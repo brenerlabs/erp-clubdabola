@@ -42,8 +42,21 @@ export default function App() {
   }, []);
 
   const login = async () => {
-    const provider = new GoogleAuthProvider();
-    await signInWithPopup(auth, provider);
+    try {
+      const provider = new GoogleAuthProvider();
+      // Force account selection to avoid automatic login with wrong account
+      provider.setCustomParameters({ prompt: 'select_account' });
+      await signInWithPopup(auth, provider);
+    } catch (err: any) {
+      console.error("Erro no Login:", err);
+      if (err.code === 'auth/popup-blocked') {
+        alert("O seu navegador bloqueou a janela de login. Por favor, permita pop-ups para este site.");
+      } else if (err.code === 'auth/unauthorized-domain') {
+        alert("Este domínio não está autorizado no Console do Firebase. Adicione '" + window.location.hostname + "' aos domínios autorizados no Firebase.");
+      } else {
+        alert("Erro ao entrar com Google: " + err.message);
+      }
+    }
   };
 
   const handleSeed = async () => {
