@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { db } from '../lib/firebase';
+import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, where, orderBy } from 'firebase/firestore';
 import { Customer, Transaction } from '../types';
 import { Plus, Search, Edit2, Trash2, Copy, User, Phone, Wallet, History, ArrowDownCircle, ArrowUpCircle, X } from 'lucide-react';
@@ -63,23 +63,36 @@ export default function Customers() {
     const amount = parseFloat(paymentAmount);
     if (!selectedCustomer || isNaN(amount) || amount <= 0) return;
     
-    // 1. Create Transaction
-    await addDoc(collection(db, 'transactions'), {
-      customerId: selectedCustomer.id,
-      amount: amount,
-      type: 'payment',
-      paymentMethod: 'Dinheiro', // Default or add selector
-      createdAt: serverTimestamp()
-    });
-
-    // 2. Update Customer Debt
-    await updateDoc(doc(db, 'customers', selectedCustomer.id!), {
-      totalDebt: Math.max(0, (selectedCustomer.totalDebt || 0) - amount),
-      updatedAt: serverTimestamp()
-    });
-
-    setPaymentAmount('');
-    alert('Pagamento processado com sucesso!');
+    try {
+      // 1. Create Transaction
+      try {
+        await addDoc(collection(db, 'transactions'), {
+          customerId: selectedCustomer.id,
+          amount: amount,
+          type: 'payment',
+          paymentMethod: 'Dinheiro', // Default or add selector
+          createdAt: serverTimestamp()
+        });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.CREATE, 'transactions');
+      }
+  
+      // 2. Update Customer Debt
+      try {
+        await updateDoc(doc(db, 'customers', selectedCustomer.id!), {
+          totalDebt: Math.max(0, (selectedCustomer.totalDebt || 0) - amount),
+          updatedAt: serverTimestamp()
+        });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.UPDATE, `customers/${selectedCustomer.id}`);
+      }
+  
+      setPaymentAmount('');
+      alert('Pagamento processado com sucesso!');
+    } catch (err: any) {
+      console.error(err);
+      alert('Erro ao processar pagamento. Verifique as permissões.');
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -93,15 +106,32 @@ export default function Customers() {
       };
 
       if (editingCustomer) {
-        await updateDoc(doc(db, 'customers', editingCustomer.id!), customerData);
+        try {
+          await updateDoc(doc(db, 'customers', editingCustomer.id!), customerData);
+        } catch (err) {
+          handleFirestoreError(err, OperationType.UPDATE, `customers/${editingCustomer.id}`);
+        }
       } else {
-        await addDoc(collection(db, 'customers'), customerData);
+        try {
+          await addDoc(collection(db, 'customers'), customerData);
+        } catch (err) {
+          handleFirestoreError(err, OperationType.CREATE, 'customers');
+        }
       }
       setIsModalOpen(false);
       alert('Cliente salvo com sucesso!');
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('Erro ao salvar cliente. Verifique sua conexão.');
+      let message = 'Erro ao salvar cliente. Verifique sua conexão.';
+      try {
+        const errInfo = JSON.parse(err.message);
+        if (errInfo.error.includes('permission')) {
+          message = 'Erro de permissão: Apenas o administrador autenticado pode realizar esta ação.';
+        }
+      } catch {
+        // Not JSON
+      }
+      alert(message);
     }
   };
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { db } from '../lib/firebase';
+import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { Product, Variation } from '../types';
 import { Plus, Search, Edit2, Trash2, Copy, Package, Box, X } from 'lucide-react';
@@ -71,15 +71,32 @@ export default function Products() {
       };
 
       if (editingProduct) {
-        await updateDoc(doc(db, 'products', editingProduct.id!), productData);
+        try {
+          await updateDoc(doc(db, 'products', editingProduct.id!), productData);
+        } catch (err) {
+          handleFirestoreError(err, OperationType.UPDATE, `products/${editingProduct.id}`);
+        }
       } else {
-        await addDoc(collection(db, 'products'), productData);
+        try {
+          await addDoc(collection(db, 'products'), productData);
+        } catch (err) {
+          handleFirestoreError(err, OperationType.CREATE, 'products');
+        }
       }
       setIsModalOpen(false);
       alert('Produto salvo com sucesso!');
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('Erro ao salvar produto. Verifique sua conexão.');
+      let message = 'Erro ao salvar produto. Verifique sua conexão.';
+      try {
+        const errInfo = JSON.parse(err.message);
+        if (errInfo.error.includes('permission')) {
+          message = 'Erro de permissão: Apenas o administrador autenticado pode realizar esta ação.';
+        }
+      } catch {
+        // Not JSON
+      }
+      alert(message);
     }
   };
 

@@ -9,44 +9,44 @@ service cloud.firestore {
 
     // Primitives & Helpers
     function isSignedIn() { return request.auth != null; }
+    function isValidId(id) { return id is string && id.size() <= 128; }
     function isAdmin() { 
       return isSignedIn() && 
-             request.auth.token.email == 'Brener91.BG@gmail.com' && 
+             request.auth.token.email.lower() == 'brener91.bg@gmail.com' && 
              request.auth.token.email_verified == true; 
     }
-    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
     function incoming() { return request.resource.data; }
     function existing() { return resource.data; }
 
     // Validation Blueprints
     function isValidProduct(data) {
-      return data.name is string && data.name.size() > 0 && data.name.size() <= 200 &&
-             data.category is string && data.category.size() <= 100 &&
-             data.costPrice is number && data.costPrice >= 0 &&
-             data.sellingPrice is number && data.sellingPrice >= 0 &&
-             data.variations is list && data.variations.size() <= 100 &&
+      return data.name is string && data.name.size() > 0 && 
+             data.category is string &&
+             data.costPrice is number &&
+             data.sellingPrice is number &&
+             data.variations is list &&
              data.totalStock is number &&
              (data.get('updatedAt', null) == null || data.updatedAt == request.time);
     }
 
     function isValidCustomer(data) {
-      return data.name is string && data.name.size() > 0 && data.name.size() <= 200 &&
-             data.contact is string && data.contact.size() <= 50 &&
+      return data.name is string && data.name.size() > 0 &&
+             data.contact is string &&
              data.totalDebt is number &&
              (data.get('updatedAt', null) == null || data.updatedAt == request.time);
     }
 
     function isValidSale(data) {
       return data.items is list && data.items.size() > 0 &&
-             data.total is number && data.total >= 0 &&
+             data.total is number &&
              data.paymentMethod in ['Dinheiro', 'Cartão', 'Pix', 'Fiado'] &&
              data.status in ['Concluída', 'Pendente'] &&
              (data.get('createdAt', null) == null || data.createdAt == request.time);
     }
 
     function isValidTransaction(data) {
-      return data.customerId is string && isValidId(data.customerId) &&
-             data.amount is number && data.amount > 0 &&
+      return data.customerId is string &&
+             data.amount is number &&
              data.type in ['payment', 'debt'] &&
              data.createdAt == request.time;
     }

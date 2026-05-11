@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { db } from '../lib/firebase';
+import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, query, onSnapshot, addDoc, updateDoc, doc, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { Product, Customer, SaleItem, Variation } from '../types';
 import { Search, ShoppingCart, User, Plus, Minus, Trash2, CreditCard, Banknote, QrCode, ClipboardList, Send, X, CheckCircle2, MessageCircle, FileImage, Share2 } from 'lucide-react';
@@ -191,9 +191,9 @@ export default function PDV() {
       setSelectedCustomer(null);
       setPaymentMethod('Dinheiro');
       setDownPayment('');
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('Erro ao finalizar venda.');
+      handleFirestoreError(err, OperationType.WRITE, 'PDV_Batch_Commit');
     } finally {
       setIsFinishing(false);
     }
