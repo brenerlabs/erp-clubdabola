@@ -1,0 +1,90 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Primitives & Helpers
+    function isSignedIn() { return request.auth != null; }
+    function isAdmin() { 
+      return isSignedIn() && 
+             request.auth.token.email == 'Brener91.BG@gmail.com' && 
+             request.auth.token.email_verified == true; 
+    }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+
+    // Validation Blueprints
+    function isValidProduct(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() <= 200 &&
+             data.category is string && data.category.size() <= 100 &&
+             data.costPrice is number && data.costPrice >= 0 &&
+             data.sellingPrice is number && data.sellingPrice >= 0 &&
+             data.variations is list && data.variations.size() <= 100 &&
+             data.totalStock is number &&
+             (data.get('updatedAt', null) == null || data.updatedAt == request.time);
+    }
+
+    function isValidCustomer(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() <= 200 &&
+             data.contact is string && data.contact.size() <= 50 &&
+             data.totalDebt is number &&
+             (data.get('updatedAt', null) == null || data.updatedAt == request.time);
+    }
+
+    function isValidSale(data) {
+      return data.items is list && data.items.size() > 0 &&
+             data.total is number && data.total >= 0 &&
+             data.paymentMethod in ['Dinheiro', 'Cartão', 'Pix', 'Fiado'] &&
+             data.status in ['Concluída', 'Pendente'] &&
+             (data.get('createdAt', null) == null || data.createdAt == request.time);
+    }
+
+    function isValidTransaction(data) {
+      return data.customerId is string && isValidId(data.customerId) &&
+             data.amount is number && data.amount > 0 &&
+             data.type in ['payment', 'debt'] &&
+             data.createdAt == request.time;
+    }
+
+    // Collections
+    match /products/{productId} {
+      allow read: if isSignedIn();
+      allow create: if isAdmin() && isValidId(productId) && isValidProduct(incoming());
+      allow update: if isAdmin() && isValidId(productId) && isValidProduct(incoming()) && (
+        incoming().diff(existing()).affectedKeys().hasAny(['name', 'category', 'costPrice', 'sellingPrice', 'variations', 'totalStock', 'updatedAt'])
+      );
+      allow delete: if isAdmin();
+    }
+
+    match /customers/{customerId} {
+      allow read: if isSignedIn();
+      allow create: if isAdmin() && isValidId(customerId) && isValidCustomer(incoming());
+      allow update: if isAdmin() && isValidId(customerId) && isValidCustomer(incoming()) && (
+        incoming().diff(existing()).affectedKeys().hasAny(['totalDebt', 'updatedAt', 'name', 'contact'])
+      );
+      allow delete: if isAdmin();
+    }
+
+    match /sales/{saleId} {
+      allow read: if isSignedIn();
+      allow create: if isAdmin() && isValidId(saleId) && isValidSale(incoming());
+      allow update: if isAdmin() && isValidId(saleId) && (
+        // Action: Complete sale or minor update
+        incoming().diff(existing()).affectedKeys().hasAny(['status', 'updatedAt'])
+      );
+      allow delete: if isAdmin();
+    }
+
+    match /transactions/{transactionId} {
+      allow list: if isAdmin();
+      allow get: if isAdmin();
+      allow create: if isAdmin() && isValidId(transactionId) && isValidTransaction(incoming());
+      allow update, delete: if false; // Transactions are immutable records
+    }
+  }
+}

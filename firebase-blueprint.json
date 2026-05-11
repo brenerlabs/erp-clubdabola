@@ -1,0 +1,84 @@
+{
+  "entities": {
+    "Product": {
+      "title": "Produto",
+      "description": "Cadastro de produtos com suporte a grade e preços.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Nome do produto" },
+        "category": { "type": "string", "description": "Categoria do produto" },
+        "costPrice": { "type": "number", "description": "Preço de custo" },
+        "sellingPrice": { "type": "number", "description": "Preço de venda" },
+        "margin": { "type": "number", "description": "Margem de lucro em %" },
+        "markup": { "type": "number", "description": "Markup em %" },
+        "variations": {
+          "type": "array",
+          "description": "Grade de variações (cor, tamanho, estoque)"
+        },
+        "totalStock": { "type": "number", "description": "Estoque total acumulado" },
+        "minStock": { "type": "number", "description": "Estoque mínimo para alerta" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "category", "costPrice", "sellingPrice"]
+    },
+    "Customer": {
+      "title": "Cliente",
+      "description": "Cadastro de clientes e saldo devedor (Fiado).",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Nome do cliente" },
+        "contact": { "type": "string", "description": "Telefone/WhatsApp" },
+        "totalDebt": { "type": "number", "description": "Saldo devedor total" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name"]
+    },
+    "Sale": {
+      "title": "Venda",
+      "description": "Registro de vendas realizadas no PDV.",
+      "type": "object",
+      "properties": {
+        "customerId": { "type": "string", "description": "ID do cliente (opcional)" },
+        "customerName": { "type": "string", "description": "Nome do cliente para busca rápida" },
+        "items": { "type": "array", "description": "Itens vendidos" },
+        "total": { "type": "number", "description": "Valor total da venda" },
+        "paymentMethod": { "type": "string", "enum": ["Dinheiro", "Cartão", "Pix", "Fiado"] },
+        "status": { "type": "string", "enum": ["Concluída", "Pendente"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["items", "total", "paymentMethod"]
+    },
+    "Transaction": {
+      "title": "Movimentação Financeira",
+      "description": "Pagamentos de fiado ou outras entradas/saídas.",
+      "type": "object",
+      "properties": {
+        "customerId": { "type": "string", "description": "ID do cliente associado" },
+        "amount": { "type": "number", "description": "Valor da transação" },
+        "type": { "type": "string", "enum": ["payment", "debt"], "description": "Tipo de movimentação" },
+        "paymentMethod": { "type": "string", "description": "Forma de pagamento (Pix, Dinheiro, etc)" },
+        "saleId": { "type": "string", "description": "ID da venda associada (se aplicável)" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Data de criação" }
+      },
+      "required": ["customerId", "amount", "type"]
+    }
+  },
+  "firestore": {
+    "/products/{productId}": {
+      "schema": "Product",
+      "description": "Coleção de produtos"
+    },
+    "/customers/{customerId}": {
+      "schema": "Customer",
+      "description": "Coleção de clientes"
+    },
+    "/sales/{saleId}": {
+      "schema": "Sale",
+      "description": "Histórico de vendas"
+    },
+    "/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "Movimentações de fiado"
+    }
+  }
+}

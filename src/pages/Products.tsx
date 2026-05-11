@@ -1,0 +1,373 @@
+import React, { useState, useEffect } from 'react';
+import { db } from '../lib/firebase';
+import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { Product, Variation } from '../types';
+import { Plus, Search, Edit2, Trash2, Copy, Package, Box, X } from 'lucide-react';
+import { formatCurrency, calculateMargin, calculateMarkup, cn } from '../lib/utils';
+import { motion, AnimatePresence } from 'motion/react';
+
+export default function Products() {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [search, setSearch] = useState('');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+
+  // Form State
+  const [name, setName] = useState('');
+  const [category, setCategory] = useState('');
+  const [costPrice, setCostPrice] = useState(0);
+  const [sellingPrice, setSellingPrice] = useState(0);
+  const [minStock, setMinStock] = useState(2);
+  const [variations, setVariations] = useState<Variation[]>([]);
+
+  useEffect(() => {
+    const q = query(collection(db, 'products'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setProducts(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Product)));
+    });
+    return unsubscribe;
+  }, []);
+
+  const openModal = (product?: Product, isDuplicate = false) => {
+    if (product) {
+      setName(isDuplicate ? `${product.name} (Cópia)` : product.name);
+      setCategory(product.category);
+      setCostPrice(product.costPrice);
+      setSellingPrice(product.sellingPrice);
+      setMinStock(product.minStock);
+      setVariations(product.variations);
+      setEditingProduct(isDuplicate ? null : product);
+    } else {
+      setName('');
+      setCategory('');
+      setCostPrice(0);
+      setSellingPrice(0);
+      setMinStock(2);
+      setVariations([]);
+      setEditingProduct(null);
+    }
+    setIsModalOpen(true);
+  };
+
+  const addVariation = () => {
+    setVariations([...variations, { id: Math.random().toString(36).substr(2, 9), size: '', color: '', stock: 0 }]);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const totalStock = variations.reduce((acc, v) => acc + v.stock, 0);
+      const productData = {
+        name,
+        category,
+        costPrice,
+        sellingPrice,
+        margin: calculateMargin(costPrice, sellingPrice),
+        markup: calculateMarkup(costPrice, sellingPrice),
+        variations,
+        totalStock,
+        minStock,
+        updatedAt: serverTimestamp()
+      };
+
+      if (editingProduct) {
+        await updateDoc(doc(db, 'products', editingProduct.id!), productData);
+      } else {
+        await addDoc(collection(db, 'products'), productData);
+      }
+      setIsModalOpen(false);
+      alert('Produto salvo com sucesso!');
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao salvar produto. Verifique sua conexão.');
+    }
+  };
+
+  const filtered = products.filter(p => p.name.toLowerCase().includes(search.toLowerCase()) || p.category.toLowerCase().includes(search.toLowerCase()));
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div className="relative w-96 group">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 size-5 group-focus-within:text-indigo-500 transition-colors" />
+          <input 
+            type="text" 
+            placeholder="Buscar por nome ou categoria..." 
+            className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-1 focus:ring-indigo-500 transition-all shadow-sm outline-none text-sm font-medium"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+        </div>
+        <button 
+          onClick={() => openModal()}
+          className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-md shadow-indigo-200 flex items-center gap-2 active:scale-95"
+        >
+          <Plus size={20} /> Adicionar Produto
+        </button>
+      </div>
+
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="bg-slate-50/50 border-b border-slate-100">
+              <th className="px-6 py-4 text-[10px] uppercase font-black text-slate-400 tracking-widest">Produto</th>
+              <th className="px-6 py-4 text-[10px] uppercase font-black text-slate-400 tracking-widest">Categoria</th>
+              <th className="px-6 py-4 text-[10px] uppercase font-black text-slate-400 tracking-widest text-right">Preços</th>
+              <th className="px-6 py-4 text-[10px] uppercase font-black text-slate-400 tracking-widest text-center">Grade/Estoque</th>
+              <th className="px-6 py-4 text-[10px] uppercase font-black text-slate-400 tracking-widest text-right">Ações</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-50">
+            {filtered.map(product => (
+              <tr key={product.id} className="hover:bg-slate-50/50 transition-colors group">
+                <td className="px-6 py-5">
+                  <div className="flex items-center gap-4">
+                    <div className="size-10 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-600 shadow-inner">
+                      <Package size={20} />
+                    </div>
+                    <div>
+                      <div className="font-bold text-slate-900 text-sm leading-tight">{product.name}</div>
+                      <div className="flex gap-2 mt-1">
+                        <div className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">Margem: {product.margin.toFixed(1)}%</div>
+                        <div className="text-[10px] text-indigo-400 font-bold uppercase tracking-tighter">Markup: {calculateMarkup(product.costPrice, product.sellingPrice).toFixed(1)}%</div>
+                      </div>
+                    </div>
+                  </div>
+                </td>
+                <td className="px-6 py-5">
+                  <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-[9px] font-black rounded uppercase tracking-widest">{product.category}</span>
+                </td>
+                <td className="px-6 py-5 text-right">
+                  <div className="text-sm font-bold text-slate-900">{formatCurrency(product.sellingPrice)}</div>
+                  <div className="text-[10px] text-slate-400 font-medium">Custo: {formatCurrency(product.costPrice)}</div>
+                </td>
+                <td className="px-6 py-5 text-center">
+                  <div className={cn(
+                    "text-sm font-bold",
+                    product.totalStock <= product.minStock ? 'text-rose-500' : 'text-slate-900'
+                  )}>
+                    {product.totalStock} un
+                  </div>
+                  <div className="text-[10px] text-slate-400 font-bold uppercase">{product.variations.length} variações</div>
+                </td>
+                <td className="px-6 py-5">
+                  <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={() => openModal(product, true)} className="p-2 hover:bg-indigo-50 text-indigo-600 rounded-lg transition-colors" title="Duplicar">
+                      <Copy size={16} />
+                    </button>
+                    <button onClick={() => openModal(product)} className="p-2 hover:bg-indigo-50 text-indigo-600 rounded-lg transition-colors" title="Editar">
+                      <Edit2 size={16} />
+                    </button>
+                    <button onClick={() => deleteDoc(doc(db, 'products', product.id!))} className="p-2 hover:bg-rose-50 text-rose-600 rounded-lg transition-colors" title="Excluir">
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Modal */}
+      <AnimatePresence>
+        {isModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }}
+              onClick={() => setIsModalOpen(false)}
+              className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" 
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white rounded-2xl shadow-2xl relative z-10 w-full max-w-4xl overflow-hidden border border-slate-200"
+            >
+              <form onSubmit={handleSubmit}>
+                <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                  <div className="flex items-center gap-3">
+                    <div className="size-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white">
+                      <Box size={18} />
+                    </div>
+                    <h3 className="text-lg font-bold text-slate-900">
+                      {editingProduct ? 'Configurar Produto' : 'Cadastrar Novo Item'}
+                    </h3>
+                  </div>
+                  <button type="button" onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-2 hover:bg-slate-200 rounded-lg transition-colors"><X size={20} /></button>
+                </div>
+                
+                <div className="p-8 overflow-y-auto max-h-[70vh] grid grid-cols-5 gap-8">
+                  <div className="col-span-3 space-y-6">
+                    <div className="grid grid-cols-2 gap-6">
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Identificação</label>
+                        <input 
+                          required 
+                          type="text" 
+                          value={name} 
+                          onChange={e => setName(e.target.value)}
+                          className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-indigo-500 font-medium text-sm transition-all"
+                          placeholder="Nome do produto"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Segmento/Categoria</label>
+                        <input 
+                          required 
+                          type="text" 
+                          value={category} 
+                          onChange={e => setCategory(e.target.value)}
+                          className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-indigo-500 font-medium text-sm transition-all"
+                          placeholder="Ex: Tênis"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-6">
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Preço Custo</label>
+                        <input 
+                          required 
+                          type="number" 
+                          step="0.01"
+                          value={costPrice} 
+                          onChange={e => setCostPrice(Number(e.target.value))}
+                          className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-indigo-500 font-medium text-sm transition-all"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Preço Venda</label>
+                        <input 
+                          required 
+                          type="number" 
+                          step="0.01"
+                          value={sellingPrice} 
+                          onChange={e => setSellingPrice(Number(e.target.value))}
+                          className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-indigo-500 font-medium text-sm transition-all"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Estoque Mínimo</label>
+                        <input 
+                          type="number" 
+                          value={minStock} 
+                          onChange={e => setMinStock(Number(e.target.value))}
+                          className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-indigo-500 font-medium text-sm transition-all"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="p-5 bg-indigo-600 rounded-2xl shadow-lg shadow-indigo-100 flex items-center justify-between text-white">
+                      <div className="flex gap-8">
+                        <div>
+                          <p className="text-[10px] font-black uppercase opacity-60 tracking-widest mb-1">Margem Lucro</p>
+                          <p className="text-2xl font-black">{calculateMargin(costPrice, sellingPrice).toFixed(1)}%</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-black uppercase opacity-60 tracking-widest mb-1">Markup (Mark-on)</p>
+                          <p className="text-2xl font-black">{calculateMarkup(costPrice, sellingPrice).toFixed(1)}%</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[10px] font-black uppercase opacity-60 tracking-widest mb-1">Lucro un.</p>
+                        <p className="text-xl font-bold">{formatCurrency(sellingPrice - costPrice)}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="col-span-2 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Grade Dimensional / Cores</label>
+                      <button 
+                        type="button" 
+                        onClick={addVariation}
+                        className="text-[10px] font-black text-indigo-600 uppercase flex items-center gap-1 hover:bg-indigo-50 px-2 py-1 rounded"
+                      >
+                        <Plus size={14} /> Adicionar
+                      </button>
+                    </div>
+                    <div className="space-y-3 p-4 bg-slate-50 border border-slate-200 rounded-2xl overflow-y-auto max-h-[350px]">
+                      {variations.length === 0 && (
+                        <div className="text-center py-10">
+                          <Plus className="mx-auto text-slate-300 mb-2" size={32} strokeWidth={1} />
+                          <p className="text-[11px] font-bold text-slate-400 uppercase">Defina a grade do produto</p>
+                        </div>
+                      )}
+                      {variations.map((v, i) => (
+                        <div key={v.id} className="grid grid-cols-11 gap-2 items-center group/row">
+                          <div className="col-span-3">
+                            <input 
+                              placeholder="Tamanho"
+                              className="w-full text-xs px-2 py-2 border rounded-lg border-slate-200 bg-white"
+                              value={v.size}
+                              onChange={e => {
+                                const next = [...variations];
+                                next[i].size = e.target.value;
+                                setVariations(next);
+                              }}
+                            />
+                          </div>
+                          <div className="col-span-4">
+                            <input 
+                              placeholder="Cor/Variante"
+                              className="w-full text-xs px-2 py-2 border rounded-lg border-slate-200 bg-white"
+                              value={v.color}
+                              onChange={e => {
+                                const next = [...variations];
+                                next[i].color = e.target.value;
+                                setVariations(next);
+                              }}
+                            />
+                          </div>
+                          <div className="col-span-3">
+                            <input 
+                              type="number"
+                              placeholder="Est"
+                              className="w-full text-xs px-2 py-2 border rounded-lg border-slate-200 bg-white font-bold"
+                              value={v.stock}
+                              onChange={e => {
+                                const next = [...variations];
+                                next[i].stock = Number(e.target.value);
+                                setVariations(next);
+                              }}
+                            />
+                          </div>
+                          <button 
+                            type="button"
+                            onClick={() => setVariations(variations.filter((_, idx) => idx !== i))}
+                            className="col-span-1 text-slate-300 hover:text-rose-500 transition-colors flex justify-center"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
+                  <button 
+                    type="button" 
+                    onClick={() => setIsModalOpen(false)}
+                    className="px-6 py-2.5 text-[11px] font-black uppercase text-slate-400 hover:text-slate-600 transition-all tracking-widest"
+                  >
+                    Descartar
+                  </button>
+                  <button 
+                    type="submit"
+                    className="px-10 py-2.5 bg-indigo-600 hover:bg-slate-900 text-white text-[11px] font-black uppercase rounded-xl transition-all shadow-lg shadow-indigo-100 tracking-widest"
+                  >
+                    Salvar Alterações
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
