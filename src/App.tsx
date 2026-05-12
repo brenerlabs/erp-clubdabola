@@ -109,7 +109,7 @@ export default function App() {
 
   return (
     <div className="flex h-screen bg-slate-50 font-sans overflow-hidden relative">
-      {/* Sidebar Navigation - Desktop only or controlled via mobile menu */}
+      {/* Sidebar Navigation - Desktop only */}
       <AnimatePresence>
         {(isSidebarOpen || window.innerWidth > 768) && (
           <motion.aside 
@@ -121,7 +121,7 @@ export default function App() {
             }}
             exit={window.innerWidth <= 768 ? { x: -300 } : undefined}
             className={cn(
-              "bg-slate-900 flex flex-col shrink-0 shadow-2xl z-[70] transition-all duration-300 h-full",
+              "bg-slate-900 flex-col shrink-0 shadow-2xl z-[70] transition-all duration-300 h-full hidden md:flex",
               window.innerWidth <= 768 && "absolute top-0 left-0"
             )}
           >
@@ -219,12 +219,6 @@ export default function App() {
       <main className="flex-1 flex flex-col overflow-hidden relative">
          <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 md:px-8 shrink-0 z-50">
           <div className="flex items-center gap-3">
-             <button 
-                onClick={() => setIsSidebarOpen(true)}
-                className="md:hidden p-2 text-slate-600 hover:bg-slate-100 rounded-lg"
-              >
-                <Menu size={20} />
-              </button>
              <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center bg-slate-50 border border-slate-100 p-1 hidden sm:flex">
                <img 
                 src="https://i.ibb.co/v3Y0V6N/logo-club-da-bola.jpg" 
