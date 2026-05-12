@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { collection, query, onSnapshot, addDoc, updateDoc, doc, serverTimestamp, writeBatch } from 'firebase/firestore';
+import { collection, query, onSnapshot, addDoc, updateDoc, doc, serverTimestamp, writeBatch, orderBy } from 'firebase/firestore';
 import { Product, Customer, SaleItem, Variation } from '../types';
 import { Search, ShoppingCart, User, Plus, Minus, Trash2, CreditCard, Banknote, QrCode, ClipboardList, Send, X, CheckCircle2, MessageCircle, FileImage, Share2 } from 'lucide-react';
 import { formatCurrency, cn } from '../lib/utils';
@@ -14,16 +14,18 @@ export default function PDV() {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'Dinheiro' | 'Cartão' | 'Pix' | 'Fiado'>('Dinheiro');
   const [downPayment, setDownPayment] = useState<string>('');
+  const [discountPerc, setDiscountPerc] = useState<string>('0');
+  const [discountVal, setDiscountVal] = useState<string>('0');
   const [isFinishing, setIsFinishing] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [lastSale, setLastSale] = useState<any>(null);
 
   useEffect(() => {
-    const qProd = query(collection(db, 'products'));
+    const qProd = query(collection(db, 'products'), orderBy('name', 'asc'));
     const unsubProd = onSnapshot(qProd, (snapshot) => {
       setProducts(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Product)));
     });
-    const qCust = query(collection(db, 'customers'));
+    const qCust = query(collection(db, 'customers'), orderBy('name', 'asc'));
     const unsubCust = onSnapshot(qCust, (snapshot) => {
       setCustomers(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Customer)));
     });
@@ -67,7 +69,25 @@ export default function PDV() {
     }).filter(item => item.quantity > 0));
   };
 
-  const total = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+  const subtotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+  const total = Math.max(0, subtotal - (parseFloat(discountVal) || 0));
+
+  const handleDiscountPercChange = (valStr: string) => {
+    // Replace comma with dot for calculation
+    const val = valStr.replace(',', '.');
+    setDiscountPerc(valStr);
+    const p = parseFloat(val) || 0;
+    const v = (subtotal * p) / 100;
+    setDiscountVal(v.toFixed(2).replace('.', ','));
+  };
+
+  const handleDiscountValChange = (valStr: string) => {
+    const val = valStr.replace(',', '.');
+    setDiscountVal(valStr);
+    const v = parseFloat(val) || 0;
+    const p = subtotal > 0 ? (v * 100) / subtotal : 0;
+    setDiscountPerc(p.toFixed(1).replace('.', ','));
+  };
 
   const finishSale = async () => {
     if (cart.length === 0) return;
@@ -80,7 +100,8 @@ export default function PDV() {
     try {
       const batch = writeBatch(db);
       
-      const finalDownPayment = parseFloat(downPayment) || 0;
+      const finalDownPayment = parseFloat(downPayment.replace(',', '.')) || 0;
+      const finalDiscount = parseFloat(discountVal.replace(',', '.')) || 0;
       const debtAmount = total - finalDownPayment;
 
       // 1. Create Sale Record
@@ -89,6 +110,8 @@ export default function PDV() {
         customerId: selectedCustomer?.id || null,
         customerName: selectedCustomer?.name || 'Consumidor Final',
         items: cart,
+        subtotal,
+        discount: finalDiscount,
         total,
         downPayment: finalDownPayment,
         paymentMethod,
@@ -191,6 +214,8 @@ export default function PDV() {
       setSelectedCustomer(null);
       setPaymentMethod('Dinheiro');
       setDownPayment('');
+      setDiscountPerc('0');
+      setDiscountVal('0');
     } catch (err: any) {
       console.error(err);
       handleFirestoreError(err, OperationType.WRITE, 'PDV_Batch_Commit');
@@ -231,20 +256,25 @@ export default function PDV() {
 
   return (
     <div className="h-full flex flex-col md:flex-row gap-6 relative">
-      {/* Mobile Cart Toggle */}
-      <div className="md:hidden flex items-center justify-between bg-slate-900 p-4 rounded-2xl text-white shadow-lg z-30">
-        <div className="flex items-center gap-3">
-          <ShoppingCart size={20} className="text-indigo-400" />
+      {/* Mobile Cart Toggle Bar */}
+      <div className="md:hidden sticky top-0 bg-slate-900/95 backdrop-blur-md p-3 rounded-2xl text-white shadow-xl z-[45] flex items-center justify-between border border-white/5 mx-1">
+        <div className="flex items-center gap-2">
+          <div className="size-9 bg-indigo-500/20 rounded-lg flex items-center justify-center border border-indigo-500/30">
+            <ShoppingCart size={18} className="text-indigo-400" />
+          </div>
           <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-white/50 leading-none mb-1">Carrinho</p>
-            <p className="text-lg font-black leading-none">{formatCurrency(total)}</p>
+            <p className="text-[8px] font-black uppercase tracking-widest text-white/50 leading-none mb-1">Total Carrinho</p>
+            <p className="text-base font-black leading-none">{formatCurrency(total)}</p>
           </div>
         </div>
         <button 
           onClick={() => setIsCartVisible(!isCartVisible)}
-          className="bg-indigo-500 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all"
+          className={cn(
+            "px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all shadow-lg",
+            isCartVisible ? "bg-slate-700 text-white" : "bg-indigo-500 text-white shadow-indigo-500/20"
+          )}
         >
-          {isCartVisible ? 'Produtos' : 'Finalizar'}
+          {isCartVisible ? 'Voltar aos Produtos' : 'Finalizar Pedido'}
         </button>
       </div>
 
@@ -349,16 +379,16 @@ export default function PDV() {
           />
         </div>
 
-        <div className="flex-1 overflow-y-auto grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 pb-4">
+        <div className="flex-1 overflow-y-auto grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 pb-4">
           {filteredProducts.map(product => (
-            <div key={product.id} className="bg-white p-3 md:p-4 rounded-2xl border border-gray-100 shadow-sm flex flex-col group hover:shadow-md transition-all">
-              <div className="mb-3">
-                <span className="px-2 py-0.5 bg-blue-50 text-[10px] font-bold text-blue-600 rounded uppercase tracking-wider">{product.category}</span>
-                <h4 className="font-bold text-gray-900 mt-1 line-clamp-2 leading-tight text-xs md:text-sm">{product.name}</h4>
+            <div key={product.id} className="bg-white p-2.5 md:p-4 rounded-xl md:rounded-2xl border border-gray-100 shadow-sm flex flex-col group hover:shadow-md transition-all">
+              <div className="mb-2">
+                <span className="px-2 py-0.5 bg-blue-50 text-[9px] md:text-[10px] font-bold text-blue-600 rounded uppercase tracking-wider">{product.category}</span>
+                <h4 className="font-bold text-gray-900 mt-0.5 line-clamp-2 leading-tight text-[11px] md:text-sm">{product.name}</h4>
               </div>
-              <div className="mt-auto space-y-2">
-                <div className="text-base md:text-lg font-black text-blue-600">{formatCurrency(product.sellingPrice)}</div>
-                <div className="grid grid-cols-2 gap-1 px-1">
+              <div className="mt-auto space-y-1.5 md:space-y-2">
+                <div className="text-sm md:text-lg font-black text-blue-600">{formatCurrency(product.sellingPrice)}</div>
+                <div className="grid grid-cols-2 gap-1">
                   {product.variations.map(v => (
                     <button 
                       key={v.id}
@@ -486,6 +516,39 @@ export default function PDV() {
               ))}
             </div>
 
+            <div className="grid grid-cols-2 gap-2">
+              <div className="relative group">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 text-[10px] font-black group-focus-within:text-amber-400">% Desc.</span>
+                <input 
+                  type="text"
+                  inputMode="decimal"
+                  className="w-full bg-white/5 border border-white/10 rounded-xl pl-16 pr-4 py-2.5 text-xs font-bold outline-none hover:bg-white/10 focus:ring-1 focus:ring-amber-500 transition-all text-white/80"
+                  value={discountPerc}
+                  onChange={e => {
+                    const val = e.target.value.replace(/[^0-9,.]/g, '');
+                    handleDiscountPercChange(val);
+                  }}
+                  onFocus={e => e.target.value === '0' ? setDiscountPerc('') : null}
+                  onBlur={e => e.target.value === '' ? setDiscountPerc('0') : null}
+                />
+              </div>
+              <div className="relative group">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 text-[10px] font-black group-focus-within:text-amber-400">R$ Desc.</span>
+                <input 
+                  type="text"
+                  inputMode="decimal"
+                  className="w-full bg-white/5 border border-white/10 rounded-xl pl-16 pr-4 py-2.5 text-xs font-bold outline-none hover:bg-white/10 focus:ring-1 focus:ring-amber-500 transition-all text-white/80"
+                  value={discountVal}
+                  onChange={e => {
+                    const val = e.target.value.replace(/[^0-9,.]/g, '');
+                    handleDiscountValChange(val);
+                  }}
+                  onFocus={e => e.target.value === '0' ? setDiscountVal('') : null}
+                  onBlur={e => e.target.value === '' ? setDiscountVal('0') : null}
+                />
+              </div>
+            </div>
+
             {paymentMethod === 'Fiado' && (
               <motion.div 
                 initial={{ opacity: 0, y: -10 }}
@@ -494,19 +557,27 @@ export default function PDV() {
               >
                 <Banknote className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 size-4 group-focus-within:text-emerald-400" />
                 <input 
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   placeholder="Valor de Entrada (Opcional)"
                   className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs font-bold outline-none hover:bg-white/10 focus:ring-1 focus:ring-emerald-500 transition-all text-white/80"
                   value={downPayment}
-                  onChange={e => setDownPayment(e.target.value)}
+                  onChange={e => setDownPayment(e.target.value.replace(/[^0-9,.]/g, ''))}
                   onFocus={e => e.target.value === '0' ? setDownPayment('') : null}
+                  onBlur={e => e.target.value === '' ? setDownPayment('') : null}
                 />
               </motion.div>
             )}
 
-            <div className="flex justify-between items-center px-4 py-4 bg-white/5 rounded-2xl border border-white/5">
-              <span className="text-xs font-bold text-white/50 uppercase tracking-widest">Total</span>
-              <span className="text-3xl font-black text-indigo-300">{formatCurrency(total)}</span>
+            <div className="flex flex-col gap-1 px-4 py-3 bg-white/5 rounded-2xl border border-white/5">
+              <div className="flex justify-between items-center opacity-40">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-white">Subtotal</span>
+                <span className="text-sm font-black text-white">{formatCurrency(subtotal)}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-xs font-bold text-white/50 uppercase tracking-widest">Total</span>
+                <span className="text-3xl font-black text-indigo-300">{formatCurrency(total)}</span>
+              </div>
             </div>
 
             <button 

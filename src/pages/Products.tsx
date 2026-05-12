@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, orderBy } from 'firebase/firestore';
 import { Product, Variation } from '../types';
 import { Plus, Search, Edit2, Trash2, Copy, Package, Box, X } from 'lucide-react';
 import { formatCurrency, calculateMargin, calculateMarkup, cn } from '../lib/utils';
@@ -15,13 +15,13 @@ export default function Products() {
   // Form State
   const [name, setName] = useState('');
   const [category, setCategory] = useState('');
-  const [costPrice, setCostPrice] = useState(0);
-  const [sellingPrice, setSellingPrice] = useState(0);
-  const [minStock, setMinStock] = useState(2);
+  const [costPrice, setCostPrice] = useState<string>('0');
+  const [sellingPrice, setSellingPrice] = useState<string>('0');
+  const [minStock, setMinStock] = useState<string>('2');
   const [variations, setVariations] = useState<Variation[]>([]);
 
   useEffect(() => {
-    const q = query(collection(db, 'products'));
+    const q = query(collection(db, 'products'), orderBy('name', 'asc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setProducts(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Product)));
     });
@@ -32,17 +32,17 @@ export default function Products() {
     if (product) {
       setName(isDuplicate ? `${product.name} (Cópia)` : product.name);
       setCategory(product.category);
-      setCostPrice(product.costPrice);
-      setSellingPrice(product.sellingPrice);
-      setMinStock(product.minStock);
+      setCostPrice(product.costPrice.toString());
+      setSellingPrice(product.sellingPrice.toString());
+      setMinStock(product.minStock.toString());
       setVariations(product.variations);
       setEditingProduct(isDuplicate ? null : product);
     } else {
       setName('');
       setCategory('');
-      setCostPrice(0);
-      setSellingPrice(0);
-      setMinStock(2);
+      setCostPrice('0');
+      setSellingPrice('0');
+      setMinStock('2');
       setVariations([]);
       setEditingProduct(null);
     }
@@ -56,17 +56,20 @@ export default function Products() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const totalStock = variations.reduce((acc, v) => acc + v.stock, 0);
+      const cPrice = parseFloat(costPrice) || 0;
+      const sPrice = parseFloat(sellingPrice) || 0;
+      const mStock = parseInt(minStock) || 0;
+      const totalStock = variations.reduce((acc, v) => acc + (parseInt(v.stock?.toString() || '0') || 0), 0);
       const productData = {
         name,
         category,
-        costPrice,
-        sellingPrice,
-        margin: calculateMargin(costPrice, sellingPrice),
-        markup: calculateMarkup(costPrice, sellingPrice),
-        variations,
+        costPrice: cPrice,
+        sellingPrice: sPrice,
+        margin: calculateMargin(cPrice, sPrice),
+        markup: calculateMarkup(cPrice, sPrice),
+        variations: variations.map(v => ({ ...v, stock: parseInt(v.stock?.toString() || '0') || 0 })),
         totalStock,
-        minStock,
+        minStock: mStock,
         updatedAt: serverTimestamp()
       };
 
@@ -124,7 +127,8 @@ export default function Products() {
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <table className="w-full text-left border-collapse">
+        {/* Desktop Table View */}
+        <table className="w-full text-left border-collapse hidden md:table">
           <thead>
             <tr className="bg-slate-50/50 border-b border-slate-100">
               <th className="px-6 py-4 text-[10px] uppercase font-black text-slate-400 tracking-widest">Produto</th>
@@ -184,6 +188,44 @@ export default function Products() {
             ))}
           </tbody>
         </table>
+
+        {/* Mobile List View */}
+        <div className="md:hidden divide-y divide-slate-100 px-2">
+          {filtered.map(product => (
+            <div key={product.id} className="p-4 space-y-3">
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="size-10 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-600">
+                    <Package size={20} />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-slate-900 text-sm leading-tight">{product.name}</h4>
+                    <span className="text-[10px] text-indigo-500 font-black uppercase tracking-widest">{product.category}</span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-sm font-black text-slate-900">{formatCurrency(product.sellingPrice)}</div>
+                  <div className={cn(
+                    "text-[10px] font-bold uppercase",
+                    product.totalStock <= product.minStock ? "text-rose-500" : "text-slate-400"
+                  )}>
+                    Estoque: {product.totalStock}
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center justify-between pt-2">
+                <div className="flex gap-2">
+                  <div className="text-[9px] bg-slate-100 px-1.5 py-0.5 rounded font-bold text-slate-500 uppercase">Mg: {product.margin.toFixed(1)}%</div>
+                  <div className="text-[9px] bg-indigo-50 px-1.5 py-0.5 rounded font-bold text-indigo-500 uppercase">Mk: {calculateMarkup(product.costPrice, product.sellingPrice).toFixed(1)}%</div>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => openModal(product)} className="p-2 bg-slate-100 text-slate-600 rounded-lg"><Edit2 size={14} /></button>
+                  <button onClick={() => deleteDoc(doc(db, 'products', product.id!))} className="p-2 bg-rose-50 text-rose-600 rounded-lg"><Trash2 size={14} /></button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Modal */}
@@ -248,10 +290,15 @@ export default function Products() {
                         <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Preço Custo</label>
                         <input 
                           required 
-                          type="number" 
-                          step="0.01"
+                          type="text" 
+                          inputMode="decimal"
                           value={costPrice} 
-                          onChange={e => setCostPrice(Number(e.target.value))}
+                          onChange={e => {
+                            const val = e.target.value.replace(/[^0-9,.]/g, '').replace(',', '.');
+                            setCostPrice(val);
+                          }}
+                          onFocus={e => e.target.value === '0' && setCostPrice('')}
+                          onBlur={e => e.target.value === '' && setCostPrice('0')}
                           className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-indigo-500 font-medium text-sm transition-all"
                         />
                       </div>
@@ -259,19 +306,30 @@ export default function Products() {
                         <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Preço Venda</label>
                         <input 
                           required 
-                          type="number" 
-                          step="0.01"
+                          type="text" 
+                          inputMode="decimal"
                           value={sellingPrice} 
-                          onChange={e => setSellingPrice(Number(e.target.value))}
+                          onChange={e => {
+                            const val = e.target.value.replace(/[^0-9,.]/g, '').replace(',', '.');
+                            setSellingPrice(val);
+                          }}
+                          onFocus={e => e.target.value === '0' && setSellingPrice('')}
+                          onBlur={e => e.target.value === '' && setSellingPrice('0')}
                           className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-indigo-500 font-medium text-sm transition-all"
                         />
                       </div>
                       <div className="space-y-1.5">
                         <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Estoque Mínimo</label>
                         <input 
-                          type="number" 
+                          type="text" 
+                          inputMode="numeric"
                           value={minStock} 
-                          onChange={e => setMinStock(Number(e.target.value))}
+                          onChange={e => {
+                            const val = e.target.value.replace(/[^0-9]/g, '');
+                            setMinStock(val);
+                          }}
+                          onFocus={e => e.target.value === '0' && setMinStock('')}
+                          onBlur={e => e.target.value === '' && setMinStock('0')}
                           className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-indigo-500 font-medium text-sm transition-all"
                         />
                       </div>
@@ -281,16 +339,16 @@ export default function Products() {
                       <div className="flex gap-8">
                         <div>
                           <p className="text-[10px] font-black uppercase opacity-60 tracking-widest mb-1">Margem Lucro</p>
-                          <p className="text-2xl font-black">{calculateMargin(costPrice, sellingPrice).toFixed(1)}%</p>
+                          <div className="text-2xl font-black">{calculateMargin(parseFloat(costPrice) || 0, parseFloat(sellingPrice) || 0).toFixed(1)}%</div>
                         </div>
                         <div>
                           <p className="text-[10px] font-black uppercase opacity-60 tracking-widest mb-1">Markup (Mark-on)</p>
-                          <p className="text-2xl font-black">{calculateMarkup(costPrice, sellingPrice).toFixed(1)}%</p>
+                          <div className="text-2xl font-black">{calculateMarkup(parseFloat(costPrice) || 0, parseFloat(sellingPrice) || 0).toFixed(1)}%</div>
                         </div>
                       </div>
                       <div className="text-right">
                         <p className="text-[10px] font-black uppercase opacity-60 tracking-widest mb-1">Lucro un.</p>
-                        <p className="text-xl font-bold">{formatCurrency(sellingPrice - costPrice)}</p>
+                        <p className="text-xl font-bold">{formatCurrency((parseFloat(sellingPrice) || 0) - (parseFloat(costPrice) || 0))}</p>
                       </div>
                     </div>
                   </div>
@@ -341,14 +399,29 @@ export default function Products() {
                           </div>
                           <div className="col-span-3">
                             <input 
-                              type="number"
+                              type="text"
+                              inputMode="numeric"
                               placeholder="Est"
                               className="w-full text-xs px-2 py-2 border rounded-lg border-slate-200 bg-white font-bold"
                               value={v.stock}
                               onChange={e => {
                                 const next = [...variations];
-                                next[i].stock = Number(e.target.value);
+                                next[i].stock = e.target.value.replace(/[^0-9]/g, '') as any;
                                 setVariations(next);
+                              }}
+                              onFocus={e => {
+                                if (e.target.value === '0') {
+                                  const next = [...variations];
+                                  next[i].stock = '' as any;
+                                  setVariations(next);
+                                }
+                              }}
+                              onBlur={e => {
+                                if (e.target.value === '') {
+                                  const next = [...variations];
+                                  next[i].stock = 0;
+                                  setVariations(next);
+                                }
                               }}
                             />
                           </div>

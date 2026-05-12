@@ -109,7 +109,7 @@ export default function App() {
 
   return (
     <div className="flex h-screen bg-slate-50 font-sans overflow-hidden relative">
-      {/* Sidebar Navigation */}
+      {/* Sidebar Navigation - Desktop only or controlled via mobile menu */}
       <AnimatePresence>
         {(isSidebarOpen || window.innerWidth > 768) && (
           <motion.aside 
@@ -117,11 +117,11 @@ export default function App() {
             animate={{ 
               width: isSidebarOpen ? 260 : 80,
               x: 0,
-              position: window.innerWidth <= 768 ? 'absolute' : 'relative'
+              position: window.innerWidth <= 768 ? 'fixed' : 'relative'
             }}
             exit={window.innerWidth <= 768 ? { x: -300 } : undefined}
             className={cn(
-              "bg-slate-900 flex flex-col shrink-0 shadow-2xl z-[60] transition-all duration-300 h-full",
+              "bg-slate-900 flex flex-col shrink-0 shadow-2xl z-[70] transition-all duration-300 h-full",
               window.innerWidth <= 768 && "absolute top-0 left-0"
             )}
           >
@@ -150,16 +150,22 @@ export default function App() {
                       }}
                     />
                   </div>
-                  <h1 className="text-white font-black tracking-tighter leading-none text-xs italic">
+                  <h1 className="text-white font-black tracking-tighter leading-none text-xs italic text-nowrap">
                     ERP CLUB DA <span className="text-amber-500">BOLA</span>
                   </h1>
                 </motion.div>
               )}
               <button 
                 onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                className="p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white rounded-lg transition-colors md:block"
+                className="p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white rounded-lg transition-colors hidden md:block"
               >
                 {isSidebarOpen ? <X size={20} /> : <Menu size={20} />}
+              </button>
+              <button 
+                onClick={() => setIsSidebarOpen(false)}
+                className="p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white rounded-lg transition-colors md:hidden"
+              >
+                <X size={20} />
               </button>
             </div>
 
@@ -184,14 +190,14 @@ export default function App() {
               ))}
             </nav>
 
-            <div className="p-4 mt-auto border-t border-slate-800 space-y-4">
+            <div className="p-4 mt-auto border-t border-slate-800 space-y-4 mb-20 md:mb-0">
               {isSidebarOpen && (
                 <div className="bg-indigo-500/10 p-3 rounded-lg border border-indigo-500/20 hidden md:block">
                   <p className="text-[10px] uppercase font-bold text-indigo-400 mb-1">Carga inicial</p>
                   <p className="text-[10px] text-white opacity-80 leading-tight">Importe dados da planilha categorizada.</p>
                   <button 
                     onClick={handleSeed}
-                    className="mt-2 w-full text-[10px] bg-indigo-600 text-white py-1.5 px-2 rounded font-bold uppercase hover:bg-indigo-500 transition-colors"
+                    className="mt-2 w-full text-[10px] bg-indigo-600 text-white py-1.5 px-2 rounded font-bold uppercase hover:bg-indigo-50 transition-colors"
                   >
                     Importar Firestore
                   </button>
@@ -211,7 +217,7 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col overflow-hidden relative">
-         <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 md:px-8 shrink-0">
+         <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 md:px-8 shrink-0 z-50">
           <div className="flex items-center gap-3">
              <button 
                 onClick={() => setIsSidebarOpen(true)}
@@ -237,7 +243,7 @@ export default function App() {
                 }}
                />
              </div>
-            <span className="text-slate-900 text-sm font-black italic uppercase tracking-tighter">ERP CLUB DA <span className="text-amber-500">BOLA</span></span>
+            <span className="text-slate-900 text-sm font-black italic uppercase tracking-tighter truncate max-w-[120px] sm:max-w-none">ERP CLUB DA <span className="text-amber-500">BOLA</span></span>
             <span className="text-slate-300 hidden sm:block">/</span>
             <span className="text-slate-800 font-semibold text-sm capitalize hidden sm:block">
               {menuItems.find(m => m.id === activePage)?.label}
@@ -253,14 +259,14 @@ export default function App() {
                 <p className="text-xs font-bold text-slate-900">{user.displayName || user.email.split('@')[0]}</p>
                 <p className="text-[10px] text-slate-500 uppercase font-medium">Administrador</p>
               </div>
-              <div className="w-10 h-10 rounded-full bg-slate-200 overflow-hidden border border-slate-100 p-0.5 shadow-sm">
-                <img className="rounded-full" src={user.photoURL || `https://ui-avatars.com/api/?name=${user.email}&background=6366f1&color=fff`} alt="User" />
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-slate-200 overflow-hidden border border-slate-100 p-0.5 shadow-sm">
+                <img className="rounded-full w-full h-full object-cover" src={user.photoURL || `https://ui-avatars.com/api/?name=${user.email}&background=6366f1&color=fff`} alt="User" />
               </div>
             </div>
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-4 md:p-6">
+        <div className="flex-1 overflow-y-auto p-3 md:p-6 pb-24 md:pb-6">
           <AnimatePresence mode="wait">
             <motion.div
               key={activePage}
@@ -278,6 +284,34 @@ export default function App() {
               {activePage === 'finance' && <Finance />}
             </motion.div>
           </AnimatePresence>
+        </div>
+
+        {/* Bottom Navigation for Mobile */}
+        <div className="md:hidden fixed bottom-0 left-0 right-0 h-20 bg-slate-900 border-t border-slate-800 flex items-center justify-around px-2 z-50">
+          {menuItems.slice(0, 4).map((item) => (
+            <button
+              key={item.id}
+              onClick={() => setActivePage(item.id as Page)}
+              className={cn(
+                "flex flex-col items-center gap-1 p-2 transition-all",
+                activePage === item.id ? "text-indigo-400" : "text-slate-500"
+              )}
+            >
+              <item.icon size={22} className={cn(activePage === item.id && "scale-110")} />
+              <span className="text-[9px] font-bold uppercase tracking-tighter">{item.label.split(' ')[0]}</span>
+              {activePage === item.id && <motion.div layoutId="bottomNav" className="absolute -bottom-1 w-1 h-1 bg-indigo-500 rounded-full" />}
+            </button>
+          ))}
+          <button
+            onClick={() => setActivePage('finance')}
+            className={cn(
+              "flex flex-col items-center gap-1 p-2 transition-all",
+              activePage === 'finance' ? "text-indigo-400" : "text-slate-500"
+            )}
+          >
+            <DollarSign size={22} className={cn(activePage === 'finance' && "scale-110")} />
+            <span className="text-[9px] font-bold uppercase tracking-tighter">Finance</span>
+          </button>
         </div>
       </main>
     </div>

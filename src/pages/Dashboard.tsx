@@ -194,6 +194,21 @@ export default function Dashboard() {
     });
   }, [filteredSales]);
 
+  const customerRanking = React.useMemo(() => {
+    const ranking: Record<string, { name: string, total: number, count: number }> = {};
+    
+    sales.forEach(sale => {
+      if (!sale.customerId) return;
+      if (!ranking[sale.customerId]) {
+        ranking[sale.customerId] = { name: sale.customerName || 'Cliente sem nome', total: 0, count: 0 };
+      }
+      ranking[sale.customerId].total += sale.total;
+      ranking[sale.customerId].count += 1;
+    });
+
+    return Object.values(ranking).sort((a, b) => b.total - a.total).slice(0, 5);
+  }, [sales]);
+
   const debtors = customers.filter(c => (c.totalDebt || 0) > 0).sort((a, b) => (b.totalDebt || 0) - (a.totalDebt || 0));
 
   const categoryData = products.reduce((acc: any[], p) => {
@@ -334,6 +349,43 @@ export default function Dashboard() {
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+        </div>
+
+        {/* TOP Customers Ranking */}
+        <div className="bg-indigo-600 rounded-[32px] p-8 text-white shadow-2xl relative overflow-hidden group">
+          <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none group-hover:scale-110 transition-transform duration-500">
+            <TrendingUp size={160} />
+          </div>
+          <div className="relative z-10">
+            <h3 className="text-lg font-black uppercase tracking-widest mb-6 flex items-center gap-2">
+              <div className="size-8 bg-white/20 rounded-lg flex items-center justify-center text-white">
+                <ArrowUpRight size={16} />
+              </div>
+              Ranking de Compras
+            </h3>
+            
+            <div className="space-y-4">
+              {customerRanking.map((rank, index) => (
+                <div key={index} className="bg-white/10 backdrop-blur-sm border border-white/10 rounded-2xl p-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="size-8 rounded-full bg-amber-400 text-slate-900 flex items-center justify-center font-black text-sm">
+                      {index + 1}º
+                    </div>
+                    <div>
+                      <div className="text-xs font-black uppercase tracking-tight">{rank.name}</div>
+                      <div className="text-[9px] font-bold text-white/60 uppercase tracking-widest">{rank.count} pedidos realizados</div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm font-black">{formatCurrency(rank.total)}</div>
+                  </div>
+                </div>
+              ))}
+              {customerRanking.length === 0 && (
+                <p className="text-center py-6 text-white/40 text-[10px] font-black uppercase tracking-widest">Nenhum dado disponível</p>
+              )}
             </div>
           </div>
         </div>

@@ -24,7 +24,7 @@ export default function Customers() {
   const [contact, setContact] = useState('');
 
   useEffect(() => {
-    const q = query(collection(db, 'customers'));
+    const q = query(collection(db, 'customers'), orderBy('name', 'asc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setCustomers(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Customer)));
     });
@@ -178,7 +178,8 @@ export default function Customers() {
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <table className="w-full text-left border-collapse">
+        {/* Desktop Table View */}
+        <table className="w-full text-left border-collapse hidden md:table">
           <thead>
             <tr className="bg-slate-50/50 border-b border-slate-100">
               <th className="px-6 py-4 text-[10px] uppercase font-black text-slate-400 tracking-widest">Identificação do Cliente</th>
@@ -231,6 +232,43 @@ export default function Customers() {
             ))}
           </tbody>
         </table>
+
+        {/* Mobile Card View */}
+        <div className="md:hidden divide-y divide-slate-100">
+          {filtered.map(customer => (
+            <div key={customer.id} className="p-4 space-y-3">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h4 className="font-bold text-slate-900 text-sm">{customer.name}</h4>
+                  <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium">
+                    <Phone size={12} className="text-emerald-500" />
+                    {customer.contact}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Saldo</p>
+                  <p className={cn(
+                    "text-sm font-black",
+                    customer.totalDebt > 0 ? "text-rose-500" : "text-emerald-600"
+                  )}>
+                    {formatCurrency(customer.totalDebt)}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center justify-between pt-2">
+                <div className="flex gap-2">
+                  <button onClick={() => openHistory(customer)} className="px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-lg text-[9px] font-black uppercase tracking-widest flex items-center gap-1">
+                    <Wallet size={12} /> Pagar
+                  </button>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => openModal(customer)} className="p-2 bg-slate-100 text-slate-600 rounded-lg"><Edit2 size={14} /></button>
+                  <button onClick={() => deleteDoc(doc(db, 'customers', customer.id!))} className="p-2 bg-rose-50 text-rose-600 rounded-lg"><Trash2 size={14} /></button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Customer Modal */}
@@ -326,10 +364,12 @@ export default function Customers() {
                     <div className="flex-1 relative">
                       <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 font-bold">R$</span>
                       <input 
-                        type="number" value={paymentAmount} 
-                        onChange={e => setPaymentAmount(e.target.value)}
+                        type="text" value={paymentAmount} 
+                        inputMode="decimal"
+                        onChange={e => setPaymentAmount(e.target.value.replace(/[^0-9,.]/g, '').replace(',', '.'))}
                         onFocus={e => e.target.value === '0' ? setPaymentAmount('') : null}
-                        className="w-full bg-white/10 border border-white/10 rounded-xl pl-10 pr-4 py-3 outline-none font-black text-xl text-indigo-300 focus:bg-white/20 transition-all transition-all placeholder:text-white/20"
+                        onBlur={e => e.target.value === '' ? setPaymentAmount('0') : null}
+                        className="w-full bg-white/10 border border-white/10 rounded-xl pl-10 pr-4 py-3 outline-none font-black text-xl text-indigo-300 focus:bg-white/20 transition-all placeholder:text-white/20"
                         placeholder="0,00"
                       />
                     </div>
