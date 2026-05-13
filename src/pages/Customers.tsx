@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, where, orderBy } from 'firebase/firestore';
+import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, where, orderBy, writeBatch } from 'firebase/firestore';
 import { Customer, Transaction } from '../types';
 import { Plus, Search, Edit2, Trash2, Copy, User, Phone, Wallet, History, ArrowDownCircle, ArrowUpCircle, X } from 'lucide-react';
 import { formatCurrency, cn } from '../lib/utils';
@@ -22,6 +22,7 @@ export default function Customers() {
   // Form State
   const [name, setName] = useState('');
   const [contact, setContact] = useState('');
+  const [isImporting, setIsImporting] = useState(false);
 
   useEffect(() => {
     const q = query(collection(db, 'customers'), orderBy('name', 'asc'));
@@ -42,6 +43,53 @@ export default function Customers() {
       setEditingCustomer(null);
     }
     setIsModalOpen(true);
+  };
+
+  const handleCSVImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsImporting(true);
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const text = event.target?.result as string;
+        const lines = text.split('\n').filter(line => line.trim() !== '');
+        
+        // Remove header if exists (checking for "nome")
+        let startIndex = 0;
+        if (lines[0].toLowerCase().includes('nome')) {
+          startIndex = 1;
+        }
+
+        const batch = writeBatch(db);
+        let count = 0;
+
+        for (let i = startIndex; i < lines.length; i++) {
+          const columns = lines[i].split(',').map(c => c.trim());
+          if (columns[0]) {
+            const customerRef = doc(collection(db, 'customers'));
+            batch.set(customerRef, {
+              name: columns[0],
+              contact: columns[1] || '',
+              totalDebt: 0,
+              updatedAt: serverTimestamp()
+            });
+            count++;
+          }
+        }
+
+        await batch.commit();
+        alert(`${count} clientes importados com sucesso!`);
+      } catch (err: any) {
+        console.error(err);
+        alert('Erro ao processar CSV. Verifique a formatação.');
+      } finally {
+        setIsImporting(false);
+        if (e.target) e.target.value = '';
+      }
+    };
+    reader.readAsText(file);
   };
 
   const openHistory = (customer: Customer) => {
@@ -169,12 +217,22 @@ export default function Customers() {
             Pendentes {filterPending && `(${filtered.length})`}
           </button>
         </div>
-        <button 
-          onClick={() => openModal()}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-md shadow-indigo-200 flex items-center gap-2 active:scale-95"
-        >
-          <Plus size={20} /> Cadastrar Cliente
-        </button>
+        <div className="flex items-center gap-2">
+          <label className={cn(
+            "flex items-center gap-2 px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl cursor-pointer transition-all active:scale-95",
+            isImporting && "opacity-50 pointer-events-none"
+          )}>
+            <ArrowDownCircle size={20} />
+            {isImporting ? 'Importando...' : 'Importar CSV'}
+            <input type="file" accept=".csv" className="hidden" onChange={handleCSVImport} disabled={isImporting} />
+          </label>
+          <button 
+            onClick={() => openModal()}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-md shadow-indigo-200 flex items-center gap-2 active:scale-95"
+          >
+            <Plus size={20} /> Cadastrar Cliente
+          </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
