@@ -30,6 +30,8 @@ export default function Shipments() {
   const [search, setSearch] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showTimelineId, setShowTimelineId] = useState<string | null>(null);
+  const [editingTaxId, setEditingTaxId] = useState<string | null>(null);
+  const [quickTaxAmount, setQuickTaxAmount] = useState('');
 
   // Form State
   const [trackingCode, setTrackingCode] = useState('');
@@ -122,9 +124,15 @@ export default function Shipments() {
 
     const currentItems = [...items];
     
+    // Check for items already in other shipments (global check)
+    const otherShipmentsItems = shipments
+      .filter(s => s.id !== editingShipment?.id)
+      .flatMap(s => s.items.map(i => `${i.saleId}-${i.productId}-${i.variationId}`));
+    const globalShippedKeys = new Set(otherShipmentsItems);
+
     sale.items.forEach(item => {
       const itemKey = `${sale.id}-${item.productId}-${item.variationId}`;
-      if (shippedItemKeys.has(itemKey)) return; // Skip already shipped items
+      if (globalShippedKeys.has(itemKey)) return; // Skip items in other shipments
 
       const pName = `${item.name} ${item.variationName ? `(${item.variationName})` : ''}`;
       const cId = sale.customerId || 'final-consumer';
@@ -568,26 +576,56 @@ export default function Shipments() {
                     >
                       {shipment.taxPaid ? 'Pago' : 'Pagar'}
                     </button>
-                  </div>
-                ) : (
                     <button 
                       onClick={(e) => {
                         e.stopPropagation();
-                        const amountStr = prompt('Valor da taxa (Ex: 100,50):');
-                        if (amountStr !== null && amountStr.trim() !== '') {
-                          const normalized = amountStr.replace(',', '.').replace(/[^\d.]/g, '');
-                          const parsed = parseFloat(normalized);
-                          if (!isNaN(parsed) && parsed >= 0) {
-                            updateShipmentTax(shipment.id!, parsed, false);
-                          } else {
-                            alert('Por favor, insira um valor numérico válido.');
-                          }
-                        }
+                        setEditingTaxId(shipment.id!);
+                        setQuickTaxAmount(shipment.taxAmount.toString());
                       }}
-                      className="flex items-center gap-1 text-[9px] font-black uppercase text-slate-400 hover:text-indigo-600 transition-colors border border-slate-200 px-2 py-1 rounded-lg"
+                      className="p-1 hover:bg-slate-100 rounded-md text-slate-400"
+                    >
+                      <Plus size={10} />
+                    </button>
+                  </div>
+                ) : (
+                  editingTaxId === shipment.id ? (
+                    <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-1 animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
+                      <input 
+                        autoFocus
+                        type="text"
+                        placeholder="0,00"
+                        value={quickTaxAmount}
+                        onChange={e => setQuickTaxAmount(e.target.value.replace(/[^0-9,]/g, ''))}
+                        className="w-16 px-1.5 py-0.5 text-[10px] font-bold outline-none"
+                      />
+                      <button 
+                        onClick={() => {
+                          const val = parseFloat(quickTaxAmount.replace(',', '.'));
+                          if (!isNaN(val)) {
+                            updateShipmentTax(shipment.id!, val, false);
+                            setEditingTaxId(null);
+                          }
+                        }}
+                        className="bg-indigo-600 text-white px-2 py-0.5 rounded text-[8px] font-black uppercase"
+                      >
+                        OK
+                      </button>
+                      <button onClick={() => setEditingTaxId(null)} className="text-slate-400">
+                        <X size={10} />
+                      </button>
+                    </div>
+                  ) : (
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingTaxId(shipment.id!);
+                        setQuickTaxAmount('');
+                      }}
+                      className="flex items-center gap-1 text-[9px] font-black uppercase text-slate-400 hover:text-indigo-600 transition-colors border border-slate-200 px-2 py-1.5 rounded-xl bg-white shadow-sm"
                     >
                       <Plus size={10} /> Adicionar Taxa
                     </button>
+                  )
                 )}
               </div>
               <button 

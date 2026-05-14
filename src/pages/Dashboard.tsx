@@ -230,6 +230,21 @@ export default function Dashboard() {
   }, [sales]);
 
   const debtors = customers.filter(c => (c.totalDebt || 0) > 0).sort((a, b) => (b.totalDebt || 0) - (a.totalDebt || 0));
+  
+  const supplierRanking = React.useMemo(() => {
+    const ranking: Record<string, { name: string, totalTax: number, count: number }> = {};
+    
+    shipments.forEach(s => {
+      const supplier = s.supplierName || 'Desconhecido';
+      if (!ranking[supplier]) {
+        ranking[supplier] = { name: supplier, totalTax: 0, count: 0 };
+      }
+      ranking[supplier].totalTax += (s.taxAmount || 0);
+      ranking[supplier].count += 1;
+    });
+
+    return Object.values(ranking).sort((a, b) => b.totalTax - a.totalTax).slice(0, 5);
+  }, [shipments]);
 
   const categoryData = products.reduce((acc: any[], p) => {
     const existing = acc.find(a => a.name === p.category);
@@ -461,6 +476,44 @@ export default function Dashboard() {
                 </div>
               ))}
               {customerRanking.length === 0 && (
+                <p className="text-center py-6 text-white/40 text-[10px] font-black uppercase tracking-widest">Nenhum dado disponível</p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* TOP Suppliers Ranking */}
+        <div className="bg-emerald-600 rounded-[32px] p-8 text-white shadow-2xl relative overflow-hidden group">
+          <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none group-hover:scale-110 transition-transform duration-500">
+            <Truck size={160} />
+          </div>
+          <div className="relative z-10">
+            <h3 className="text-lg font-black uppercase tracking-widest mb-6 flex items-center gap-2">
+              <div className="size-8 bg-white/20 rounded-lg flex items-center justify-center text-white">
+                <Receipt size={16} />
+              </div>
+              Taxas por Fornecedor
+            </h3>
+            
+            <div className="space-y-4">
+              {supplierRanking.map((rank, index) => (
+                <div key={index} className="bg-white/10 backdrop-blur-sm border border-white/10 rounded-2xl p-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="size-8 rounded-full bg-white text-emerald-600 flex items-center justify-center font-black text-sm">
+                      {index + 1}º
+                    </div>
+                    <div>
+                      <div className="text-xs font-black uppercase tracking-tight truncate max-w-[100px]">{rank.name}</div>
+                      <div className="text-[9px] font-bold text-white/60 uppercase tracking-widest">{rank.count} lotes</div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm font-black">{formatCurrency(rank.totalTax)}</div>
+                    <div className="text-[8px] font-bold text-emerald-200 uppercase">Total Tributos</div>
+                  </div>
+                </div>
+              ))}
+              {supplierRanking.length === 0 && (
                 <p className="text-center py-6 text-white/40 text-[10px] font-black uppercase tracking-widest">Nenhum dado disponível</p>
               )}
             </div>

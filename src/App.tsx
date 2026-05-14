@@ -34,6 +34,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [activePage, setActivePage] = useState<Page>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
@@ -74,7 +75,12 @@ export default function App() {
     }
   };
 
-  if (loading) return <div className="h-screen w-screen flex items-center justify-center bg-gray-50 text-gray-400">Carregando...</div>;
+  if (loading) return (
+    <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-900 text-indigo-400 gap-4">
+      <div className="size-16 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin" />
+      <p className="text-[10px] font-black uppercase tracking-[0.2em] animate-pulse">Sincronizando Sistema...</p>
+    </div>
+  );
 
   if (!user) {
     return (
@@ -112,106 +118,119 @@ export default function App() {
 
   return (
     <div className="flex h-screen bg-slate-50 font-sans overflow-hidden relative">
-      {/* Sidebar Navigation - Desktop only */}
+      {/* Mobile Drawer Overlay */}
       <AnimatePresence>
-        {(isSidebarOpen || window.innerWidth > 768) && (
+        {isMobileMenuOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setIsMobileMenuOpen(false)}
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[80] md:hidden"
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Modern Sidebar - Responsive */}
+      <AnimatePresence mode="wait">
+        {(isSidebarOpen || isMobileMenuOpen) && (
           <motion.aside 
-            initial={window.innerWidth <= 768 ? { x: -300 } : false}
+            initial={isMobileMenuOpen ? { x: -300 } : false}
             animate={{ 
-              width: isSidebarOpen ? 260 : 80,
+              width: isMobileMenuOpen ? 280 : (isSidebarOpen ? 260 : 80),
               x: 0,
-              position: window.innerWidth <= 768 ? 'fixed' : 'relative'
+              position: isMobileMenuOpen ? 'fixed' : 'relative',
             }}
-            exit={window.innerWidth <= 768 ? { x: -300 } : undefined}
+            exit={isMobileMenuOpen ? { x: -300 } : undefined}
             className={cn(
-              "bg-slate-900 flex-col shrink-0 shadow-2xl z-[70] transition-all duration-300 h-full hidden md:flex",
-              window.innerWidth <= 768 && "absolute top-0 left-0"
+              "bg-slate-900 flex flex-col shrink-0 shadow-2xl z-[90] transition-all duration-300 h-full",
+              !isMobileMenuOpen && "hidden md:flex",
+              isMobileMenuOpen && "fixed top-0 left-0"
             )}
           >
-            <div className="p-6 flex items-center justify-between">
-              {(isSidebarOpen || window.innerWidth <= 768) && (
-                <motion.div 
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="flex items-center gap-2"
-                >
-                  <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center p-1 bg-white/10">
-                    <img 
-                      src="https://i.ibb.co/v3Y0V6N/logo-club-da-bola.jpg" 
-                      alt="Logo" 
-                      className="w-full h-full object-contain"
-                      referrerPolicy="no-referrer"
-                      onError={(e) => { 
-                        e.currentTarget.style.display = 'none';
-                        const parent = e.currentTarget.parentElement;
-                        if (parent) {
-                          const fallback = document.createElement('div');
-                          fallback.className = "w-full h-full bg-amber-500 rounded flex items-center justify-center text-[10px] font-black italic text-slate-900";
-                          fallback.innerText = "CB";
-                          parent.appendChild(fallback);
-                        }
-                      }}
-                    />
-                  </div>
-                  <h1 className="text-white font-black tracking-tighter leading-none text-xs italic text-nowrap">
+            <div className="p-6 flex items-center justify-between border-b border-slate-800/50">
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="flex items-center gap-3"
+              >
+                <div className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center p-1.5 bg-white/5 border border-white/10 shadow-inner">
+                  <img 
+                    src="https://i.ibb.co/v3Y0V6N/logo-club-da-bola.jpg" 
+                    alt="Logo" 
+                    className="w-full h-full object-contain"
+                    referrerPolicy="no-referrer"
+                    onError={(e) => { 
+                      e.currentTarget.style.display = 'none';
+                      const parent = e.currentTarget.parentElement;
+                      if (parent) {
+                        const fallback = document.createElement('div');
+                        fallback.className = "w-full h-full bg-amber-500 rounded flex items-center justify-center text-[10px] font-black italic text-slate-900";
+                        fallback.innerText = "CB";
+                        parent.appendChild(fallback);
+                      }
+                    }}
+                  />
+                </div>
+                {(isSidebarOpen || isMobileMenuOpen) && (
+                  <h1 className="text-white font-black tracking-tighter leading-none text-xs italic">
                     ERP CLUB DA <span className="text-amber-500">BOLA</span>
                   </h1>
-                </motion.div>
+                )}
+              </motion.div>
+              
+              {isMobileMenuOpen && (
+                <button 
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="p-2 text-slate-400 hover:text-white bg-white/5 rounded-xl transition-colors md:hidden"
+                >
+                  <X size={18} />
+                </button>
               )}
-              <button 
-                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                className="p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white rounded-lg transition-colors hidden md:block"
-              >
-                {isSidebarOpen ? <X size={20} /> : <Menu size={20} />}
-              </button>
-              <button 
-                onClick={() => setIsSidebarOpen(false)}
-                className="p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white rounded-lg transition-colors md:hidden"
-              >
-                <X size={20} />
-              </button>
             </div>
 
-            <nav className="flex-1 mt-6 px-4 space-y-1 overflow-y-auto custom-scrollbar">
+            <nav className="flex-1 mt-8 px-4 space-y-1.5 overflow-y-auto custom-scrollbar">
               {menuItems.map((item) => (
                 <button
                   key={item.id}
                   onClick={() => {
                     setActivePage(item.id as Page);
-                    if (window.innerWidth <= 768) setIsSidebarOpen(false);
+                    if (isMobileMenuOpen) setIsMobileMenuOpen(false);
                   }}
-                  className={`w-full flex items-center gap-3 px-3 py-3 rounded-md transition-all text-sm font-medium ${
+                  className={cn(
+                    "w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all text-sm font-bold group",
                     activePage === item.id 
-                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-900/20' 
-                      : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-                  }`}
+                      ? 'bg-gradient-to-r from-indigo-600 to-indigo-500 text-white shadow-lg shadow-indigo-600/20' 
+                      : 'text-slate-400 hover:bg-white/5 hover:text-slate-100'
+                  )}
                 >
-                  <item.icon size={18} className={activePage === item.id ? 'text-white' : 'text-slate-400'} />
-                  {(isSidebarOpen || window.innerWidth <= 768) && <span>{item.label}</span>}
-                  {(isSidebarOpen || window.innerWidth <= 768) && activePage === item.id && <ChevronRight size={14} className="ml-auto opacity-50" />}
+                  <item.icon size={20} className={cn(activePage === item.id ? 'text-white' : 'text-slate-500 group-hover:text-indigo-400 transition-colors')} />
+                  {(isSidebarOpen || isMobileMenuOpen) && <span className="tracking-tight">{item.label}</span>}
+                  {(isSidebarOpen || isMobileMenuOpen) && activePage === item.id && (
+                    <motion.div layoutId="activeIndicator" className="ml-auto w-1.5 h-1.5 bg-white rounded-full shadow-glow" />
+                  )}
                 </button>
               ))}
             </nav>
 
-            <div className="p-4 mt-auto border-t border-slate-800 space-y-4 mb-20 md:mb-0">
-              {isSidebarOpen && (
-                <div className="bg-indigo-500/10 p-3 rounded-lg border border-indigo-500/20 hidden md:block">
-                  <p className="text-[10px] uppercase font-bold text-indigo-400 mb-1">Carga inicial</p>
-                  <p className="text-[10px] text-white opacity-80 leading-tight">Importe dados da planilha categorizada.</p>
+            <div className="p-4 mt-auto border-t border-slate-800/50 space-y-4">
+              {(isSidebarOpen || isMobileMenuOpen) && (
+                <div className="bg-indigo-500/5 p-4 rounded-2xl border border-indigo-500/10">
+                  <p className="text-[10px] uppercase font-black text-indigo-400 mb-1 tracking-widest">Base de Dados</p>
                   <button 
                     onClick={handleSeed}
-                    className="mt-2 w-full text-[10px] bg-indigo-600 text-white py-1.5 px-2 rounded font-bold uppercase hover:bg-indigo-50 transition-colors"
+                    className="mt-2 w-full text-[10px] bg-slate-800 text-white py-2 px-3 rounded-xl font-black uppercase hover:bg-indigo-600 transition-all border border-slate-700"
                   >
-                    Importar Firestore
+                    Importar Excel
                   </button>
                 </div>
               )}
               <button 
                 onClick={() => signOut(auth)}
-                className="w-full flex items-center gap-3 px-3 py-2 rounded-md hover:bg-rose-500/10 hover:text-rose-400 transition-all text-slate-400 text-sm font-medium"
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl hover:bg-rose-500/10 hover:text-rose-400 transition-all text-slate-500 text-sm font-bold group"
               >
-                <LogOut size={18} />
-                {(isSidebarOpen || window.innerWidth <= 768) && <span>Encerrar Sessão</span>}
+                <LogOut size={20} className="group-hover:translate-x-1 transition-transform" />
+                {(isSidebarOpen || isMobileMenuOpen) && <span>Sair do Sistema</span>}
               </button>
             </div>
           </motion.aside>
@@ -220,31 +239,35 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col overflow-hidden relative">
-         <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 md:px-8 shrink-0 z-50">
-          <div className="flex items-center gap-3">
-             <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center bg-slate-50 border border-slate-100 p-1 hidden sm:flex">
-               <img 
-                src="https://i.ibb.co/v3Y0V6N/logo-club-da-bola.jpg" 
-                alt="Logo" 
-                className="w-full h-full object-contain" 
-                referrerPolicy="no-referrer"
-                onError={(e) => { 
-                  e.currentTarget.style.display = 'none';
-                  const parent = e.currentTarget.parentElement;
-                  if (parent) {
-                    const fallback = document.createElement('div');
-                    fallback.className = "w-full h-full bg-amber-500 rounded flex items-center justify-center text-[10px] font-black italic text-slate-900";
-                    fallback.innerText = "CB";
-                    parent.appendChild(fallback);
-                  }
-                }}
-               />
+         <header className="h-16 md:h-20 bg-white border-b border-slate-100 flex items-center justify-between px-4 md:px-10 shrink-0 z-50">
+          <div className="flex items-center gap-4">
+             {/* Hamburger Menu - 3 Bars */}
+             <button 
+               onClick={() => setIsMobileMenuOpen(true)}
+               className="p-2.5 text-slate-600 hover:bg-slate-50 rounded-xl transition-all md:hidden border border-slate-100 shadow-sm"
+             >
+               <Menu size={20} />
+             </button>
+
+             {/* Sidebar Toggle - Desktop */}
+             <button 
+                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                className="hidden md:flex p-2.5 text-slate-400 hover:bg-slate-50 hover:text-slate-900 rounded-xl transition-all border border-slate-100"
+              >
+                <Menu size={20} />
+              </button>
+
+             <div className="flex items-center gap-3">
+                <div className="hidden lg:flex w-9 h-9 rounded-xl overflow-hidden items-center justify-center bg-slate-50 border border-slate-100 p-1.5 shadow-sm">
+                  <img src="https://i.ibb.co/v3Y0V6N/logo-club-da-bola.jpg" alt="Logo" className="w-full h-full object-contain" referrerPolicy="no-referrer" />
+                </div>
+                <div className="flex flex-col -space-y-1">
+                  <span className="text-slate-900 text-xs font-black italic uppercase tracking-tighter truncate max-w-[120px] sm:max-w-none">ERP CLUB DA <span className="text-amber-500">BOLA</span></span>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase hidden sm:block tracking-widest">
+                    Sistema de Gestão Profissional
+                  </span>
+                </div>
              </div>
-            <span className="text-slate-900 text-sm font-black italic uppercase tracking-tighter truncate max-w-[120px] sm:max-w-none">ERP CLUB DA <span className="text-amber-500">BOLA</span></span>
-            <span className="text-slate-300 hidden sm:block">/</span>
-            <span className="text-slate-800 font-semibold text-sm capitalize hidden sm:block">
-              {menuItems.find(m => m.id === activePage)?.label}
-            </span>
           </div>
           <div className="flex items-center gap-3 md:gap-6">
             <button className="hidden md:flex items-center gap-2 bg-emerald-500 text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-sm shadow-emerald-200 hover:bg-emerald-600 transition-colors">
@@ -284,28 +307,8 @@ export default function App() {
           </AnimatePresence>
         </div>
 
-        <div className="md:hidden fixed bottom-0 left-0 right-0 h-20 bg-slate-900 border-t border-slate-800 flex items-center justify-around px-2 z-50">
-          {[
-            { id: 'dashboard', label: 'Dash', icon: LayoutDashboard },
-            { id: 'pdv', label: 'Venda', icon: ShoppingCart },
-            { id: 'shipments', label: 'Enc', icon: Truck },
-            { id: 'products', label: 'Est', icon: Package },
-            { id: 'finance', label: 'Fin', icon: DollarSign },
-          ].map((item) => (
-            <button
-              key={item.id}
-              onClick={() => setActivePage(item.id as Page)}
-              className={cn(
-                "flex flex-col items-center gap-1 p-2 transition-all relative",
-                activePage === item.id ? "text-indigo-400" : "text-slate-500"
-              )}
-            >
-              <item.icon size={22} className={cn(activePage === item.id && "scale-110")} />
-              <span className="text-[9px] font-bold uppercase tracking-tighter">{item.label}</span>
-              {activePage === item.id && <motion.div layoutId="bottomNav" className="absolute -bottom-1 w-1 h-1 bg-indigo-500 rounded-full" />}
-            </button>
-          ))}
-        </div>
+        {/* Bottom Navigation - Only small devices, strictly essential only or remove */}
+        {/* I'll remove the redundant bottom nav as the sidebar is now the primary navigation as requested */}
       </main>
     </div>
   );
