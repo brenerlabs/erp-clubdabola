@@ -41,11 +41,46 @@ export interface Sale {
   customerId?: string;
   customerName?: string;
   items: SaleItem[];
+  subtotal: number;
+  discount: number;
   total: number;
   downPayment?: number;
   paymentMethod: 'Dinheiro' | 'Cartão' | 'Pix' | 'Fiado';
   status: 'Concluída' | 'Pendente';
   createdAt: any;
+}
+
+export interface ShipmentItem {
+  id: string;
+  saleId?: string;
+  variationId?: string;
+  customerId: string;
+  customerName: string;
+  productId: string;
+  productName: string;
+  quantity: number;
+  price: number;
+}
+
+export interface ShipmentStatusHistory {
+  status: Shipment['status'];
+  updatedAt: any;
+  notes?: string;
+}
+
+export interface Shipment {
+  id?: string;
+  trackingCode: string;
+  status: 'Processando' | 'Postado' | 'Em Trânsito' | 'Fiscalização' | 'Recebido' | 'Entregue';
+  items: ShipmentItem[];
+  hasTax: boolean;
+  taxAmount: number;
+  taxPaid: boolean;
+  supplierName?: string;
+  history?: ShipmentStatusHistory[];
+  notes?: string;
+  createdAt: any;
+  updatedAt: any;
 }
 
 export interface Transaction {

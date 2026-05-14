@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../lib/firebase';
 import { collection, query, onSnapshot, orderBy, limit, doc, updateDoc, writeBatch, serverTimestamp, getDoc } from 'firebase/firestore';
-import { Transaction, Sale, Product, Customer } from '../types';
+import { Transaction, Sale, Product, Customer, Shipment } from '../types';
 import { formatCurrency, cn } from '../lib/utils';
 import { 
   TrendingUp, 
@@ -17,7 +17,9 @@ import {
   CreditCard,
   Banknote,
   QrCode,
-  CheckCircle2
+  CheckCircle2,
+  Receipt,
+  Truck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -44,6 +46,7 @@ export default function Dashboard() {
   const [isCompensating, setIsCompensating] = useState(false);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [shipments, setShipments] = useState<Shipment[]>([]);
   
   // Filters
   const [customerFilter, setCustomerFilter] = useState('all');
@@ -66,7 +69,11 @@ export default function Dashboard() {
       setTransactions(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Transaction)));
     });
 
-    return () => { unsubSales(); unsubProd(); unsubCust(); unsubTrans(); };
+    const unsubShip = onSnapshot(collection(db, 'shipments'), (snapshot) => {
+      setShipments(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Shipment)));
+    });
+
+    return () => { unsubSales(); unsubProd(); unsubCust(); unsubTrans(); unsubShip(); };
   }, []);
 
   // Dynamic Filtering
@@ -96,15 +103,28 @@ export default function Dashboard() {
       .filter(c => customerFilter === 'all' || c.id === customerFilter)
       .reduce((acc, c) => acc + (c.totalDebt || 0), 0);
 
+    const paidTaxes = shipments
+      .filter(s => s.taxPaid)
+      .reduce((acc, s) => acc + (s.taxAmount || 0), 0);
+
+    const pendingTaxes = shipments
+      .filter(s => s.hasTax && !s.taxPaid)
+      .reduce((acc, s) => acc + (s.taxAmount || 0), 0);
+
+    const efficiencyRatio = revenue > 0 ? ((revenue - debt) / revenue) * 100 : 0;
+
     return {
       totalRevenue: revenue,
-      totalProfit: profit,
+      totalProfit: profit - paidTaxes,
       avgTicket: filteredSales.length > 0 ? revenue / filteredSales.length : 0,
       lowStockItems: products.filter(p => p.totalStock <= p.minStock).length,
       totalDebt: debt,
-      totalOrders: filteredSales.length
+      totalOrders: filteredSales.length,
+      paidTaxes,
+      pendingTaxes,
+      efficiencyRatio
     };
-  }, [filteredSales, products, customers, customerFilter]);
+  }, [filteredSales, products, customers, customerFilter, shipments]);
 
   const getSaleBalance = (sale: Sale) => {
     if (sale.paymentMethod !== 'Fiado') return 0;
@@ -297,6 +317,63 @@ export default function Dashboard() {
           positive={stats.totalDebt === 0} 
           color="rose"
         />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-white p-6 rounded-[32px] border border-slate-200 shadow-sm flex items-center justify-between">
+           <div className="flex items-center gap-4">
+              <div className={cn(
+                "size-12 rounded-2xl flex items-center justify-center",
+                stats.efficiencyRatio > 80 ? "bg-emerald-100 text-emerald-600" : "bg-amber-100 text-amber-600"
+              )}>
+                <TrendingUp size={24} />
+              </div>
+              <div>
+                <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Eficiência de Recebimento</p>
+                <h4 className="text-xl font-black text-slate-900 leading-tight">{stats.efficiencyRatio.toFixed(1)}%</h4>
+              </div>
+           </div>
+           <div className="text-right">
+              <p className="text-[9px] font-bold text-slate-400 uppercase">Qualidade do Fluxo</p>
+              <div className="w-24 h-1.5 bg-slate-100 rounded-full mt-2 overflow-hidden">
+                <motion.div 
+                  initial={{ width: 0 }}
+                  animate={{ width: `${stats.efficiencyRatio}%` }}
+                  className={cn("h-full", stats.efficiencyRatio > 80 ? "bg-emerald-500" : "bg-amber-500")} 
+                />
+              </div>
+           </div>
+        </div>
+        <div className="bg-white p-6 rounded-[32px] border border-slate-200 shadow-sm flex items-center justify-between">
+           <div className="flex items-center gap-4">
+              <div className="size-12 bg-rose-100 text-rose-600 rounded-2xl flex items-center justify-center">
+                <Receipt size={24} />
+              </div>
+              <div>
+                <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Taxas de Importação Pagas</p>
+                <h4 className="text-xl font-black text-slate-900 leading-tight">{formatCurrency(stats.paidTaxes)}</h4>
+              </div>
+           </div>
+           <div className="text-right">
+              <p className="text-[10px] font-black uppercase text-rose-400 tracking-widest">Pendente: {formatCurrency(stats.pendingTaxes)}</p>
+              <p className="text-[9px] font-bold text-slate-400 mt-1 uppercase">Dedução direta do lucro operacional</p>
+           </div>
+        </div>
+        <div className="bg-white p-6 rounded-[32px] border border-slate-200 shadow-sm flex items-center justify-between">
+           <div className="flex items-center gap-4">
+              <div className="size-12 bg-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center">
+                <Truck size={24} />
+              </div>
+              <div>
+                <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Encaminhamentos Ativos</p>
+                <h4 className="text-xl font-black text-slate-900 leading-tight">{shipments.filter(s => s.status !== 'Entregue').length} Lotes</h4>
+              </div>
+           </div>
+           <div className="text-right">
+              <p className="text-[10px] font-black uppercase text-indigo-400 tracking-widest">Total Itens: {shipments.reduce((acc, s) => acc + s.items.length, 0)}</p>
+              <p className="text-[9px] font-bold text-slate-400 mt-1 uppercase">Monitoramento via rádio/rastreio</p>
+           </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">

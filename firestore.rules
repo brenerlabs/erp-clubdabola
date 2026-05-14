@@ -51,6 +51,19 @@ service cloud.firestore {
              data.createdAt == request.time;
     }
 
+    function isValidShipment(data) {
+      return data.trackingCode is string &&
+             data.status is string &&
+             data.items is list &&
+             data.hasTax is bool &&
+             data.taxAmount is number &&
+             data.taxPaid is bool &&
+             (data.get('supplierName', '') is string) &&
+             (data.get('notes', '') is string) &&
+             (data.get('history', []) is list) &&
+             (data.get('updatedAt', null) == null || data.updatedAt == request.time);
+    }
+
     // Collections
     match /products/{productId} {
       allow read: if isSignedIn();
@@ -85,6 +98,17 @@ service cloud.firestore {
       allow get: if isAdmin();
       allow create: if isAdmin() && isValidId(transactionId) && isValidTransaction(incoming());
       allow update, delete: if false; // Transactions are immutable records
+    }
+
+    match /shipments/{shipmentId} {
+      allow read: if isSignedIn();
+      allow create: if isAdmin() && isValidId(shipmentId) && isValidShipment(incoming()) && 
+                    (incoming().get('createdAt', null) == request.time);
+      allow update: if isAdmin() && isValidId(shipmentId) && isValidShipment(incoming()) && (
+        incoming().get('createdAt', null) == existing().get('createdAt', null) &&
+        incoming().diff(existing()).affectedKeys().hasAny(['status', 'items', 'trackingCode', 'hasTax', 'taxAmount', 'taxPaid', 'notes', 'updatedAt', 'supplierName', 'history'])
+      );
+      allow delete: if isAdmin();
     }
   }
 }

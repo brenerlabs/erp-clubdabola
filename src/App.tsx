@@ -11,7 +11,8 @@ import {
   X,
   Plus,
   RefreshCcw,
-  Send
+  Send,
+  Truck
 } from 'lucide-react';
 import { auth } from './lib/firebase';
 import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from 'firebase/auth';
@@ -24,8 +25,9 @@ import Products from './pages/Products';
 import Customers from './pages/Customers';
 import Finance from './pages/Finance';
 import Compensations from './pages/Compensations';
+import Shipments from './pages/Shipments';
 
-type Page = 'dashboard' | 'pdv' | 'products' | 'customers' | 'finance' | 'compensations';
+type Page = 'dashboard' | 'pdv' | 'products' | 'customers' | 'finance' | 'compensations' | 'shipments';
 
 export default function App() {
   const [user, setUser] = useState<any>(null);
@@ -103,6 +105,7 @@ export default function App() {
     { id: 'pdv', label: 'Venda (PDV)', icon: ShoppingCart },
     { id: 'products', label: 'Estoque', icon: Package },
     { id: 'customers', label: 'Clientes', icon: Users },
+    { id: 'shipments', label: 'Encomendas', icon: Truck },
     { id: 'compensations', label: 'Compensações', icon: RefreshCcw },
     { id: 'finance', label: 'Financeiro', icon: DollarSign },
   ];
@@ -275,37 +278,33 @@ export default function App() {
               {activePage === 'products' && <Products />}
               {activePage === 'customers' && <Customers />}
               {activePage === 'compensations' && <Compensations />}
+              {activePage === 'shipments' && <Shipments />}
               {activePage === 'finance' && <Finance />}
             </motion.div>
           </AnimatePresence>
         </div>
 
-        {/* Bottom Navigation for Mobile */}
         <div className="md:hidden fixed bottom-0 left-0 right-0 h-20 bg-slate-900 border-t border-slate-800 flex items-center justify-around px-2 z-50">
-          {menuItems.slice(0, 4).map((item) => (
+          {[
+            { id: 'dashboard', label: 'Dash', icon: LayoutDashboard },
+            { id: 'pdv', label: 'Venda', icon: ShoppingCart },
+            { id: 'shipments', label: 'Enc', icon: Truck },
+            { id: 'products', label: 'Est', icon: Package },
+            { id: 'finance', label: 'Fin', icon: DollarSign },
+          ].map((item) => (
             <button
               key={item.id}
               onClick={() => setActivePage(item.id as Page)}
               className={cn(
-                "flex flex-col items-center gap-1 p-2 transition-all",
+                "flex flex-col items-center gap-1 p-2 transition-all relative",
                 activePage === item.id ? "text-indigo-400" : "text-slate-500"
               )}
             >
               <item.icon size={22} className={cn(activePage === item.id && "scale-110")} />
-              <span className="text-[9px] font-bold uppercase tracking-tighter">{item.label.split(' ')[0]}</span>
+              <span className="text-[9px] font-bold uppercase tracking-tighter">{item.label}</span>
               {activePage === item.id && <motion.div layoutId="bottomNav" className="absolute -bottom-1 w-1 h-1 bg-indigo-500 rounded-full" />}
             </button>
           ))}
-          <button
-            onClick={() => setActivePage('finance')}
-            className={cn(
-              "flex flex-col items-center gap-1 p-2 transition-all",
-              activePage === 'finance' ? "text-indigo-400" : "text-slate-500"
-            )}
-          >
-            <DollarSign size={22} className={cn(activePage === 'finance' && "scale-110")} />
-            <span className="text-[9px] font-bold uppercase tracking-tighter">Finance</span>
-          </button>
         </div>
       </main>
     </div>

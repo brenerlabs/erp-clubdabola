@@ -61,6 +61,24 @@
         "createdAt": { "type": "string", "format": "date-time", "description": "Data de criação" }
       },
       "required": ["customerId", "amount", "type"]
+    },
+    "Shipment": {
+      "title": "Encomenda / Importação",
+      "description": "Agrupamento de pedidos para importação e rastreio.",
+      "type": "object",
+      "properties": {
+        "trackingCode": { "type": "string", "description": "Código de rastreio internacional" },
+        "status": { "type": "string", "description": "Status da encomenda" },
+        "items": { "type": "array", "description": "Lista de itens e clientes no lote" },
+        "hasTax": { "type": "boolean", "description": "Se houve taxação" },
+        "taxAmount": { "type": "number", "description": "Valor da taxa paga" },
+        "taxPaid": { "type": "boolean", "description": "Se a taxa foi liquidada" },
+        "supplierName": { "type": "string", "description": "Nome do fornecedor" },
+        "notes": { "type": "string", "description": "Observações adicionais" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["trackingCode", "status", "items"]
     }
   },
   "firestore": {
@@ -79,6 +97,10 @@
     "/transactions/{transactionId}": {
       "schema": "Transaction",
       "description": "Movimentações de fiado"
+    },
+    "/shipments/{shipmentId}": {
+      "schema": "Shipment",
+      "description": "Lotes de importação"
     }
   }
 }

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../lib/firebase';
 import { collection, query, onSnapshot, orderBy } from 'firebase/firestore';
-import { Transaction, Sale } from '../types';
+import { Transaction, Sale, Shipment } from '../types';
 import { 
   ArrowDownCircle, 
   ArrowUpCircle, 
@@ -11,7 +11,8 @@ import {
   QrCode, 
   Banknote,
   FileText,
-  Table as TableIcon
+  Table as TableIcon,
+  Receipt
 } from 'lucide-react';
 import { formatCurrency, cn } from '../lib/utils';
 import jsPDF from 'jspdf';
@@ -21,6 +22,7 @@ import * as XLSX from 'xlsx';
 export default function Finance() {
   const [sales, setSales] = useState<Sale[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [shipments, setShipments] = useState<Shipment[]>([]);
   const [filter, setFilter] = useState<'all' | 'payment' | 'debt'>('all');
 
   useEffect(() => {
@@ -32,7 +34,11 @@ export default function Finance() {
       setTransactions(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Transaction)));
     });
 
-    return () => { unsubSales(); unsubTrans(); };
+    const unsubShip = onSnapshot(collection(db, 'shipments'), (snapshot) => {
+      setShipments(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Shipment)));
+    });
+
+    return () => { unsubSales(); unsubTrans(); unsubShip(); };
   }, []);
 
   const getSaleBalance = (sale: Sale) => {
@@ -45,11 +51,12 @@ export default function Finance() {
 
   const totalInvoiced = sales.reduce((acc, s) => acc + s.total, 0);
   const totalReceived = transactions.filter(t => t.type === 'payment').reduce((acc, t) => acc + t.amount, 0);
+  const totalPaidTaxes = shipments.filter(s => s.taxPaid).reduce((acc, s) => acc + (s.taxAmount || 0), 0);
   
   // Accounts Receivable is the sum of balances of all Fiado sales
   const accountsReceivable = sales.reduce((acc, s) => acc + getSaleBalance(s), 0);
   
-  const cashFlow = totalReceived;
+  const cashFlow = totalReceived - totalPaidTaxes;
 
   const methods = [
     { name: 'Dinheiro', icon: Banknote, value: transactions.filter(t => t.paymentMethod === 'Dinheiro').reduce((a, b) => a + b.amount, 0), color: 'bg-green-50 text-green-600' },
@@ -114,10 +121,11 @@ export default function Finance() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
         <FinanceCard title="Faturamento Bruto" value={formatCurrency(totalInvoiced)} icon={ArrowUpCircle} color="indigo" />
-        <FinanceCard title="Fluxo de Caixa (Real)" value={formatCurrency(cashFlow)} icon={ArrowDownCircle} color="emerald" />
+        <FinanceCard title="Fluxo de Caixa (Líquido)" value={formatCurrency(cashFlow)} icon={ArrowDownCircle} color="emerald" />
         <FinanceCard title="Contas a Receber" value={formatCurrency(accountsReceivable)} icon={Wallet} color="rose" />
+        <FinanceCard title="Taxas Pagas" value={formatCurrency(totalPaidTaxes)} icon={Receipt} color="amber" />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
@@ -213,6 +221,7 @@ function FinanceCard({ title, value, icon: Icon, color }: any) {
     indigo: 'bg-indigo-600 shadow-indigo-200',
     emerald: 'bg-emerald-500 shadow-emerald-200',
     rose: 'bg-rose-500 shadow-rose-200',
+    amber: 'bg-amber-500 shadow-amber-200',
   };
 
   return (

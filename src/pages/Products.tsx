@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, orderBy } from 'firebase/firestore';
+import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, orderBy, writeBatch } from 'firebase/firestore';
 import { Product, Variation } from '../types';
 import { Plus, Search, Edit2, Trash2, Copy, Package, Box, X } from 'lucide-react';
 import { formatCurrency, calculateMargin, calculateMarkup, cn } from '../lib/utils';
@@ -11,6 +11,7 @@ export default function Products() {
   const [search, setSearch] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
 
   // Form State
   const [name, setName] = useState('');
@@ -47,6 +48,62 @@ export default function Products() {
       setEditingProduct(null);
     }
     setIsModalOpen(true);
+  };
+
+  const handleCSVImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsImporting(true);
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const text = event.target?.result as string;
+        const lines = text.split('\n').filter(line => line.trim() !== '');
+        
+        let startIndex = 0;
+        if (lines[0].toLowerCase().includes('nome') || lines[0].toLowerCase().includes('produto')) {
+          startIndex = 1;
+        }
+
+        const batch = writeBatch(db);
+        let count = 0;
+
+        for (let i = startIndex; i < lines.length; i++) {
+          const columns = lines[i].split(',').map(c => c.trim());
+          if (columns[0]) {
+            const cPrice = parseFloat(columns[2]?.replace(',', '.') || '0') || 0;
+            const sPrice = parseFloat(columns[3]?.replace(',', '.') || '0') || 0;
+            const mStock = parseInt(columns[4]) || 2;
+            
+            const productRef = doc(collection(db, 'products'));
+            batch.set(productRef, {
+              name: columns[0],
+              category: columns[1] || 'Geral',
+              costPrice: cPrice,
+              sellingPrice: sPrice,
+              margin: calculateMargin(cPrice, sPrice),
+              markup: calculateMarkup(cPrice, sPrice),
+              minStock: mStock,
+              totalStock: 0,
+              variations: [],
+              updatedAt: serverTimestamp()
+            });
+            count++;
+          }
+        }
+
+        await batch.commit();
+        alert(`${count} produtos importados com sucesso!`);
+      } catch (err: any) {
+        console.error(err);
+        alert('Erro ao processar CSV. Use o formato: Nome, Categoria, Custo, Venda, Estoque Min');
+      } finally {
+        setIsImporting(false);
+        if (e.target) e.target.value = '';
+      }
+    };
+    reader.readAsText(file);
   };
 
   const addVariation = () => {
@@ -118,12 +175,22 @@ export default function Products() {
             onChange={e => setSearch(e.target.value)}
           />
         </div>
-        <button 
-          onClick={() => openModal()}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-md shadow-indigo-200 flex items-center gap-2 active:scale-95"
-        >
-          <Plus size={20} /> Adicionar Produto
-        </button>
+        <div className="flex items-center gap-2">
+          <label className={cn(
+            "flex items-center gap-2 px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl cursor-pointer transition-all active:scale-95 text-sm",
+            isImporting && "opacity-50 pointer-events-none"
+          )}>
+            <Box size={20} className="text-slate-400" />
+            {isImporting ? 'Importando...' : 'Importar CSV'}
+            <input type="file" accept=".csv" className="hidden" onChange={handleCSVImport} disabled={isImporting} />
+          </label>
+          <button 
+            onClick={() => openModal()}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-md shadow-indigo-200 flex items-center gap-2 active:scale-95 h-full"
+          >
+            <Plus size={20} /> Adicionar Produto
+          </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
