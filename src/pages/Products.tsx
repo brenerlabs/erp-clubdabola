@@ -163,17 +163,15 @@ export default function Products() {
   const filtered = products.filter(p => p.name.toLowerCase().includes(search.toLowerCase()) || p.category.toLowerCase().includes(search.toLowerCase()));
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="relative w-96 group">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 size-5 group-focus-within:text-indigo-500 transition-colors" />
-          <input 
-            type="text" 
-            placeholder="Buscar por nome ou categoria..." 
-            className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-1 focus:ring-indigo-500 transition-all shadow-sm outline-none text-sm font-medium"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="space-y-8 pb-10"
+    >
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          <h2 className="text-3xl font-black italic tracking-tighter">Gestão de <span className="text-indigo-500 underline decoration-indigo-200 decoration-4 underline-offset-4">Portfólio</span></h2>
+          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.3em] mt-1">Controle de Inventário e Margens</p>
         </div>
         <div className="flex items-center gap-2">
           <label className={cn(
@@ -181,15 +179,44 @@ export default function Products() {
             isImporting && "opacity-50 pointer-events-none"
           )}>
             <Box size={20} className="text-slate-400" />
-            {isImporting ? 'Importando...' : 'Importar CSV'}
+            {isImporting ? 'Syncing...' : 'Import CSV'}
             <input type="file" accept=".csv" className="hidden" onChange={handleCSVImport} disabled={isImporting} />
           </label>
           <button 
             onClick={() => openModal()}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-md shadow-indigo-200 flex items-center gap-2 active:scale-95 h-full"
+            className="bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-md flex items-center gap-2 active:scale-95"
           >
-            <Plus size={20} /> Adicionar Produto
+            <Plus size={20} /> Deploy Produto
           </button>
+        </div>
+      </div>
+
+      <div className="flex flex-col lg:flex-row items-center justify-between gap-4 p-6 bg-white/40 backdrop-blur-md rounded-3xl border border-white/60 shadow-xl shadow-slate-200/50">
+        <div className="flex-1 max-w-md relative group">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 size-5 group-focus-within:text-indigo-500 transition-colors" />
+          <input 
+            type="text" 
+            placeholder="Search SKUs..." 
+            className="w-full pl-12 pr-4 py-3 bg-white/60 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm outline-none text-sm font-black italic"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+        </div>
+        <div className="flex items-center gap-8 px-6 border-l border-slate-200 hidden lg:flex">
+           <div className="text-right">
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Ativos em Estoque</p>
+              <p className="text-xl font-black text-slate-900">{products.reduce((acc, p) => acc + (p.totalStock || 0), 0)} un</p>
+           </div>
+           <div className="text-right">
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Valor de Inventário</p>
+              <p className="text-xl font-black text-indigo-600">{formatCurrency(products.reduce((acc, p) => acc + (p.costPrice * (p.totalStock || 0)), 0))}</p>
+           </div>
+           <div className="text-right">
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Margem Média</p>
+              <p className="text-xl font-black text-emerald-500">
+                {(products.reduce((acc, p) => acc + (p.margin || 0), 0) / (products.length || 1)).toFixed(1)}%
+              </p>
+           </div>
         </div>
       </div>
 
@@ -230,13 +257,22 @@ export default function Products() {
                   <div className="text-[10px] text-slate-400 font-medium">Custo: {formatCurrency(product.costPrice)}</div>
                 </td>
                 <td className="px-6 py-5 text-center">
-                  <div className={cn(
-                    "text-sm font-bold",
-                    product.totalStock <= product.minStock ? 'text-rose-500' : 'text-slate-900'
-                  )}>
-                    {product.totalStock} un
+                  <div className="flex flex-col items-center">
+                    <div className="flex items-center gap-2">
+                      <span className={cn(
+                        "text-sm font-black italic tracking-tighter",
+                        (product.totalStock || 0) <= 5 ? "text-rose-500" : "text-slate-900"
+                      )}>
+                        {product.totalStock} un
+                      </span>
+                      {(product.totalStock || 0) <= 5 && (
+                        <div className="size-2 bg-rose-500 rounded-full animate-ping" />
+                      )}
+                    </div>
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none">
+                      {(product.totalStock || 0) <= 5 ? "Reposição" : "Operacional"}
+                    </span>
                   </div>
-                  <div className="text-[10px] text-slate-400 font-bold uppercase">{product.variations.length} variações</div>
                 </td>
                 <td className="px-6 py-5">
                   <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -525,6 +561,6 @@ export default function Products() {
           </div>
         )}
       </AnimatePresence>
-    </div>
+    </motion.div>
   );
 }

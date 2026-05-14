@@ -35,6 +35,20 @@ export default function App() {
   const [activePage, setActivePage] = useState<Page>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+
+  useEffect(() => {
+    const updateTheme = () => {
+      const hour = new Date().getHours();
+      // Dark mode between 18:00 and 06:00
+      const isDark = hour >= 18 || hour < 6;
+      setTheme(isDark ? 'dark' : 'light');
+    };
+    
+    updateTheme();
+    const interval = setInterval(updateTheme, 60000); // Check every minute
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
@@ -76,30 +90,51 @@ export default function App() {
   };
 
   if (loading) return (
-    <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-900 text-indigo-400 gap-4">
-      <div className="size-16 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin" />
-      <p className="text-[10px] font-black uppercase tracking-[0.2em] animate-pulse">Sincronizando Sistema...</p>
+    <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-950 text-indigo-400 gap-4">
+      <div className="size-16 border-2 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin" />
+      <p className="text-[10px] font-black uppercase tracking-[0.4em] animate-pulse">Enterprise System</p>
     </div>
   );
 
   if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+      <div className={cn("min-h-screen flex items-center justify-center p-4 transition-colors duration-700", theme === 'dark' ? "bg-slate-950" : "bg-slate-50")}>
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full text-center border border-gray-100"
+          className={cn(
+            "p-12 rounded-[48px] shadow-2xl max-w-md w-full text-center border relative overflow-hidden group transition-colors duration-700",
+            theme === 'dark' ? "bg-slate-900 border-slate-800" : "bg-white border-slate-100"
+          )}
         >
-          <div className="w-16 h-16 bg-amber-500 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-amber-200 overflow-hidden">
-            <img src="https://i.ibb.co/v3Y0V6N/logo-club-da-bola.jpg" alt="Club da Bola" className="w-full h-full object-contain p-2" onError={(e) => e.currentTarget.src='https://ui-avatars.com/api/?name=CB&background=f59e0b&color=0f172a'} />
+          <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500" />
+          
+          <div className="flex flex-col items-center justify-center gap-4 mb-10">
+            <div className={cn(
+                "w-16 h-16 rounded-3xl flex items-center justify-center shadow-2xl border transition-colors",
+                theme === 'dark' ? "bg-slate-800 border-slate-700" : "bg-indigo-600 border-indigo-500"
+              )}>
+              <LayoutDashboard size={32} className="text-white" />
+            </div>
+            <div>
+              <h1 className={cn("text-4xl font-black italic tracking-tighter transition-colors", theme === 'dark' ? "text-white" : "text-slate-900")}>
+                ERP CLUB DA <span className="text-indigo-500">BOLA</span>
+              </h1>
+              <p className={cn("mt-2 font-bold uppercase tracking-widest text-[10px] transition-colors", theme === 'dark' ? "text-slate-400" : "text-slate-500")}>
+                Executive Management Suite
+              </p>
+            </div>
           </div>
-          <h1 className="text-2xl font-black text-slate-900 mb-2 italic">ERP CLUB DA <span className="text-amber-500">BOLA</span></h1>
-          <p className="text-gray-500 mb-8 font-medium">Gestão Inteligente para o seu Negócio</p>
+          
           <button 
             onClick={login}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 px-4 rounded-xl transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2"
+            className={cn(
+              "w-full py-5 px-8 rounded-2xl transition-all shadow-xl flex items-center justify-center gap-4 group/btn font-black uppercase tracking-widest text-xs",
+              theme === 'dark' ? "bg-white text-slate-900 hover:bg-slate-100" : "bg-slate-900 text-white hover:bg-slate-800"
+            )}
           >
-            Entrar com Google
+            <img src="https://www.google.com/favicon.ico" className="w-4 h-4" alt="Google" />
+            Autenticação Digital
           </button>
         </motion.div>
       </div>
@@ -113,11 +148,11 @@ export default function App() {
     { id: 'customers', label: 'Clientes', icon: Users },
     { id: 'shipments', label: 'Encomendas', icon: Truck },
     { id: 'compensations', label: 'Compensações', icon: RefreshCcw },
-    { id: 'finance', label: 'Financeiro', icon: DollarSign },
+    { id: 'finance', label: 'Financeiro & Auditoria', icon: DollarSign },
   ];
 
   return (
-    <div className="flex h-screen bg-slate-50 font-sans overflow-hidden relative">
+    <div className={cn("flex h-screen font-sans overflow-hidden relative transition-colors duration-700", theme === 'dark' ? "bg-slate-950 text-slate-200" : "bg-slate-50 text-slate-900")}>
       {/* Mobile Drawer Overlay */}
       <AnimatePresence>
         {isMobileMenuOpen && (
@@ -126,7 +161,7 @@ export default function App() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setIsMobileMenuOpen(false)}
-            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[80] md:hidden"
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[80] md:hidden"
           />
         )}
       </AnimatePresence>
@@ -143,7 +178,8 @@ export default function App() {
             }}
             exit={isMobileMenuOpen ? { x: -300 } : undefined}
             className={cn(
-              "bg-slate-900 flex flex-col shrink-0 shadow-2xl z-[90] transition-all duration-300 h-full",
+              "flex flex-col shrink-0 shadow-2xl z-[90] transition-all duration-300 h-full border-r",
+              theme === 'dark' ? "bg-slate-900 border-slate-800" : "bg-slate-900 border-slate-800", // Sidebar remains dark for executive feel
               !isMobileMenuOpen && "hidden md:flex",
               isMobileMenuOpen && "fixed top-0 left-0"
             )}
@@ -154,27 +190,12 @@ export default function App() {
                 animate={{ opacity: 1 }}
                 className="flex items-center gap-3"
               >
-                <div className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center p-1.5 bg-white/5 border border-white/10 shadow-inner">
-                  <img 
-                    src="https://i.ibb.co/v3Y0V6N/logo-club-da-bola.jpg" 
-                    alt="Logo" 
-                    className="w-full h-full object-contain"
-                    referrerPolicy="no-referrer"
-                    onError={(e) => { 
-                      e.currentTarget.style.display = 'none';
-                      const parent = e.currentTarget.parentElement;
-                      if (parent) {
-                        const fallback = document.createElement('div');
-                        fallback.className = "w-full h-full bg-amber-500 rounded flex items-center justify-center text-[10px] font-black italic text-slate-900";
-                        fallback.innerText = "CB";
-                        parent.appendChild(fallback);
-                      }
-                    }}
-                  />
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center p-1 bg-gradient-to-br from-indigo-500 to-indigo-700 border border-white/10 shadow-lg group-hover:scale-110 transition-transform">
+                  <LayoutDashboard size={18} className="text-white" />
                 </div>
                 {(isSidebarOpen || isMobileMenuOpen) && (
                   <h1 className="text-white font-black tracking-tighter leading-none text-xs italic">
-                    ERP CLUB DA <span className="text-amber-500">BOLA</span>
+                    ERP CLUB DA <span className="text-indigo-400">BOLA</span>
                   </h1>
                 )}
               </motion.div>
@@ -239,12 +260,18 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col overflow-hidden relative">
-         <header className="h-16 md:h-20 bg-white border-b border-slate-100 flex items-center justify-between px-4 md:px-10 shrink-0 z-50">
+         <header className={cn(
+           "h-16 md:h-20 border-b flex items-center justify-between px-4 md:px-10 shrink-0 z-50 transition-colors duration-700",
+           theme === 'dark' ? "bg-slate-900 border-slate-800" : "bg-white border-slate-100"
+         )}>
           <div className="flex items-center gap-4">
              {/* Hamburger Menu - 3 Bars */}
              <button 
                onClick={() => setIsMobileMenuOpen(true)}
-               className="p-2.5 text-slate-600 hover:bg-slate-50 rounded-xl transition-all md:hidden border border-slate-100 shadow-sm"
+               className={cn(
+                 "p-2.5 rounded-xl transition-all md:hidden border shadow-sm",
+                 theme === 'dark' ? "text-slate-400 bg-slate-800 border-slate-700 hover:bg-slate-700" : "text-slate-600 bg-slate-50 border-slate-100 hover:bg-slate-100"
+               )}
              >
                <Menu size={20} />
              </button>
@@ -252,35 +279,50 @@ export default function App() {
              {/* Sidebar Toggle - Desktop */}
              <button 
                 onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                className="hidden md:flex p-2.5 text-slate-400 hover:bg-slate-50 hover:text-slate-900 rounded-xl transition-all border border-slate-100"
+                className={cn(
+                  "hidden md:flex p-2.5 rounded-xl transition-all border",
+                  theme === 'dark' ? "text-slate-400 bg-slate-800 border-slate-700 hover:text-white" : "text-slate-400 bg-slate-50 border-slate-100 hover:text-slate-900"
+                )}
               >
                 <Menu size={20} />
               </button>
 
              <div className="flex items-center gap-3">
-                <div className="hidden lg:flex w-9 h-9 rounded-xl overflow-hidden items-center justify-center bg-slate-50 border border-slate-100 p-1.5 shadow-sm">
-                  <img src="https://i.ibb.co/v3Y0V6N/logo-club-da-bola.jpg" alt="Logo" className="w-full h-full object-contain" referrerPolicy="no-referrer" />
-                </div>
-                <div className="flex flex-col -space-y-1">
-                  <span className="text-slate-900 text-xs font-black italic uppercase tracking-tighter truncate max-w-[120px] sm:max-w-none">ERP CLUB DA <span className="text-amber-500">BOLA</span></span>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase hidden sm:block tracking-widest">
-                    Sistema de Gestão Profissional
-                  </span>
+                <div className="flex items-center gap-2 group cursor-pointer">
+                  <div className={cn(
+                    "w-8 h-8 rounded-lg flex items-center justify-center p-1 shadow-lg transition-transform",
+                    theme === 'dark' ? "bg-indigo-600 shadow-indigo-900/20" : "bg-slate-900 shadow-slate-200"
+                  )}>
+                    <LayoutDashboard size={16} className="text-white" />
+                  </div>
+                  <div className="flex flex-col -space-y-0.5">
+                    <span className={cn("text-xs font-black italic uppercase tracking-tighter transition-colors", theme === 'dark' ? "text-white" : "text-slate-900")}>
+                      ERP CLUB DA <span className="text-indigo-500">BOLA</span>
+                    </span>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase hidden sm:block tracking-widest leading-tight">
+                      Intelligence & Logistics
+                    </span>
+                  </div>
                 </div>
              </div>
           </div>
           <div className="flex items-center gap-3 md:gap-6">
-            <button className="hidden md:flex items-center gap-2 bg-emerald-500 text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-sm shadow-emerald-200 hover:bg-emerald-600 transition-colors">
+            <button className="hidden md:flex items-center gap-2 bg-gradient-to-r from-emerald-500 to-teal-600 text-white px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg shadow-emerald-500/20 hover:scale-105 transition-all">
               <Send size={14} />
-              WhatsApp Ativo
+              Service Active
             </button>
-            <div className="flex items-center gap-3 md:border-l md:pl-6 border-slate-200">
+            <div className="flex items-center gap-3 md:border-l md:pl-6 border-slate-700">
               <div className="text-right hidden sm:block">
-                <p className="text-xs font-bold text-slate-900">{user.displayName || user.email.split('@')[0]}</p>
-                <p className="text-[10px] text-slate-500 uppercase font-medium">Administrador</p>
+                <p className={cn("text-xs font-black uppercase tracking-tight", theme === 'dark' ? "text-white" : "text-slate-900")}>
+                  {user.displayName || user.email.split('@')[0]}
+                </p>
+                <p className="text-[9px] text-slate-500 uppercase font-bold tracking-widest">Master Admin</p>
               </div>
-              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-slate-200 overflow-hidden border border-slate-100 p-0.5 shadow-sm">
-                <img className="rounded-full w-full h-full object-cover" src={user.photoURL || `https://ui-avatars.com/api/?name=${user.email}&background=6366f1&color=fff`} alt="User" />
+              <div className={cn(
+                "w-9 h-9 sm:w-10 sm:h-10 rounded-2xl overflow-hidden p-0.5 shadow-xl transition-colors",
+                theme === 'dark' ? "bg-slate-800 border border-slate-700" : "bg-white border border-slate-100"
+              )}>
+                <img className="rounded-[14px] w-full h-full object-cover" src={user.photoURL || `https://ui-avatars.com/api/?name=${user.email}&background=6366f1&color=fff`} alt="User" />
               </div>
             </div>
           </div>

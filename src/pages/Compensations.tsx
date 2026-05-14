@@ -80,71 +80,66 @@ export default function Compensations() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="bg-slate-900 rounded-[32px] p-10 text-white relative overflow-hidden shadow-2xl">
-        <div className="absolute top-0 right-0 p-10 opacity-5 pointer-events-none">
-          <History size={200} />
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="space-y-8 pb-10"
+    >
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          <h2 className="text-3xl font-black italic tracking-tighter shadow-sm">
+            Auditoria de <span className="text-emerald-500 underline decoration-emerald-200 decoration-4 underline-offset-4 tracking-tighter font-black italic">Recebíveis</span>
+          </h2>
+          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.3em] mt-2">Relatórios de Compensação e Amortização</p>
         </div>
-        <div className="relative z-10">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
-            <div className="flex items-center gap-4">
-              <div className="size-14 bg-emerald-500 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-500/20">
-                <History size={28} />
-              </div>
-              <div>
-                <h2 className="text-3xl font-black tracking-tight">Compensações</h2>
-                <p className="text-emerald-400 font-bold uppercase tracking-widest text-[10px] opacity-80">Relação de recebimentos para amortização de dívidas</p>
-              </div>
-            </div>
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={handleShare}
+            className="flex items-center gap-2 px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-black uppercase text-[10px] tracking-widest rounded-xl transition-all shadow-lg shadow-emerald-500/20 active:scale-95 translate-y-[-1px]"
+          >
+            <Share2 size={16} />
+            Export WhatsApp
+          </button>
+        </div>
+      </div>
 
-            <button 
-              onClick={handleShare}
-              className="flex items-center gap-2 px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-black uppercase text-[10px] tracking-widest rounded-xl transition-all shadow-lg shadow-emerald-500/20 active:scale-95"
-            >
-              <Share2 size={16} />
-              Share WPP
-            </button>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="bg-white/5 border border-white/5 rounded-2xl p-4">
-              <p className="text-[9px] font-black uppercase text-emerald-400 mb-1 tracking-widest">Filtrar por Cliente</p>
-              <select 
-                value={customerFilter}
-                onChange={e => setCustomerFilter(e.target.value)}
-                className="w-full bg-transparent text-xs font-black text-white outline-none border-none appearance-none cursor-pointer"
-              >
-                <option value="all" className="text-slate-900">Todos</option>
-                {customers.map(c => <option key={c.id} value={c.id} className="text-slate-900">{c.name}</option>)}
-              </select>
-            </div>
-            <div className="bg-white/5 border border-white/5 rounded-2xl p-4">
-              <p className="text-[9px] font-black uppercase text-emerald-400 mb-1 tracking-widest">Forma PGTO</p>
-              <select 
-                value={methodFilter}
-                onChange={e => setMethodFilter(e.target.value)}
-                className="w-full bg-transparent text-xs font-black text-white outline-none border-none appearance-none cursor-pointer"
-              >
-                <option value="all" className="text-slate-900">Todas</option>
-                <option value="Dinheiro" className="text-slate-900">Dinheiro</option>
-                <option value="Pix" className="text-slate-900">Pix</option>
-                <option value="Cartão" className="text-slate-900">Cartão</option>
-              </select>
-            </div>
-            <div className="bg-white/5 border border-white/5 rounded-2xl p-4">
-              <p className="text-[9px] font-black uppercase text-emerald-400 mb-1 tracking-widest">Data Específica</p>
-              <input 
-                type="date"
-                value={dateFilter}
-                onChange={e => setDateFilter(e.target.value)}
-                className="w-full bg-transparent text-xs font-black text-white outline-none border-none appearance-none cursor-pointer block"
-              />
-            </div>
-            <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4">
-              <p className="text-[9px] font-black uppercase text-emerald-400 mb-1 tracking-widest">Subtotal Filtrado</p>
-              <div className="text-lg font-black">{formatCurrency(filtered.reduce((acc, t) => acc + t.amount, 0))}</div>
-            </div>
-          </div>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-6 bg-white/40 backdrop-blur-md rounded-[32px] border border-white/60 shadow-xl shadow-slate-200/50">
+        <div className="bg-white/60 border border-slate-100 rounded-2xl p-4 shadow-sm">
+          <p className="text-[9px] font-black uppercase text-slate-400 mb-2 tracking-widest">Customer Entity</p>
+          <select 
+            value={customerFilter}
+            onChange={e => setCustomerFilter(e.target.value)}
+            className="w-full bg-transparent text-xs font-black text-slate-900 outline-none border-none appearance-none cursor-pointer"
+          >
+            <option value="all">All Channels</option>
+            {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
+        <div className="bg-white/60 border border-slate-100 rounded-2xl p-4 shadow-sm">
+          <p className="text-[9px] font-black uppercase text-slate-400 mb-2 tracking-widest">Financial Gateway</p>
+          <select 
+            value={methodFilter}
+            onChange={e => setMethodFilter(e.target.value)}
+            className="w-full bg-transparent text-xs font-black text-slate-900 outline-none border-none appearance-none cursor-pointer"
+          >
+            <option value="all">All Methods</option>
+            <option value="Dinheiro">Cash (Físico)</option>
+            <option value="Pix">Instant (Pix)</option>
+            <option value="Cartão">Credit Card</option>
+          </select>
+        </div>
+        <div className="bg-white/60 border border-slate-100 rounded-2xl p-4 shadow-sm">
+          <p className="text-[9px] font-black uppercase text-slate-400 mb-2 tracking-widest">Auditoria Temporal</p>
+          <input 
+            type="date"
+            value={dateFilter}
+            onChange={e => setDateFilter(e.target.value)}
+            className="w-full bg-transparent text-xs font-black text-slate-900 outline-none border-none appearance-none cursor-pointer block"
+          />
+        </div>
+        <div className="bg-emerald-600 rounded-2xl p-4 shadow-lg shadow-emerald-100 flex flex-col justify-center">
+          <p className="text-[9px] font-black uppercase text-emerald-100 mb-1 tracking-widest opacity-80">Volume Filtrado</p>
+          <div className="text-xl font-black text-white">{formatCurrency(filtered.reduce((acc, t) => acc + t.amount, 0))}</div>
         </div>
       </div>
 
@@ -223,6 +218,6 @@ export default function Compensations() {
           </table>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }

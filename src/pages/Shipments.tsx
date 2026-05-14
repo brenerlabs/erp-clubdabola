@@ -339,11 +339,17 @@ export default function Shipments() {
   );
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="space-y-8 pb-10"
+    >
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-black text-slate-900 tracking-tight italic">ENCOMENDAS <span className="text-indigo-600">IMPORTAÇÃO</span></h2>
-          <p className="text-slate-500 text-sm font-medium">Agrupe pedidos e gerencie o rastreio internacional</p>
+          <h2 className="text-3xl font-black italic tracking-tighter uppercase leading-none">
+            Encomendas <span className="text-indigo-500 underline decoration-indigo-200 decoration-4 underline-offset-4 tracking-tighter font-black italic">Logística</span>
+          </h2>
+          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.3em] mt-2">Gestão de Importação e Rastreamento</p>
         </div>
         <div className="flex items-center gap-2">
           {selectedIds.length > 0 && (
@@ -378,22 +384,39 @@ export default function Shipments() {
               </button>
             </div>
           )}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-            <input 
-              type="text" 
-              placeholder="Rastreio ou cliente..." 
-              className="pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none w-full md:w-64 transition-all"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
-          </div>
           <button 
             onClick={() => openModal()}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-6 rounded-xl transition-all shadow-lg shadow-indigo-100 flex items-center gap-2 active:scale-95"
+            className="bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-md flex items-center gap-2 active:scale-95"
           >
-            <Plus size={20} /> Novo Grupo
+            <Plus size={20} /> Deploy Lote
           </button>
+        </div>
+      </div>
+
+      <div className="flex flex-col lg:flex-row items-center justify-between gap-4 p-6 bg-white/40 backdrop-blur-md rounded-3xl border border-white/60 shadow-xl shadow-slate-200/50">
+        <div className="flex-1 max-w-md relative group">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 size-5 group-focus-within:text-indigo-500 transition-colors" />
+          <input 
+            type="text" 
+            placeholder="Search Rastreio ou Cliente..." 
+            className="w-full pl-12 pr-4 py-3 bg-white/60 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm outline-none text-sm font-black italic tracking-tight"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+        </div>
+        <div className="flex items-center gap-8 px-6 border-l border-slate-200 hidden lg:flex">
+           <div className="text-right">
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Lotes no Trecho</p>
+              <p className="text-xl font-black text-slate-900">{shipments.filter(s => s.status !== 'Entregue').length}</p>
+           </div>
+           <div className="text-right">
+              <p className="text-[9px] font-black text-emerald-500 uppercase tracking-widest">Taxas Pagas</p>
+              <p className="text-xl font-black text-emerald-600">{formatCurrency(shipments.filter(s => s.taxPaid).reduce((acc, s) => acc + (s.taxAmount || 0), 0))}</p>
+           </div>
+           <div className="text-right">
+              <p className="text-[9px] font-black text-rose-500 uppercase tracking-widest">Taxas Pendentes</p>
+              <p className="text-xl font-black text-rose-600">{formatCurrency(shipments.filter(s => s.hasTax && !s.taxPaid).reduce((acc, s) => acc + (s.taxAmount || 0), 0))}</p>
+           </div>
         </div>
       </div>
 
@@ -859,6 +882,6 @@ export default function Shipments() {
           </div>
         )}
       </AnimatePresence>
-    </div>
+    </motion.div>
   );
 }

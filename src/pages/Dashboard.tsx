@@ -19,7 +19,9 @@ import {
   QrCode,
   CheckCircle2,
   Receipt,
-  Truck
+  Truck,
+  Activity,
+  LayoutDashboard
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -256,81 +258,105 @@ export default function Dashboard() {
   const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#f43f5e', '#8b5cf6'];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 pb-10">
+      {/* Header Summary */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          <h2 className="text-3xl font-black italic tracking-tighter">Business <span className="text-indigo-500 underline decoration-indigo-200 decoration-4 underline-offset-4">Insights</span></h2>
+          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.3em] mt-1">Global Intelligence Dashboard</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex -space-x-2">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="size-8 rounded-full border-2 border-white bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-400">
+                {String.fromCharCode(64 + i)}
+              </div>
+            ))}
+          </div>
+          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest pl-2 border-l border-slate-200">Active Analysts</p>
+        </div>
+      </div>
+
       {/* Filters Section */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4 hover:border-indigo-200 transition-colors">
-          <div className="size-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center shrink-0">
-             <Users size={20} />
+        <motion.div 
+          whileHover={{ y: -2 }}
+          className="bg-white/40 backdrop-blur-md p-5 rounded-3xl border border-white/60 shadow-xl shadow-slate-200/50 flex items-center gap-5 hover:bg-white/60 transition-all group"
+        >
+          <div className="size-12 bg-slate-900 text-white rounded-2xl flex items-center justify-center shrink-0 shadow-lg group-hover:scale-110 transition-transform">
+             <Users size={22} />
           </div>
           <div className="flex-1">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Filtrar por Cliente</p>
+            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Segmentação por Cliente</p>
             <select 
-              className="w-full bg-transparent font-bold text-slate-800 outline-none text-sm appearance-none cursor-pointer"
+              className="w-full bg-transparent font-black text-slate-900 outline-none text-sm appearance-none cursor-pointer"
               value={customerFilter}
               onChange={e => setCustomerFilter(e.target.value)}
             >
-              <option value="all">Todos os Clientes</option>
+              <option value="all">Filtro Global (Todos)</option>
               {customers.map(c => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
           </div>
-        </div>
+        </motion.div>
 
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4 hover:border-amber-200 transition-colors">
-          <div className="size-10 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center shrink-0">
-             <Package size={20} />
+        <motion.div 
+          whileHover={{ y: -2 }}
+          className="bg-white/40 backdrop-blur-md p-5 rounded-3xl border border-white/60 shadow-xl shadow-slate-200/50 flex items-center gap-5 hover:bg-white/60 transition-all group"
+        >
+          <div className="size-12 bg-indigo-600 text-white rounded-2xl flex items-center justify-center shrink-0 shadow-lg group-hover:scale-110 transition-transform">
+             <Package size={22} />
           </div>
           <div className="flex-1">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Filtrar por Produto</p>
+            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Segmentação por SKU</p>
             <select 
-              className="w-full bg-transparent font-bold text-slate-800 outline-none text-sm appearance-none cursor-pointer"
+              className="w-full bg-transparent font-black text-slate-900 outline-none text-sm appearance-none cursor-pointer"
               value={productFilter}
               onChange={e => setProductFilter(e.target.value)}
             >
-              <option value="all">Todos os Produtos</option>
+              <option value="all">Portfólio Completo</option>
               {products.map(p => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
             </select>
           </div>
-        </div>
+        </motion.div>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard 
-          title="Ticket Médio" 
+          title="Consumo Médio" 
           value={formatCurrency(stats.avgTicket)} 
           icon={TrendingUp} 
-          trend="+12.5%" 
+          trend="Ticket Executivo" 
           positive 
-          color="indigo"
+          variant="glass"
         />
         <StatCard 
-          title="Profitabilidade" 
+          title="Margem Operacional" 
           value={`${((stats.totalProfit / (stats.totalRevenue || 1)) * 100).toFixed(1)}%`} 
           icon={DollarSign} 
           trend={formatCurrency(stats.totalProfit)} 
           positive 
-          color="emerald"
+          variant="gradient"
         />
         <StatCard 
-          title="Total Vendas (Histórico)" 
+          title="Volume de Vendas" 
           value={formatCurrency(stats.totalRevenue)} 
           icon={ShoppingCart} 
-          trend="Tempo Real" 
+          trend="Receita Bruta" 
           positive 
-          color="indigo"
+          variant="glass"
         />
         <StatCard 
-          title="Inadimplência (Fiado)" 
+          title="Risco de Crédito" 
           value={formatCurrency(stats.totalDebt)} 
-          icon={Package} 
-          trend={`${customers.filter(c => c.totalDebt > 0).length} pendentes`}
+          icon={Wallet} 
+          trend={`${debtors.length} Contas em Aberto`}
           positive={stats.totalDebt === 0} 
-          color="rose"
+          variant="dark"
         />
       </div>
 
@@ -479,6 +505,46 @@ export default function Dashboard() {
                 <p className="text-center py-6 text-white/40 text-[10px] font-black uppercase tracking-widest">Nenhum dado disponível</p>
               )}
             </div>
+          </div>
+        </div>
+
+        {/* Global Business Health Index */}
+        <div className="xl:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="bg-slate-900 rounded-[40px] p-8 text-white relative overflow-hidden group">
+             <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:scale-110 transition-transform">
+                <Activity size={120} />
+             </div>
+             <div className="relative z-10">
+                <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em] mb-2">Efficiency Rating</p>
+                <div className="flex items-end gap-3">
+                   <h4 className="text-5xl font-black italic tracking-tighter">94<span className="text-2xl text-indigo-500">.2</span></h4>
+                   <p className="text-[10px] font-bold text-emerald-400 mb-2 uppercase tracking-widest">+2.4% from last audit</p>
+                </div>
+                <div className="mt-6 flex gap-2">
+                   {['Fiscal', 'Logistics', 'Stock'].map(tag => (
+                     <span key={tag} className="px-3 py-1 bg-white/5 border border-white/10 rounded-full text-[8px] font-black uppercase tracking-widest">{tag}</span>
+                   ))}
+                </div>
+             </div>
+          </div>
+          
+          <div className="md:col-span-2 bg-indigo-600 rounded-[40px] p-8 text-white flex flex-col justify-center relative overflow-hidden">
+             <div className="absolute top-0 right-0 p-8 opacity-20">
+                <LayoutDashboard size={100} />
+             </div>
+             <div className="relative z-10">
+                <h4 className="text-xl font-black italic tracking-tighter mb-4 uppercase">Directives for Growth</h4>
+                <div className="grid grid-cols-2 gap-4">
+                   <div className="bg-white/10 backdrop-blur-sm p-4 rounded-3xl border border-white/5">
+                      <p className="text-[9px] font-black text-white/60 uppercase mb-1">Optimizar</p>
+                      <p className="text-xs font-bold leading-tight">Taxas do fornecedor {supplierRanking[0]?.name || 'Global'} estão acima da média (High Risk)</p>
+                   </div>
+                   <div className="bg-white/10 backdrop-blur-sm p-4 rounded-3xl border border-white/5">
+                      <p className="text-[9px] font-black text-white/60 uppercase mb-1">Oportunidade</p>
+                      <p className="text-xs font-bold leading-tight">{products.filter(p => !p.totalStock).length} SKUs sem estoque com demanda ativa</p>
+                   </div>
+                </div>
+             </div>
           </div>
         </div>
 
@@ -638,28 +704,13 @@ export default function Dashboard() {
               initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
               className="bg-white rounded-[32px] shadow-2xl relative z-10 w-full max-w-md overflow-hidden border border-slate-200"
             >
-              <div className="p-8 bg-slate-900 text-white relative text-center">
-                <button onClick={() => setSelectedSale(null)} className="absolute top-6 right-6 text-white/60 hover:text-white transition-colors"><X size={24} /></button>
+              <div className="p-8 bg-slate-950 text-white relative text-center">
+                <button onClick={() => setSelectedSale(null)} className="absolute top-6 right-6 text-white/40 hover:text-white transition-colors"><X size={24} /></button>
                 <div className="size-16 bg-white/10 rounded-2xl flex items-center justify-center mx-auto mb-4 backdrop-blur-md overflow-hidden p-3 border border-white/10">
-                   <img 
-                    src="https://i.ibb.co/v3Y0V6N/logo-club-da-bola.jpg" 
-                    alt="Logo" 
-                    className="w-full h-full object-contain" 
-                    referrerPolicy="no-referrer" 
-                    onError={(e) => {
-                      e.currentTarget.style.display = 'none';
-                      const parent = e.currentTarget.parentElement;
-                      if (parent) {
-                        const fallback = document.createElement('div');
-                        fallback.className = "w-full h-full bg-amber-500 rounded flex items-center justify-center text-xs font-black italic text-slate-900";
-                        fallback.innerText = "CB";
-                        parent.appendChild(fallback);
-                      }
-                    }}
-                   />
+                   <LayoutDashboard size={32} className="text-white" />
                 </div>
-                <h3 className="text-2xl font-black tracking-tight italic uppercase">ERP CLUB DA <span className="text-amber-500">BOLA</span></h3>
-                <p className="text-emerald-400 text-[10px] font-black uppercase tracking-widest mt-2">{selectedSale.customerName}</p>
+                <h3 className="text-2xl font-black tracking-tight italic uppercase">ERP CLUB DA <span className="text-indigo-400">BOLA</span></h3>
+                <p className="text-indigo-400 text-[9px] font-black uppercase tracking-[0.3em] mt-3">{selectedSale.customerName}</p>
               </div>
 
               <div className="p-8 space-y-6">
@@ -728,32 +779,62 @@ export default function Dashboard() {
   );
 }
 
-function StatCard({ title, value, icon: Icon, trend, positive, color }: any) {
-  const colors: any = {
-    indigo: 'bg-indigo-500 text-white shadow-indigo-100',
-    emerald: 'bg-emerald-500 text-white shadow-emerald-100',
-    rose: 'bg-rose-500 text-white shadow-rose-100',
+function StatCard({ title, value, icon: Icon, trend, positive, variant = 'glass' }: any) {
+  const containerVariants = {
+    glass: "bg-white/60 backdrop-blur-md border-white/80 shadow-slate-200/60",
+    gradient: "bg-gradient-to-br from-indigo-600 to-indigo-800 text-white border-indigo-500/30 shadow-indigo-200",
+    dark: "bg-slate-900 text-white border-slate-800 shadow-slate-900/10",
   };
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
-      <div className="flex justify-between items-start mb-4">
-        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{title}</p>
-        <div className={cn("p-2 rounded-lg", colors[color])}>
-          <Icon size={18} />
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+      whileHover={{ scale: 1.02, y: -4 }}
+      className={cn(
+        "p-6 rounded-[32px] border shadow-2xl relative overflow-hidden transition-all duration-300",
+        containerVariants[variant as keyof typeof containerVariants]
+      )}
+    >
+      {variant === 'gradient' && (
+        <div className="absolute -top-10 -right-10 size-40 bg-white/10 rounded-full blur-3xl" />
+      )}
+      
+      <div className="flex justify-between items-start mb-6">
+        <div className={cn(
+          "p-3 rounded-2xl shadow-lg transition-transform",
+          variant === 'gradient' ? "bg-white/20 text-white" : "bg-white text-slate-900"
+        )}>
+          <Icon size={20} />
+        </div>
+        <div className={cn(
+          "px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest",
+          variant === 'gradient' ? "bg-white/20 text-white" : "bg-emerald-50 text-emerald-600"
+        )}>
+          {positive ? 'Optimized' : 'Warning'}
         </div>
       </div>
-      <div>
-        <h3 className="text-2xl font-bold text-slate-900 tracking-tight leading-none mb-2">{value}</h3>
+
+      <div className="space-y-1">
         <p className={cn(
-          "text-[10px] font-bold flex items-center gap-1",
-          positive ? 'text-emerald-500' : 'text-rose-500'
+          "text-[9px] font-black uppercase tracking-[0.2em]",
+          variant === 'glass' ? "text-slate-400" : "text-white/60"
+        )}>{title}</p>
+        <h3 className="text-2xl font-black italic tracking-tighter leading-tight">{value}</h3>
+      </div>
+
+      <div className="mt-6 flex items-center justify-between border-t border-current/10 pt-4">
+        <p className={cn(
+          "text-[10px] font-bold flex items-center gap-1.5",
+          variant === 'glass' ? "text-slate-500" : "text-white/80"
         )}>
-          {positive && <ArrowUpRight size={12} />}
-          {!positive && <ArrowDownRight size={12} />}
           {trend}
         </p>
+        <div className="size-5 rounded-full border border-current/20 flex items-center justify-center opacity-40">
+           <ArrowUpRight size={10} />
+        </div>
       </div>
-    </div>
+    </motion.div>
   );
 }

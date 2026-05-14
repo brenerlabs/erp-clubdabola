@@ -255,7 +255,11 @@ export default function PDV() {
   const [isCartVisible, setIsCartVisible] = useState(false);
 
   return (
-    <div className="h-full flex flex-col md:flex-row gap-6 relative">
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="h-full flex flex-col md:flex-row gap-6 relative pb-10"
+    >
       {/* Mobile Cart Toggle Bar */}
       <div className="md:hidden sticky top-0 bg-slate-900/95 backdrop-blur-md p-3 rounded-2xl text-white shadow-xl z-[45] flex items-center justify-between border border-white/5 mx-1">
         <div className="flex items-center gap-2">
@@ -300,22 +304,7 @@ export default function PDV() {
                   <CheckCircle2 size={240} className="-translate-x-1/4 -translate-y-1/4" />
                 </div>
                 <div className="size-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4 backdrop-blur-sm overflow-hidden p-3 border border-white/10">
-                   <img 
-                    src="https://i.ibb.co/v3Y0V6N/logo-club-da-bola.jpg" 
-                    alt="Logo" 
-                    className="w-full h-full object-contain" 
-                    referrerPolicy="no-referrer" 
-                    onError={(e) => {
-                      e.currentTarget.style.display = 'none';
-                      const parent = e.currentTarget.parentElement;
-                      if (parent) {
-                        const fallback = document.createElement('div');
-                        fallback.className = "w-full h-full bg-white/20 rounded flex items-center justify-center text-xs font-black italic text-white";
-                        fallback.innerText = "CB";
-                        parent.appendChild(fallback);
-                      }
-                    }}
-                   />
+                   <CheckCircle2 size={40} className="text-white" />
                 </div>
                 <h3 className="text-2xl font-black tracking-tight">Venda Finalizada!</h3>
                 <p className="text-emerald-100 font-bold opacity-80 mt-1">Transação processada com sucesso.</p>
@@ -591,6 +580,6 @@ export default function PDV() {
           </div>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }

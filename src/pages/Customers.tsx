@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from 'motion/react';
 export default function Customers() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [filterPending, setFilterPending] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
@@ -23,6 +24,17 @@ export default function Customers() {
   const [name, setName] = useState('');
   const [contact, setContact] = useState('');
   const [isImporting, setIsImporting] = useState(false);
+
+  // Debounce search
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 500);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [search]);
 
   useEffect(() => {
     const q = query(collection(db, 'customers'), orderBy('name', 'asc'));
@@ -184,21 +196,48 @@ export default function Customers() {
   };
 
   const filtered = customers.filter(c => {
-    const matchesSearch = c.name.toLowerCase().includes(search.toLowerCase()) || c.contact.includes(search);
+    const matchesSearch = c.name.toLowerCase().includes(debouncedSearch.toLowerCase()) || c.contact.includes(debouncedSearch);
     const matchesPending = filterPending ? c.totalDebt > 0 : true;
     return matchesSearch && matchesPending;
   });
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div className="relative w-96 group">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 size-5 group-focus-within:text-indigo-500 transition-colors" />
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="space-y-8 pb-10"
+    >
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          <h2 className="text-3xl font-black italic tracking-tighter">Gestão de <span className="text-indigo-500 underline decoration-indigo-200 decoration-4 underline-offset-4">Relacionamentos</span></h2>
+          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.3em] mt-1">Base Global de Clientes e Créditos</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <label className={cn(
+            "flex items-center gap-2 px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl cursor-pointer transition-all active:scale-95",
+            isImporting && "opacity-50 pointer-events-none"
+          )}>
+            <ArrowDownCircle size={20} />
+            {isImporting ? 'Syncing...' : 'Import Lote'}
+            <input type="file" accept=".csv" className="hidden" onChange={handleCSVImport} disabled={isImporting} />
+          </label>
+          <button 
+            onClick={() => openModal()}
+            className="bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-md flex items-center gap-2 active:scale-95"
+          >
+            <Plus size={20} /> Integrar Cliente
+          </button>
+        </div>
+      </div>
+
+      <div className="flex flex-col lg:flex-row items-center justify-between gap-4 p-6 bg-white/40 backdrop-blur-md rounded-3xl border border-white/60 shadow-xl shadow-slate-200/50">
+        <div className="flex flex-1 items-center gap-4 w-full">
+          <div className="relative flex-1 max-w-md group">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 size-5 group-focus-within:text-indigo-500 transition-colors" />
             <input 
               type="text" 
-              placeholder="Filtrar por nome ou celular..." 
-              className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-1 focus:ring-indigo-500 transition-all shadow-sm outline-none text-sm font-medium"
+              placeholder="Search Intelligence..." 
+              className="w-full pl-12 pr-4 py-3 bg-white/60 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm outline-none text-sm font-black italic"
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
@@ -207,31 +246,26 @@ export default function Customers() {
           <button 
             onClick={() => setFilterPending(!filterPending)}
             className={cn(
-              "flex items-center gap-2 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all border",
+              "flex items-center gap-3 px-6 py-3 rounded-2xl text-[9px] font-black uppercase tracking-widest transition-all border",
               filterPending 
                 ? "bg-rose-50 border-rose-200 text-rose-600 shadow-inner" 
                 : "bg-white border-slate-100 text-slate-400 hover:bg-slate-50"
             )}
           >
             <Wallet size={16} />
-            Pendentes {filterPending && `(${filtered.length})`}
+            Risco Ativo {filterPending && `(${filtered.length})`}
           </button>
         </div>
-        <div className="flex items-center gap-2">
-          <label className={cn(
-            "flex items-center gap-2 px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl cursor-pointer transition-all active:scale-95",
-            isImporting && "opacity-50 pointer-events-none"
-          )}>
-            <ArrowDownCircle size={20} />
-            {isImporting ? 'Importando...' : 'Importar CSV'}
-            <input type="file" accept=".csv" className="hidden" onChange={handleCSVImport} disabled={isImporting} />
-          </label>
-          <button 
-            onClick={() => openModal()}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-md shadow-indigo-200 flex items-center gap-2 active:scale-95"
-          >
-            <Plus size={20} /> Cadastrar Cliente
-          </button>
+        
+        <div className="flex items-center gap-6 px-6 border-l border-slate-200 hidden lg:flex">
+           <div className="text-right">
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Total Custódia</p>
+              <p className="text-xl font-black text-slate-900">{customers.length}</p>
+           </div>
+           <div className="text-right">
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Exposição Total</p>
+              <p className="text-xl font-black text-rose-500">{formatCurrency(customers.reduce((acc, c) => acc + (c.totalDebt || 0), 0))}</p>
+           </div>
         </div>
       </div>
 
@@ -250,9 +284,16 @@ export default function Customers() {
             {filtered.map(customer => (
               <tr key={customer.id} className="hover:bg-slate-50/50 transition-colors group">
                 <td className="px-6 py-5">
-                  <div>
-                    <div className="font-bold text-slate-900 text-sm leading-tight">{customer.name}</div>
-                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">REGISTRADO NO ERP CLUB DA BOLA</div>
+                  <div className="flex flex-col">
+                    <div className="font-black text-slate-900 text-sm italic tracking-tighter leading-tight uppercase underline decoration-indigo-200 decoration-2 underline-offset-2">{customer.name}</div>
+                    <div className="flex items-center gap-2 mt-2">
+                       <span className="px-2 py-0.5 bg-slate-100 text-slate-400 text-[8px] font-black uppercase rounded tracking-widest">ERP ID: {customer.id?.slice(-4)}</span>
+                       {customer.totalDebt > 0 ? (
+                         <span className="px-2 py-0.5 bg-rose-500/10 text-rose-600 text-[8px] font-black uppercase rounded border border-rose-200 shadow-sm">Débito Ativo</span>
+                       ) : (
+                         <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-600 text-[8px] font-black uppercase rounded border border-emerald-200 shadow-sm">Trusted Account</span>
+                       )}
+                    </div>
                   </div>
                 </td>
                 <td className="px-6 py-5">
@@ -485,6 +526,6 @@ export default function Customers() {
           </div>
         )}
       </AnimatePresence>
-    </div>
+    </motion.div>
   );
 }

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../lib/firebase';
 import { collection, query, onSnapshot, orderBy } from 'firebase/firestore';
-import { Transaction, Sale, Shipment } from '../types';
+import { Transaction, Sale, Shipment, Customer } from '../types';
 import { 
   ArrowDownCircle, 
   ArrowUpCircle, 
@@ -12,9 +12,13 @@ import {
   Banknote,
   FileText,
   Table as TableIcon,
-  Receipt
+  Receipt,
+  Truck,
+  User,
+  LayoutDashboard
 } from 'lucide-react';
 import { formatCurrency, cn } from '../lib/utils';
+import { motion } from 'motion/react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
@@ -23,6 +27,7 @@ export default function Finance() {
   const [sales, setSales] = useState<Sale[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [shipments, setShipments] = useState<Shipment[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [filter, setFilter] = useState<'all' | 'payment' | 'debt'>('all');
 
   useEffect(() => {
@@ -38,8 +43,14 @@ export default function Finance() {
       setShipments(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Shipment)));
     });
 
-    return () => { unsubSales(); unsubTrans(); unsubShip(); };
+    const unsubCust = onSnapshot(collection(db, 'customers'), (snapshot) => {
+      setCustomers(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Customer)));
+    });
+
+    return () => { unsubSales(); unsubTrans(); unsubShip(); unsubCust(); };
   }, []);
+
+  const getCustomerName = (id: string) => customers.find(c => c.id === id)?.name || 'Anônimo';
 
   const getSaleBalance = (sale: Sale) => {
     if (sale.paymentMethod !== 'Fiado') return 0;
@@ -52,6 +63,11 @@ export default function Finance() {
   const totalInvoiced = sales.reduce((acc, s) => acc + s.total, 0);
   const totalReceived = transactions.filter(t => t.type === 'payment').reduce((acc, t) => acc + t.amount, 0);
   const totalPaidTaxes = shipments.filter(s => s.taxPaid).reduce((acc, s) => acc + (s.taxAmount || 0), 0);
+
+  const getShipmentForSale = (saleId?: string) => {
+    if (!saleId) return null;
+    return shipments.find(s => s.items.some(i => i.saleId === saleId));
+  };
   
   // Accounts Receivable is the sum of balances of all Fiado sales
   const accountsReceivable = sales.reduce((acc, s) => acc + getSaleBalance(s), 0);
@@ -102,9 +118,16 @@ export default function Finance() {
   };
 
   return (
-    <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-black text-slate-800 uppercase tracking-widest italic">Visão Financeira</h2>
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="space-y-8 pb-10"
+    >
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          <h2 className="text-3xl font-black italic tracking-tighter">Financeiro & <span className="text-indigo-500 underline decoration-indigo-200 decoration-4 underline-offset-4">Auditoria</span></h2>
+          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.3em] mt-1">Gestão de Ativos e Fluxo de Caixa</p>
+        </div>
         <div className="flex gap-2">
           <button 
             onClick={exportToPDF}
@@ -171,6 +194,8 @@ export default function Finance() {
               <thead className="sticky top-0 bg-white border-b border-slate-100 z-10">
                 <tr>
                   <th className="px-6 py-4 text-[10px] uppercase font-black text-slate-400 tracking-widest">Natureza</th>
+                  <th className="px-6 py-4 text-[10px] uppercase font-black text-slate-400 tracking-widest">Envolvido</th>
+                  <th className="px-6 py-4 text-[10px] uppercase font-black text-slate-400 tracking-widest">Status Logístico</th>
                   <th className="px-6 py-4 text-[10px] uppercase font-black text-slate-400 tracking-widest">Temporalidade</th>
                   <th className="px-6 py-4 text-[10px] uppercase font-black text-slate-400 tracking-widest text-right">Montante</th>
                 </tr>
@@ -193,6 +218,31 @@ export default function Finance() {
                       </div>
                     </td>
                     <td className="px-6 py-5">
+                      <div className="flex items-center gap-2">
+                        <div className="size-6 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
+                          <User size={12} />
+                        </div>
+                        <span className="text-xs font-bold text-slate-700">{getCustomerName(t.customerId)}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-5">
+                      {getShipmentForSale(t.saleId) ? (
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1">
+                            <Truck size={12} className="text-indigo-500" />
+                            <span className="text-[10px] font-black uppercase text-indigo-600 tracking-tighter">
+                              {getShipmentForSale(t.saleId)?.trackingCode || 'Sem Rastreio'}
+                            </span>
+                          </div>
+                          <div className="px-2 py-0.5 bg-slate-100 rounded-full text-[9px] font-bold text-slate-500 inline-block uppercase italic">
+                            Status: {getShipmentForSale(t.saleId)?.status}
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">Sem Lote Ativo</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-5">
                       <div className="text-sm font-medium text-slate-600">
                         {new Date(t.createdAt?.seconds * 1000).toLocaleDateString('pt-BR')} 
                         <span className="text-[10px] text-slate-400 ml-2 font-black uppercase">
@@ -212,28 +262,56 @@ export default function Finance() {
           </div>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
 function FinanceCard({ title, value, icon: Icon, color }: any) {
-  const colors: any = {
-    indigo: 'bg-indigo-600 shadow-indigo-200',
-    emerald: 'bg-emerald-500 shadow-emerald-200',
-    rose: 'bg-rose-500 shadow-rose-200',
-    amber: 'bg-amber-500 shadow-amber-200',
+  const configs: any = {
+    indigo: 'from-indigo-600 to-indigo-800 shadow-indigo-500/20 text-white',
+    emerald: 'bg-white text-slate-900 border-slate-100 shadow-slate-200/50',
+    rose: 'bg-slate-900 text-white border-slate-800 shadow-slate-950/20',
+    amber: 'from-amber-400 to-amber-600 shadow-amber-500/20 text-white',
   };
 
+  const isGradient = color === 'indigo' || color === 'amber';
+
   return (
-    <div className={cn("p-8 rounded-2xl text-white shadow-xl transition-all hover:scale-[1.02] cursor-default", colors[color])}>
-      <div className="flex justify-between items-start mb-8">
-        <div className="size-12 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-md border border-white/10 shadow-inner">
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      whileHover={{ y: -5, scale: 1.02 }}
+      className={cn(
+        "p-8 rounded-[40px] shadow-2xl transition-all border relative overflow-hidden",
+        isGradient ? `bg-gradient-to-br ${configs[color]}` : configs[color]
+      )}
+    >
+      <div className="flex justify-between items-start mb-8 relative z-10">
+        <div className={cn(
+          "size-12 rounded-2xl flex items-center justify-center shadow-lg transition-transform",
+          isGradient ? "bg-white/20 text-white" : (color === 'rose' ? "bg-white/10 text-white" : "bg-indigo-600 text-white")
+        )}>
           <Icon size={24} />
         </div>
-        <div className="px-3 py-1 bg-white/10 rounded-full text-[10px] font-black uppercase tracking-widest border border-white/5">RealTime</div>
+        <div className={cn(
+          "px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-[0.2em]",
+          isGradient ? "bg-white/20 text-white" : (color === 'rose' ? "bg-white/10 text-white" : "bg-emerald-50 text-emerald-600")
+        )}>
+          Fiscal Sync
+        </div>
       </div>
-      <p className="text-xs font-black uppercase tracking-widest opacity-60 mb-2">{title}</p>
-      <h4 className="text-3xl font-black tracking-tight">{value}</h4>
-    </div>
+      
+      <div className="relative z-10">
+        <p className={cn(
+          "text-[10px] font-black uppercase tracking-[0.3em] mb-2",
+          isGradient || color === 'rose' ? "text-white/60" : "text-slate-400"
+        )}>{title}</p>
+        <h4 className="text-3xl font-black italic tracking-tighter">{value}</h4>
+      </div>
+
+      {isGradient && (
+        <div className="absolute -bottom-12 -left-12 size-32 bg-white/10 rounded-full blur-3xl" />
+      )}
+    </motion.div>
   );
 }
