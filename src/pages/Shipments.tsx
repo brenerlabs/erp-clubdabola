@@ -159,7 +159,8 @@ export default function Shipments() {
           productId: item.productId,
           productName: pName,
           quantity: item.quantity,
-          price: item.price
+          price: item.price,
+          isDropshipping: item.isDropshipping || false
         });
       }
     });
@@ -202,7 +203,7 @@ export default function Shipments() {
     }
     try {
       const data = {
-        trackingCode,
+        trackingCode: trackingCode.toUpperCase(),
         status,
         items,
         hasTax,
@@ -354,7 +355,8 @@ export default function Shipments() {
   const filtered = shipments.filter(s => 
     s.trackingCode.toLowerCase().includes(search.toLowerCase()) ||
     s.supplierName?.toLowerCase().includes(search.toLowerCase()) ||
-    s.items.some(i => i.customerName.toLowerCase().includes(search.toLowerCase()))
+    s.items.some(i => i.customerName.toLowerCase().includes(search.toLowerCase())) ||
+    (search.toLowerCase() === 'dropshipping' && s.items.some(i => i.isDropshipping))
   );
 
   return (
@@ -365,10 +367,10 @@ export default function Shipments() {
     >
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-black italic tracking-tighter uppercase leading-none">
-            Encomendas <span className="text-indigo-500 underline decoration-indigo-200 decoration-4 underline-offset-4 tracking-tighter font-black italic">Logística</span>
+          <h2 className="text-3xl font-black italic tracking-tighter">
+            Rastreio de <span className="text-red-800 underline decoration-red-200 decoration-4 underline-offset-4 tracking-tighter font-black italic">Encomendas</span>
           </h2>
-          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.3em] mt-2">Gestão de Importação e Rastreamento</p>
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.3em] mt-2">Gestão de Importação e Rastreamento</p>
         </div>
         <div className="flex items-center gap-2">
           {selectedIds.length > 0 && (
@@ -405,7 +407,7 @@ export default function Shipments() {
           )}
           <button 
             onClick={() => openModal()}
-            className="bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-md flex items-center gap-2 active:scale-95"
+            className="bg-red-800 hover:bg-black text-white font-bold py-3 px-6 rounded-xl transition-all shadow-md flex items-center gap-2 active:scale-95 shadow-red-900/20"
           >
             <Plus size={20} /> Deploy Lote
           </button>
@@ -414,113 +416,112 @@ export default function Shipments() {
 
       <div className="flex flex-col lg:flex-row items-center justify-between gap-4 p-6 bg-white/40 backdrop-blur-md rounded-3xl border border-white/60 shadow-xl shadow-slate-200/50">
         <div className="flex-1 max-w-md relative group">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 size-5 group-focus-within:text-indigo-500 transition-colors" />
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 size-5 group-focus-within:text-red-800 transition-colors" />
           <input 
             type="text" 
             placeholder="Search Rastreio ou Cliente..." 
-            className="w-full pl-12 pr-4 py-3 bg-white/60 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm outline-none text-sm font-black italic tracking-tight"
+            className="w-full pl-12 pr-4 py-3 bg-white/60 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-red-800 transition-all shadow-sm outline-none text-sm font-black italic tracking-tight"
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
         </div>
-        <div className="flex items-center gap-8 px-6 border-l border-slate-200 hidden lg:flex">
+        <div className="flex items-center gap-8 px-6 border-l border-slate-200 hidden lg:flex font-sans">
            <div className="text-right">
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Lotes no Trecho</p>
-              <p className="text-xl font-black text-slate-900">{shipments.filter(s => s.status !== 'Entregue').length}</p>
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Lotes no Trecho</p>
+              <p className="text-xl font-black text-slate-900 font-display tabular-nums leading-none">{shipments.filter(s => s.status !== 'Entregue').length}</p>
            </div>
            <div className="text-right">
-              <p className="text-[9px] font-black text-emerald-500 uppercase tracking-widest">Taxas Pagas</p>
-              <p className="text-xl font-black text-emerald-600">{formatCurrency(shipments.filter(s => s.taxPaid).reduce((acc, s) => acc + (s.taxAmount || 0), 0))}</p>
+              <p className="text-[9px] font-black text-emerald-500 uppercase tracking-widest leading-none mb-1">Taxas Pagas</p>
+              <p className="text-xl font-black text-emerald-600 font-display tabular-nums leading-none">{formatCurrency(shipments.filter(s => s.taxPaid).reduce((acc, s) => acc + (s.taxAmount || 0), 0))}</p>
            </div>
            <div className="text-right">
-              <p className="text-[9px] font-black text-rose-500 uppercase tracking-widest">Taxas Pendentes</p>
-              <p className="text-xl font-black text-rose-600">{formatCurrency(shipments.filter(s => s.hasTax && !s.taxPaid).reduce((acc, s) => acc + (s.taxAmount || 0), 0))}</p>
+              <p className="text-[9px] font-black text-rose-500 uppercase tracking-widest leading-none mb-1">Taxas Pendentes</p>
+              <p className="text-xl font-black text-rose-600 font-display tabular-nums leading-none">{formatCurrency(shipments.filter(s => s.hasTax && !s.taxPaid).reduce((acc, s) => acc + (s.taxAmount || 0), 0))}</p>
            </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filtered.map(shipment => (
           <motion.div 
             layout
             key={shipment.id} 
             className={cn(
-              "bg-white rounded-3xl border transition-all p-6 flex flex-col group relative",
-              selectedIds.includes(shipment.id!) ? "border-indigo-500 shadow-xl shadow-indigo-50" : "border-slate-100 shadow-sm hover:shadow-xl"
+              "bg-white rounded-2xl border transition-all p-4 flex flex-col group relative",
+              selectedIds.includes(shipment.id!) ? "border-amber-500 shadow-md" : "border-slate-100 shadow-sm hover:shadow-md"
             )}
           >
             <button 
               onClick={() => toggleSelect(shipment.id!)}
-              className="absolute -top-2 -left-2 z-10 size-8 bg-white border-2 border-slate-100 rounded-xl flex items-center justify-center text-slate-300 hover:text-indigo-600 hover:border-indigo-200 transition-all shadow-sm"
+              className="absolute -top-1.5 -left-1.5 z-10 size-6 bg-white border border-slate-200 rounded-lg flex items-center justify-center text-slate-300 hover:text-red-800 transition-all shadow-sm"
             >
-              {selectedIds.includes(shipment.id!) ? <CheckSquare size={18} className="text-indigo-600" /> : <Square size={18} />}
+              {selectedIds.includes(shipment.id!) ? <CheckSquare size={14} className="text-red-800" /> : <Square size={14} />}
             </button>
 
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className={cn("size-12 rounded-2xl flex items-center justify-center transition-colors", getStatusColor(shipment.status))}>
-                  <Truck size={24} />
+            <div className="flex items-start justify-between mb-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className={cn("size-9 rounded-xl flex items-center justify-center shrink-0", getStatusColor(shipment.status))}>
+                  <Truck size={18} />
                 </div>
-                <div className="max-w-[150px]">
-                  <h3 className="font-black text-slate-900 leading-tight uppercase tracking-tight truncate">{shipment.trackingCode || 'Sem Rastreio'}</h3>
-                  <div className="flex flex-col gap-0.5 mt-1">
+                <div className="min-w-0 flex-1">
+                  <h3 className="font-black text-slate-950 text-xs uppercase tracking-tight truncate font-sans">{shipment.trackingCode || 'S/ RASTREIO'}</h3>
+                  <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
                     <select 
                       value={shipment.status}
                       onChange={(e) => updateShipmentStatus(shipment, e.target.value as any)}
                       className={cn(
-                        "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider outline-none cursor-pointer border-none appearance-none",
+                        "inline-flex px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest outline-none cursor-pointer border-none appearance-none",
                         getStatusColor(shipment.status)
                       )}
                     >
                       {SHIPMENT_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                     {shipment.supplierName && (
-                      <span className="text-[9px] font-bold text-slate-400 uppercase truncate">
+                      <span className="text-[8px] font-bold text-slate-400 uppercase truncate max-w-[80px]">
                         {shipment.supplierName}
                       </span>
                     )}
                   </div>
                 </div>
               </div>
-              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button onClick={() => setShowTimelineId(showTimelineId === shipment.id ? null : shipment.id!)} className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-indigo-600"><History size={16} /></button>
-                <button onClick={() => openModal(shipment)} className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-indigo-600"><Edit2 size={16} /></button>
-                <button onClick={() => deleteDoc(doc(db, 'shipments', shipment.id!))} className="p-2 hover:bg-rose-50 rounded-lg text-slate-400 hover:text-rose-600"><Trash2 size={16} /></button>
+              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                <button onClick={() => setShowTimelineId(showTimelineId === shipment.id ? null : shipment.id!)} className="p-1.5 hover:bg-slate-100 rounded text-slate-400 hover:text-red-800"><History size={14} /></button>
+                <button onClick={() => openModal(shipment)} className="p-1.5 hover:bg-slate-100 rounded text-slate-400 hover:text-red-800"><Edit2 size={14} /></button>
+                <button onClick={() => deleteDoc(doc(db, 'shipments', shipment.id!))} className="p-1.5 hover:bg-rose-50 rounded text-slate-400 hover:text-rose-600"><Trash2 size={14} /></button>
               </div>
             </div>
 
-            <div className="space-y-3 flex-1">
+            <div className="space-y-2 flex-1">
               <AnimatePresence mode="wait">
                 {showTimelineId === shipment.id ? (
                   <motion.div 
                     key="timeline"
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: 10 }}
-                    className="space-y-4"
+                    initial={{ opacity: 0, x: -5 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 5 }}
+                    className="space-y-2 pt-1"
                   >
-                    <p className="text-[10px] font-black uppercase text-indigo-600 tracking-widest border-b border-indigo-50 pb-1">Linha do Tempo</p>
-                    <div className="space-y-3 pl-2 border-l border-slate-100 h-40 overflow-y-auto custom-scrollbar">
+                    <p className="text-[8px] font-black uppercase text-red-800 tracking-widest border-b border-red-50 pb-0.5">Log de Auditoria</p>
+                    <div className="space-y-2 pl-2 border-l border-slate-100 h-32 overflow-y-auto custom-scrollbar">
                       {shipment.history?.slice().reverse().map((h, i) => (
-                        <div key={i} className="relative pb-2">
-                          <div className={cn("absolute -left-[13px] top-1 size-2 rounded-full border-2 border-white", getStatusColor(h.status).replace('text-', 'bg-'))} />
-                          <p className="text-[10px] font-black text-slate-900 uppercase tracking-tighter">{h.status}</p>
-                          <p className="text-[9px] text-slate-500 font-bold">{new Date(h.updatedAt?.seconds * 1000 || h.updatedAt).toLocaleString()}</p>
+                        <div key={i} className="relative pb-1">
+                          <div className={cn("absolute -left-[11px] top-1 size-1.5 rounded-full border border-white", getStatusColor(h.status).replace('text-', 'bg-'))} />
+                          <p className="text-[9px] font-black text-slate-900 uppercase leading-none">{h.status}</p>
+                          <p className="text-[8px] text-slate-400 font-bold mt-0.5">{new Date(h.updatedAt?.seconds * 1000 || h.updatedAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</p>
                         </div>
                       ))}
                     </div>
-                    <button onClick={() => setShowTimelineId(null)} className="w-full py-2 text-[10px] font-black uppercase text-slate-400 hover:text-slate-600 bg-slate-50 rounded-xl">Voltar para clientes</button>
+                    <button onClick={() => setShowTimelineId(null)} className="w-full py-1.5 text-[8px] font-black uppercase text-slate-400 hover:text-slate-600 bg-slate-50 rounded-lg">Retornar</button>
                   </motion.div>
                 ) : (
                   <motion.div 
                     key="items"
-                    initial={{ opacity: 0, x: 10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -10 }}
-                    className="space-y-3"
+                    initial={{ opacity: 0, x: 5 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -5 }}
+                    className="space-y-1.5"
                   >
-                    <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest border-b border-slate-50 pb-1">Grupos por Cliente</p>
-                    <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar pr-2">
+                    <div className="flex justify-between items-center border-b border-slate-50 pb-0.5">
+                      <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest">Consigned Groups</p>
+                      <span className="text-[8px] font-black text-slate-950 font-display tabular-nums">∑ {shipment.items.reduce((acc, i) => acc + i.quantity, 0)} UNITS</span>
+                    </div>
+                    <div className="space-y-1 max-h-32 overflow-y-auto custom-scrollbar pr-1">
                       {(Array.from(new Set(shipment.items.map(i => i.customerId))) as string[]).map(customerId => {
                         const customerName = shipment.items.find(i => i.customerId === customerId)?.customerName;
                         const customerItems = shipment.items.filter(i => i.customerId === customerId);
@@ -530,15 +531,15 @@ export default function Shipments() {
                           <div key={customerId} className="space-y-1">
                             <button 
                               onClick={() => toggleExpand(shipment.id!, customerId)}
-                              className="w-full flex items-center justify-between text-xs bg-slate-50 p-2.5 rounded-xl border border-slate-100 hover:bg-slate-100 transition-colors text-left"
+                              className="w-full flex items-center justify-between text-[10px] bg-slate-50/50 p-1.5 rounded-lg border border-slate-100/50 hover:bg-slate-100/50 transition-colors"
                             >
-                              <div className="flex items-center gap-2">
-                                <div className="size-5 bg-white rounded-md flex items-center justify-center text-slate-400 border border-slate-100">
-                                  {isExpanded ? <X size={10} /> : <Plus size={10} />}
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <div className="size-4 bg-white rounded flex items-center justify-center text-slate-400 border border-slate-100 shadow-sm shrink-0">
+                                  {isExpanded ? <X size={8} /> : <Plus size={8} />}
                                 </div>
-                                <span className="font-bold text-slate-900 truncate max-w-[100px]">{customerName}</span>
+                                <span className="font-bold text-slate-900 truncate uppercase tracking-tight">{customerName}</span>
                               </div>
-                              <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded-md">
+                              <span className="text-[8px] font-black text-red-800 bg-red-100 px-1 rounded ml-2 shrink-0">
                                 {customerItems.length}
                               </span>
                             </button>
@@ -549,12 +550,17 @@ export default function Shipments() {
                                   initial={{ height: 0, opacity: 0 }}
                                   animate={{ height: 'auto', opacity: 1 }}
                                   exit={{ height: 0, opacity: 0 }}
-                                  className="bg-white/50 rounded-xl overflow-hidden ml-4 border-l-2 border-slate-100"
+                                  className="bg-slate-50/30 rounded-lg overflow-hidden ml-3 border-l border-slate-200"
                                 >
                                   {customerItems.map(item => (
-                                    <div key={item.id} className="p-2 border-b border-slate-50 last:border-0 flex justify-between items-center text-[11px]">
-                                      <span className="text-slate-600 font-medium truncate max-w-[120px]">{item.productName}</span>
-                                      <span className="font-black text-slate-900">x{item.quantity}</span>
+                                    <div key={item.id} className="p-1.5 border-b border-slate-50/50 last:border-0 flex justify-between items-center text-[9px]">
+                                      <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                                        <span className="text-slate-600 font-bold uppercase truncate tracking-tight">{item.productName}</span>
+                                        {item.isDropshipping && (
+                                          <span className="text-[6px] font-black bg-amber-500 text-white px-0.5 rounded italic leading-none">DS</span>
+                                        )}
+                                      </div>
+                                      <span className="font-black text-slate-950 ml-2 shrink-0 mr-1">x{item.quantity}</span>
                                     </div>
                                   ))}
                                 </motion.div>
@@ -569,41 +575,39 @@ export default function Shipments() {
               </AnimatePresence>
             </div>
 
-            <div className="mt-6 pt-4 border-t border-slate-50 flex items-center justify-between">
-              <div className="flex flex-col gap-2">
+            <div className="mt-4 pt-3 border-t border-slate-50 flex items-center justify-between">
+              <div className="flex items-center gap-2">
                 {shipment.hasTax ? (
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
                     <div className="group/tax relative">
                       <button 
                         onClick={(e) => {
                           e.stopPropagation();
-                          const amountStr = prompt('Valor da taxa (Ex: 100,50):', shipment.taxAmount.toString().replace('.', ','));
+                          const amountStr = prompt('Valor da taxa:', shipment.taxAmount.toString().replace('.', ','));
                           if (amountStr !== null && amountStr.trim() !== '') {
                             const normalized = amountStr.replace(',', '.').replace(/[^\d.]/g, '');
                             const parsed = parseFloat(normalized);
                             if (!isNaN(parsed) && parsed >= 0) {
                               updateShipmentTax(shipment.id!, parsed, shipment.taxPaid);
-                            } else {
-                              alert('Por favor, insira um valor numérico válido.');
                             }
                           }
                         }}
-                        className="flex items-center gap-1 cursor-pointer hover:opacity-80 transition-opacity"
+                        className="flex items-center gap-1 cursor-pointer hover:opacity-80 group"
                       >
-                        <Receipt size={14} className={shipment.taxPaid ? "text-emerald-500" : "text-rose-500"} />
-                        <span className={cn("text-[10px] font-black uppercase", shipment.taxPaid ? "text-emerald-600" : "text-rose-600")}>
-                          Imp: {formatCurrency(shipment.taxAmount)}
+                        <Receipt size={12} className={shipment.taxPaid ? "text-emerald-500" : "text-rose-500"} />
+                        <span className={cn("text-[9px] font-black uppercase font-display tabular-nums leading-none tracking-tight", shipment.taxPaid ? "text-emerald-600" : "text-rose-600")}>
+                          {formatCurrency(shipment.taxAmount)}
                         </span>
-                        <Calculator size={12} className="text-slate-300 ml-1" />
+                        <Calculator size={10} className="text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />
                       </button>
-                      {/* Tax Rateio Popover */}
-                      <div className="absolute bottom-full left-0 mb-2 w-48 bg-slate-900 text-white rounded-xl p-3 shadow-xl opacity-0 group-hover/tax:opacity-100 pointer-events-none transition-all z-20">
-                        <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 mb-2 border-b border-slate-800 pb-1">Rateio Sugerido</p>
-                        <div className="space-y-1.5">
+                      
+                      <div className="absolute bottom-full left-0 mb-2 w-48 bg-slate-950 text-white rounded-xl p-2.5 shadow-2xl opacity-0 group-hover/tax:opacity-100 pointer-events-none transition-all z-20 border border-white/10">
+                        <p className="text-[7px] font-black uppercase tracking-[0.2em] text-slate-500 mb-1.5 border-b border-white/5 pb-1">Tax Audit / Pro-Rata</p>
+                        <div className="space-y-1">
                           {calculateTaxBreakdown(shipment).map(item => (
-                            <div key={item.id} className="flex justify-between items-center text-[9px]">
-                              <span className="font-bold truncate max-w-[80px]">{item.name}</span>
-                              <span className="font-black text-emerald-400">{formatCurrency(item.tax)}</span>
+                            <div key={item.id} className="flex justify-between items-center text-[8px]">
+                              <span className="font-bold truncate max-w-[90px] uppercase opacity-70 tracking-tight">{item.name}</span>
+                              <span className="font-black text-emerald-400 font-display tabular-nums">{formatCurrency(item.tax)}</span>
                             </div>
                           ))}
                         </div>
@@ -612,33 +616,23 @@ export default function Shipments() {
                     <button 
                       onClick={() => updateShipmentTax(shipment.id!, shipment.taxAmount, !shipment.taxPaid)}
                       className={cn(
-                        "px-2 py-0.5 rounded-md text-[9px] font-black uppercase transition-all",
-                        shipment.taxPaid ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
+                        "px-1.5 py-0.5 rounded text-[7px] font-black uppercase tracking-widest transition-all",
+                        shipment.taxPaid ? "bg-emerald-500 text-white" : "bg-rose-500 text-white"
                       )}
                     >
-                      {shipment.taxPaid ? 'Pago' : 'Pagar'}
-                    </button>
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setEditingTaxId(shipment.id!);
-                        setQuickTaxAmount(shipment.taxAmount.toString());
-                      }}
-                      className="p-1 hover:bg-slate-100 rounded-md text-slate-400"
-                    >
-                      <Plus size={10} />
+                      {shipment.taxPaid ? 'PAGO' : 'PAGAR'}
                     </button>
                   </div>
                 ) : (
                   editingTaxId === shipment.id ? (
-                    <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-1 animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
+                    <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-0.5" onClick={e => e.stopPropagation()}>
                       <input 
                         autoFocus
                         type="text"
                         placeholder="0,00"
                         value={quickTaxAmount}
                         onChange={e => setQuickTaxAmount(e.target.value.replace(/[^0-9,]/g, ''))}
-                        className="w-16 px-1.5 py-0.5 text-[10px] font-bold outline-none"
+                        className="w-12 px-1 py-0.5 text-[9px] font-bold outline-none"
                       />
                       <button 
                         onClick={() => {
@@ -648,13 +642,11 @@ export default function Shipments() {
                             setEditingTaxId(null);
                           }
                         }}
-                        className="bg-indigo-600 text-white px-2 py-0.5 rounded text-[8px] font-black uppercase"
+                        className="bg-indigo-600 text-white px-1.5 py-0.5 rounded text-[7px] font-black uppercase"
                       >
                         OK
                       </button>
-                      <button onClick={() => setEditingTaxId(null)} className="text-slate-400">
-                        <X size={10} />
-                      </button>
+                      <button onClick={() => setEditingTaxId(null)} className="text-slate-400"><X size={8} /></button>
                     </div>
                   ) : (
                     <button 
@@ -663,18 +655,18 @@ export default function Shipments() {
                         setEditingTaxId(shipment.id!);
                         setQuickTaxAmount('');
                       }}
-                      className="flex items-center gap-1 text-[9px] font-black uppercase text-slate-400 hover:text-indigo-600 transition-colors border border-slate-200 px-2 py-1.5 rounded-xl bg-white shadow-sm"
+                      className="flex items-center gap-1 text-[8px] font-black uppercase text-slate-400 hover:text-indigo-600 transition-colors border border-slate-100 px-1.5 py-1 rounded bg-slate-50/50"
                     >
-                      <Plus size={10} /> Adicionar Taxa
+                      <Plus size={8} /> ADD TAXA
                     </button>
                   )
                 )}
               </div>
               <button 
                 onClick={() => sendNotification(shipment, shipment.status)}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-100 transition-colors"
+                className="flex items-center gap-1 px-2 py-1 bg-slate-900 text-white rounded text-[8px] font-black uppercase tracking-widest hover:bg-red-800 transition-colors"
               >
-                <MessageCircle size={14} /> Notificar
+                <MessageCircle size={10} /> NOTIFY
               </button>
             </div>
           </motion.div>
@@ -772,7 +764,7 @@ export default function Shipments() {
                         <select 
                           value={selectedSaleId}
                           onChange={e => setSelectedSaleId(e.target.value)}
-                          className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-2xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                          className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-2xl text-xs font-bold outline-none focus:ring-2 focus:ring-red-800 bg-white appearance-none"
                         >
                           <option value="">Selecionar Venda Realizada</option>
                           {availableSales.slice(0, 50).map(s => (
@@ -786,7 +778,7 @@ export default function Shipments() {
                         type="button"
                         onClick={() => addSaleItems(selectedSaleId)}
                         disabled={!selectedSaleId}
-                        className="px-6 bg-indigo-600 text-white font-black text-[10px] uppercase tracking-widest rounded-2xl hover:bg-indigo-700 transition-all disabled:opacity-50 shadow-lg shadow-indigo-100"
+                        className="px-6 bg-red-800 text-white font-black text-[10px] uppercase tracking-widest rounded-2xl hover:bg-black transition-all disabled:opacity-50 shadow-lg shadow-red-100"
                       >
                         Vincular Venda
                       </button>
@@ -798,7 +790,10 @@ export default function Shipments() {
                       <div key={item.id} className="bg-white p-3 rounded-2xl flex items-center justify-between border border-slate-100 shadow-sm animate-in fade-in slide-in-from-top-2">
                         <div className="flex items-center gap-3">
                           <div className="size-8 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400">
-                            <Box size={16} />
+                             <Box size={16} />
+                             {item.isDropshipping && (
+                               <div className="absolute top-0 right-0 size-3 bg-amber-500 rounded-full border-2 border-slate-50" />
+                             )}
                           </div>
                           <div>
                             <p className="text-xs font-black text-slate-900">{item.customerName}</p>
@@ -901,7 +896,7 @@ export default function Shipments() {
                 </button>
                 <button 
                   onClick={handleSubmit}
-                  className="flex-[2] px-6 py-4 bg-indigo-600 text-white font-black text-xs uppercase tracking-widest rounded-[20px] shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all hover:-translate-y-1 active:translate-y-0"
+                  className="flex-[2] px-6 py-4 bg-red-800 text-white font-black text-xs uppercase tracking-widest rounded-[20px] shadow-xl shadow-red-100 hover:bg-black transition-all hover:-translate-y-1 active:translate-y-0"
                 >
                   {editingShipment ? 'Salvar Alterações' : 'Criar Lote de Importação'}
                 </button>

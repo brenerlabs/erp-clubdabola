@@ -16,6 +16,7 @@ export interface Product {
   variations: Variation[];
   totalStock: number;
   minStock: number;
+  isDropshipping?: boolean;
   updatedAt: any;
 }
 
@@ -34,6 +35,7 @@ export interface SaleItem {
   variationName: string;
   quantity: number;
   price: number;
+  isDropshipping?: boolean;
 }
 
 export interface Sale {
@@ -60,6 +62,7 @@ export interface ShipmentItem {
   productName: string;
   quantity: number;
   price: number;
+  isDropshipping?: boolean;
 }
 
 export interface ShipmentStatusHistory {

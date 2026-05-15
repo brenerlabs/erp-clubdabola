@@ -1,59 +1,47 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Rajdhani:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
-  --color-primary: var(--color-indigo-600);
-  --color-sidebar: var(--color-slate-900);
-  --color-surface: var(--color-white);
-  --color-background: var(--color-slate-50);
+  --font-display: "Rajdhani", sans-serif;
+  --color-primary: #800000;
+  --color-accent: #f59e0b;
+  --color-sidebar: #0f172a;
+  --color-background: #f8fafc;
 }
 
 body {
-  @apply font-sans text-slate-900 antialiased bg-slate-50;
+  @apply font-sans text-slate-900 antialiased bg-slate-50 selection:bg-red-800 selection:text-white;
 }
 
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  width: 4px;
+  height: 4px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 10px;
+  @apply bg-slate-200 rounded-full transition-colors;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  @apply bg-slate-400;
 }
 
-/* Chrome, Safari, Edge, Opera */
-input::-webkit-outer-spin-button,
-input::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
+.analytical-card {
+  @apply bg-white rounded-lg border border-slate-200 shadow-sm p-6 hover:border-slate-300 transition-all duration-300;
 }
 
-/* Firefox */
-input[type=number] {
-  -moz-appearance: textfield;
-}
-
-.card {
-  @apply bg-white rounded-xl border border-slate-200 shadow-sm p-6;
+.data-value {
+  @apply font-mono tracking-tighter tabular-nums;
 }
 
 .btn-primary {
-  @apply bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-indigo-700 transition-all shadow-sm;
+  @apply bg-slate-950 text-white px-5 py-2.5 rounded-lg font-bold text-[11px] uppercase tracking-wider hover:bg-red-800 transition-all shadow-md active:scale-95;
 }
 
-.btn-success {
-  @apply bg-emerald-500 text-white px-4 py-2 rounded-full font-bold text-xs hover:bg-emerald-600 transition-all shadow-sm shadow-emerald-200 flex items-center gap-2;
-}
-
-.table-header {
-  @apply bg-slate-50 border-b border-slate-100 text-[10px] uppercase font-bold text-slate-400 tracking-wider;
+.label-analytical {
+  @apply text-[10px] font-bold uppercase tracking-widest text-slate-400;
 }

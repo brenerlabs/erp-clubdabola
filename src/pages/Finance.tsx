@@ -75,9 +75,9 @@ export default function Finance() {
   const cashFlow = totalReceived - totalPaidTaxes;
 
   const methods = [
-    { name: 'Dinheiro', icon: Banknote, value: transactions.filter(t => t.paymentMethod === 'Dinheiro').reduce((a, b) => a + b.amount, 0), color: 'bg-green-50 text-green-600' },
-    { name: 'Pix', icon: QrCode, value: transactions.filter(t => t.paymentMethod === 'Pix').reduce((a, b) => a + b.amount, 0), color: 'bg-indigo-50 text-indigo-600' },
-    { name: 'Cartão', icon: CreditCard, value: transactions.filter(t => t.paymentMethod === 'Cartão').reduce((a, b) => a + b.amount, 0), color: 'bg-blue-50 text-blue-600' },
+    { name: 'Dinheiro', icon: Banknote, value: transactions.filter(t => t.paymentMethod === 'Dinheiro').reduce((a, b) => a + b.amount, 0), color: 'bg-emerald-50 text-emerald-600' },
+    { name: 'Pix', icon: QrCode, value: transactions.filter(t => t.paymentMethod === 'Pix').reduce((a, b) => a + b.amount, 0), color: 'bg-amber-50 text-amber-600' },
+    { name: 'Cartão', icon: CreditCard, value: transactions.filter(t => t.paymentMethod === 'Cartão').reduce((a, b) => a + b.amount, 0), color: 'bg-slate-50 text-slate-600' },
     { name: 'Fiado (Pendente)', icon: Wallet, value: accountsReceivable, color: 'bg-red-50 text-red-600' },
   ];
 
@@ -125,8 +125,10 @@ export default function Finance() {
     >
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-black italic tracking-tighter">Financeiro & <span className="text-indigo-500 underline decoration-indigo-200 decoration-4 underline-offset-4">Auditoria</span></h2>
-          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.3em] mt-1">Gestão de Ativos e Fluxo de Caixa</p>
+          <h2 className="text-3xl font-black italic tracking-tighter">
+            Auditoria <span className="text-red-800 underline decoration-red-200 decoration-4 underline-offset-4 tracking-tighter font-black italic">Financeira</span>
+          </h2>
+          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.3em] mt-2">Gestão de Ativos e Fluxo de Caixa</p>
         </div>
         <div className="flex gap-2">
           <button 
@@ -144,12 +146,12 @@ export default function Finance() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-        <FinanceCard title="Faturamento Bruto" value={formatCurrency(totalInvoiced)} icon={ArrowUpCircle} color="indigo" />
-        <FinanceCard title="Fluxo de Caixa (Líquido)" value={formatCurrency(cashFlow)} icon={ArrowDownCircle} color="emerald" />
-        <FinanceCard title="Contas a Receber" value={formatCurrency(accountsReceivable)} icon={Wallet} color="rose" />
-        <FinanceCard title="Taxas Pagas" value={formatCurrency(totalPaidTaxes)} icon={Receipt} color="amber" />
-      </div>
+    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+      <FinanceCard title="Faturamento Bruto" value={formatCurrency(totalInvoiced)} icon={ArrowUpCircle} color="red" />
+      <FinanceCard title="Fluxo de Caixa (Líquido)" value={formatCurrency(cashFlow)} icon={ArrowDownCircle} color="emerald" />
+      <FinanceCard title="Contas a Receber" value={formatCurrency(accountsReceivable)} icon={Wallet} color="black" />
+      <FinanceCard title="Taxas Pagas" value={formatCurrency(totalPaidTaxes)} icon={Receipt} color="amber" />
+    </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
         {/* Payment Methods Table */}
@@ -268,50 +270,44 @@ export default function Finance() {
 
 function FinanceCard({ title, value, icon: Icon, color }: any) {
   const configs: any = {
-    indigo: 'from-indigo-600 to-indigo-800 shadow-indigo-500/20 text-white',
-    emerald: 'bg-white text-slate-900 border-slate-100 shadow-slate-200/50',
-    rose: 'bg-slate-900 text-white border-slate-800 shadow-slate-950/20',
-    amber: 'from-amber-400 to-amber-600 shadow-amber-500/20 text-white',
+    red: 'bg-red-800 text-white shadow-red-900/10',
+    emerald: 'bg-white text-slate-900 border-slate-200 shadow-sm',
+    black: 'bg-slate-950 text-white border-slate-900 shadow-slate-950/20',
+    amber: 'bg-white text-slate-900 border-slate-200 shadow-sm',
   };
-
-  const isGradient = color === 'indigo' || color === 'amber';
 
   return (
     <motion.div 
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 10 }}
       whileInView={{ opacity: 1, y: 0 }}
-      whileHover={{ y: -5, scale: 1.02 }}
+      viewport={{ once: true }}
       className={cn(
-        "p-8 rounded-[40px] shadow-2xl transition-all border relative overflow-hidden",
-        isGradient ? `bg-gradient-to-br ${configs[color]}` : configs[color]
+        "p-5 rounded-2xl border transition-all relative overflow-hidden group",
+        configs[color]
       )}
     >
-      <div className="flex justify-between items-start mb-8 relative z-10">
+      <div className="flex justify-between items-start mb-4 relative z-10">
         <div className={cn(
-          "size-12 rounded-2xl flex items-center justify-center shadow-lg transition-transform",
-          isGradient ? "bg-white/20 text-white" : (color === 'rose' ? "bg-white/10 text-white" : "bg-indigo-600 text-white")
+          "size-9 rounded-xl flex items-center justify-center transition-all group-hover:scale-110 shadow-sm",
+          color === 'red' ? "bg-white/20 text-white" : (color === 'emerald' ? "bg-emerald-100 text-emerald-600" : (color === 'black' ? "bg-white/10 text-white" : "bg-amber-100 text-amber-600"))
         )}>
-          <Icon size={24} />
+          <Icon size={18} />
         </div>
         <div className={cn(
-          "px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-[0.2em]",
-          isGradient ? "bg-white/20 text-white" : (color === 'rose' ? "bg-white/10 text-white" : "bg-emerald-50 text-emerald-600")
+          "px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest",
+          color === 'red' || color === 'black' ? "bg-white/10 text-white/60" : "bg-slate-100 text-slate-500"
         )}>
-          Fiscal Sync
+          Sync: {new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
         </div>
       </div>
       
       <div className="relative z-10">
         <p className={cn(
-          "text-[10px] font-black uppercase tracking-[0.3em] mb-2",
-          isGradient || color === 'rose' ? "text-white/60" : "text-slate-400"
+          "text-[9px] font-black uppercase tracking-[0.2em] mb-1.5 leading-none",
+          color === 'red' || color === 'black' ? "text-white/60" : "text-slate-400"
         )}>{title}</p>
-        <h4 className="text-3xl font-black italic tracking-tighter">{value}</h4>
+        <h4 className="text-2xl font-black italic tracking-tighter leading-none font-display tabular-nums uppercase">{value}</h4>
       </div>
-
-      {isGradient && (
-        <div className="absolute -bottom-12 -left-12 size-32 bg-white/10 rounded-full blur-3xl" />
-      )}
     </motion.div>
   );
 }

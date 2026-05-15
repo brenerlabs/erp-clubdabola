@@ -88,14 +88,14 @@ export default function Compensations() {
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <h2 className="text-3xl font-black italic tracking-tighter shadow-sm">
-            Auditoria de <span className="text-emerald-500 underline decoration-emerald-200 decoration-4 underline-offset-4 tracking-tighter font-black italic">Recebíveis</span>
+            Auditoria de <span className="text-red-800 underline decoration-red-200 decoration-4 underline-offset-4 tracking-tighter font-black italic">Recebíveis</span>
           </h2>
           <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.3em] mt-2">Relatórios de Compensação e Amortização</p>
         </div>
         <div className="flex items-center gap-2">
           <button 
             onClick={handleShare}
-            className="flex items-center gap-2 px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-black uppercase text-[10px] tracking-widest rounded-xl transition-all shadow-lg shadow-emerald-500/20 active:scale-95 translate-y-[-1px]"
+            className="flex items-center gap-2 px-6 py-3 bg-red-800 hover:bg-black text-white font-black uppercase text-[10px] tracking-widest rounded-xl transition-all shadow-lg shadow-red-500/20 active:scale-95 translate-y-[-1px]"
           >
             <Share2 size={16} />
             Export WhatsApp
@@ -137,16 +137,16 @@ export default function Compensations() {
             className="w-full bg-transparent text-xs font-black text-slate-900 outline-none border-none appearance-none cursor-pointer block"
           />
         </div>
-        <div className="bg-emerald-600 rounded-2xl p-4 shadow-lg shadow-emerald-100 flex flex-col justify-center">
-          <p className="text-[9px] font-black uppercase text-emerald-100 mb-1 tracking-widest opacity-80">Volume Filtrado</p>
-          <div className="text-xl font-black text-white">{formatCurrency(filtered.reduce((acc, t) => acc + t.amount, 0))}</div>
+        <div className="bg-slate-950 rounded-2xl p-4 shadow-lg shadow-slate-900/10 border border-white/5 flex flex-col justify-center">
+          <p className="text-[9px] font-black uppercase text-amber-500 mb-1 tracking-widest opacity-80">Volume Filtrado</p>
+          <div className="text-xl font-black text-white italic tracking-tighter">{formatCurrency(filtered.reduce((acc, t) => acc + t.amount, 0))}</div>
         </div>
       </div>
 
       <div className="bg-white rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
         <div className="p-8 border-b border-slate-50 flex items-center justify-between bg-slate-50/30">
           <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
-            <Calendar size={16} className="text-emerald-500" />
+            <Calendar size={16} className="text-red-800" />
             Extrato de Movimentações
           </h3>
           <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Exibindo {filtered.length} de {transactions.length} registros</div>
@@ -179,11 +179,11 @@ export default function Compensations() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.05 }}
                   key={t.id} 
-                  className="hover:bg-emerald-50/30 transition-all group"
+                  className="hover:bg-slate-50 transition-all group"
                 >
                   <td className="px-8 py-5">
                     <div className="flex items-center gap-3">
-                      <div className="size-10 bg-slate-100 text-slate-500 rounded-xl flex items-center justify-center group-hover:bg-emerald-100 group-hover:text-emerald-600 transition-colors">
+                      <div className="size-10 bg-slate-100 text-slate-500 rounded-xl flex items-center justify-center group-hover:bg-red-800 group-hover:text-white transition-colors">
                         <Calendar size={18} />
                       </div>
                       <div>
@@ -194,7 +194,7 @@ export default function Compensations() {
                   </td>
                   <td className="px-8 py-5">
                     <div className="flex items-center gap-3">
-                      <div className="size-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center">
+                      <div className="size-10 bg-slate-900 text-white rounded-xl flex items-center justify-center">
                         <User size={18} />
                       </div>
                       <div className="text-xs font-black text-slate-800 uppercase tracking-tight">{getCustomerName(t.customerId)}</div>
@@ -207,7 +207,7 @@ export default function Compensations() {
                     </div>
                   </td>
                   <td className="px-8 py-5 text-right">
-                    <div className="text-lg font-black text-emerald-600 flex items-center justify-end gap-2 text-right">
+                    <div className="text-lg font-black text-red-800 flex items-center justify-end gap-2 text-right italic tracking-tighter">
                        <ArrowDownCircle size={18} className="opacity-40" />
                        {formatCurrency(t.amount)}
                     </div>

@@ -18,8 +18,6 @@ export default function PDV() {
   const [discountVal, setDiscountVal] = useState<string>('0');
   const [isFinishing, setIsFinishing] = useState(false);
   const [saleDate, setSaleDate] = useState(new Date().toISOString().split('T')[0]);
-  const [saleStatus, setSaleStatus] = useState<'Processando' | 'Postado' | 'Entregue' | 'Concluída'>('Concluída');
-  const [trackingCode, setTrackingCode] = useState('');
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [lastSale, setLastSale] = useState<any>(null);
@@ -37,11 +35,11 @@ export default function PDV() {
   }, []);
 
   const addToCart = (product: Product, variation: Variation) => {
-    if (variation.stock <= 0) return alert('Estoque esgotado!');
+    if (!product.isDropshipping && variation.stock <= 0) return alert('Estoque esgotado!');
     
     const existing = cart.find(item => item.productId === product.id && item.variationId === variation.id);
     if (existing) {
-      if (existing.quantity >= variation.stock) return alert('Limite de estoque atingido!');
+      if (!product.isDropshipping && existing.quantity >= variation.stock) return alert('Limite de estoque atingido!');
       setCart(cart.map(item => 
         (item.productId === product.id && item.variationId === variation.id) 
           ? { ...item, quantity: item.quantity + 1 } 
@@ -52,9 +50,10 @@ export default function PDV() {
         productId: product.id!,
         variationId: variation.id,
         name: product.name,
-        variationName: `${variation.size} / ${variation.color}`,
+        variationName: `${variation.size || 'N/A'} / ${variation.color || 'N/A'}`,
         quantity: 1,
-        price: product.sellingPrice
+        price: product.sellingPrice || 0,
+        isDropshipping: product.isDropshipping || false
       }]);
     }
   };
@@ -66,7 +65,7 @@ export default function PDV() {
         const variation = product?.variations.find(v => v.id === vId);
         const nextQty = item.quantity + delta;
         if (nextQty <= 0) return item;
-        if (variation && nextQty > variation.stock) return item;
+        if (product && !product.isDropshipping && variation && nextQty > variation.stock) return item;
         return { ...item, quantity: nextQty };
       }
       return item;
@@ -107,23 +106,30 @@ export default function PDV() {
       const finalDownPayment = parseFloat(downPayment.replace(',', '.')) || 0;
       const finalDiscount = parseFloat(discountVal.replace(',', '.')) || 0;
       const debtAmount = total - finalDownPayment;
-      const finalDate = new Date(saleDate + 'T12:00:00');
+      const finalDate = saleDate ? new Date(saleDate + 'T12:00:00') : new Date();
 
       // 1. Create Sale Record
       const saleRef = doc(collection(db, 'sales'));
-      const finalStatus = paymentMethod === 'Fiado' && debtAmount > 0 ? 'Pendente' : saleStatus;
+      const finalStatus = paymentMethod === 'Fiado' && debtAmount > 0 ? 'Pendente' : 'Concluída';
       
       batch.set(saleRef, {
         customerId: selectedCustomer?.id || null,
         customerName: selectedCustomer?.name || 'Consumidor Final',
-        items: cart,
+        items: cart.map(item => ({
+          productId: item.productId || null,
+          variationId: item.variationId || null,
+          name: item.name || '',
+          variationName: item.variationName || '',
+          quantity: item.quantity || 0,
+          price: item.price || 0,
+          isDropshipping: item.isDropshipping || false
+        })),
         subtotal,
         discount: finalDiscount,
         total,
         downPayment: finalDownPayment,
         paymentMethod,
         status: finalStatus,
-        trackingCode: trackingCode || null,
         createdAt: finalDate, // Using custom date for logic
         systemCreatedAt: serverTimestamp(), // Record when it actually entered the DB
         history: [{
@@ -133,36 +139,10 @@ export default function PDV() {
         }]
       });
 
-      // 1.1 Automatically create Shipment record if trackingCode is provided
-      if (trackingCode) {
-        const shipmentRef = doc(collection(db, 'shipments'));
-        batch.set(shipmentRef, {
-          trackingCode,
-          status: finalStatus === 'Concluída' ? 'Entregue' : (finalStatus as any),
-          items: cart.map(item => ({
-            productId: item.productId,
-            variationId: item.variationId,
-            name: item.name,
-            quantity: item.quantity,
-            price: item.price
-          })),
-          saleId: saleRef.id,
-          customerId: selectedCustomer?.id || null,
-          customerName: selectedCustomer?.name || 'Consumidor Final',
-          createdAt: finalDate,
-          hasTax: false,
-          taxAmount: 0,
-          taxPaid: false,
-          history: [{
-            status: finalStatus === 'Concluída' ? 'Entregue' : (finalStatus as any),
-            updatedAt: finalDate,
-            notes: 'Criado via PDV'
-          }]
-        });
-      }
-
-      // 2. Update Stock
+      // 2. Update Stock (Skip for dropshipping)
       cart.forEach(item => {
+        if (item.isDropshipping) return; // Skip stock update for DS products
+        
         const product = products.find(p => p.id === item.productId);
         if (product) {
           const nextVariations = product.variations.map(v => 
@@ -184,7 +164,7 @@ export default function PDV() {
           if (finalDownPayment > 0) {
             const entryTransRef = doc(collection(db, 'transactions'));
             batch.set(entryTransRef, {
-              customerId: selectedCustomer.id,
+              customerId: selectedCustomer.id || null,
               amount: finalDownPayment,
               type: 'payment',
               paymentMethod: 'Dinheiro', // Default to Dinheiro for entry
@@ -202,7 +182,7 @@ export default function PDV() {
 
             const debtTransRef = doc(collection(db, 'transactions'));
             batch.set(debtTransRef, {
-              customerId: selectedCustomer.id,
+              customerId: selectedCustomer.id || null,
               amount: debtAmount,
               type: 'debt',
               saleId: saleRef.id,
@@ -213,7 +193,7 @@ export default function PDV() {
           // Non-Fiado sale with customer: record payment transaction
           const paymentTransRef = doc(collection(db, 'transactions'));
           batch.set(paymentTransRef, {
-            customerId: selectedCustomer.id,
+            customerId: selectedCustomer.id || null,
             amount: total,
             type: 'payment',
             paymentMethod: paymentMethod,
@@ -257,8 +237,6 @@ export default function PDV() {
       setDownPayment('');
       setDiscountPerc('0');
       setDiscountVal('0');
-      setSaleStatus('Concluída');
-      setTrackingCode('');
       setSaleDate(new Date().toISOString().split('T')[0]);
     } catch (err: any) {
       console.error(err);
@@ -305,21 +283,21 @@ export default function PDV() {
       className="h-full flex flex-col md:flex-row gap-6 relative pb-10"
     >
       {/* Mobile Cart Toggle Bar */}
-      <div className="md:hidden sticky top-0 bg-slate-900/95 backdrop-blur-md p-3 rounded-2xl text-white shadow-xl z-[45] flex items-center justify-between border border-white/5 mx-1">
+      <div className="md:hidden sticky top-0 bg-slate-950/95 backdrop-blur-md p-3 rounded-2xl text-white shadow-xl z-[45] flex items-center justify-between border border-white/5 mx-1">
         <div className="flex items-center gap-2">
-          <div className="size-9 bg-indigo-500/20 rounded-lg flex items-center justify-center border border-indigo-500/30">
-            <ShoppingCart size={18} className="text-indigo-400" />
+          <div className="size-9 bg-red-800/20 rounded-lg flex items-center justify-center border border-red-800/30">
+            <ShoppingCart size={18} className="text-red-800" />
           </div>
           <div>
-            <p className="text-[8px] font-black uppercase tracking-widest text-white/50 leading-none mb-1">Total Carrinho</p>
-            <p className="text-base font-black leading-none">{formatCurrency(total)}</p>
+            <p className="text-[8px] font-black uppercase tracking-widest text-white/50 leading-none mb-1 font-sans">Total Carrinho</p>
+            <p className="text-base font-black leading-none font-display tabular-nums tracking-tight">{formatCurrency(total)}</p>
           </div>
         </div>
         <button 
           onClick={() => setIsCartVisible(!isCartVisible)}
           className={cn(
             "px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all shadow-lg",
-            isCartVisible ? "bg-slate-700 text-white" : "bg-indigo-500 text-white shadow-indigo-500/20"
+            isCartVisible ? "bg-slate-800 text-white" : "bg-red-800 text-white shadow-red-800/20"
           )}
         >
           {isCartVisible ? 'Voltar aos Produtos' : 'Finalizar Pedido'}
@@ -343,26 +321,26 @@ export default function PDV() {
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
               className="bg-white rounded-[32px] shadow-2xl relative z-10 w-full max-w-md overflow-hidden border border-slate-200"
             >
-              <div className="p-8 text-center bg-emerald-500 text-white relative">
+              <div className="p-8 text-center bg-red-800 text-white relative">
                 <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
-                  <CheckCircle2 size={240} className="-translate-x-1/4 -translate-y-1/4" />
+                  <CheckCircle2 size={240} className="-translate-x-1/4 -translate-y-1/4 text-amber-500" />
                 </div>
                 <div className="size-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4 backdrop-blur-sm overflow-hidden p-3 border border-white/10">
-                   <CheckCircle2 size={40} className="text-white" />
+                   <CheckCircle2 size={40} className="text-amber-500" />
                 </div>
-                <h3 className="text-2xl font-black tracking-tight">Venda Finalizada!</h3>
-                <p className="text-emerald-100 font-bold opacity-80 mt-1">Transação processada com sucesso.</p>
+                <h3 className="text-2xl font-black tracking-tight italic uppercase font-sans">Venda Finalizada!</h3>
+                <p className="text-white/60 font-bold opacity-80 mt-1 uppercase text-[10px] tracking-widest">Transação processada com sucesso.</p>
               </div>
 
               <div className="p-8 space-y-6">
-                <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100 text-center">
+                <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100 text-center font-sans">
                   <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2">Total Recebido</p>
-                  <p className="text-4xl font-black text-slate-900">{formatCurrency(lastSale?.total || 0)}</p>
-                  <p className="text-xs font-bold text-slate-500 mt-2 uppercase">{lastSale?.paymentMethod} • {lastSale?.customerName}</p>
+                  <p className="text-4xl font-black text-slate-900 tracking-tighter font-display tabular-nums leading-none">{formatCurrency(lastSale?.total || 0)}</p>
+                  <p className="text-[10px] font-black text-slate-500 mt-2 uppercase tracking-widest leading-none">{lastSale?.paymentMethod} • {lastSale?.customerName}</p>
                   {lastSale?.downPayment > 0 && (
-                    <div className="mt-2 flex justify-center gap-4 text-[10px] font-bold">
-                       <span className="text-emerald-600">Entrada: {formatCurrency(lastSale.downPayment)}</span>
-                       <span className="text-rose-600">Pendente: {formatCurrency(lastSale.debtAmount)}</span>
+                    <div className="mt-3 flex justify-center gap-4 text-[10px] font-black uppercase tracking-tight">
+                       <span className="text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">Entrada: {formatCurrency(lastSale.downPayment)}</span>
+                       <span className="text-red-800 bg-red-50 px-2 py-1 rounded-lg">Pendente: {formatCurrency(lastSale.debtAmount)}</span>
                     </div>
                   )}
                 </div>
@@ -373,23 +351,23 @@ export default function PDV() {
                       setShowSuccessModal(false);
                       setShowDetailsModal(true);
                     }}
-                    className="flex flex-col items-center justify-center gap-2 p-4 bg-indigo-50 text-indigo-700 rounded-2xl hover:bg-indigo-100 transition-all group"
+                    className="flex flex-col items-center justify-center gap-2 p-4 bg-slate-100 text-slate-800 rounded-2xl hover:bg-slate-200 transition-all group font-black"
                   >
                     <ClipboardList size={24} className="group-hover:scale-110 transition-transform" />
                     <span className="text-[10px] font-black uppercase tracking-widest">Ver Detalhes</span>
                   </button>
                   <button 
                     onClick={shareWhatsApp}
-                    className="flex flex-col items-center justify-center gap-2 p-4 bg-emerald-50 text-emerald-700 rounded-2xl hover:bg-emerald-100 transition-all group"
+                    className="flex flex-col items-center justify-center gap-2 p-4 bg-amber-50 text-amber-700 rounded-2xl hover:bg-amber-100 transition-all group font-black"
                   >
-                    <MessageCircle size={24} className="group-hover:scale-110 transition-transform" />
+                    <MessageCircle size={24} className="group-hover:scale-110 transition-transform text-amber-600" />
                     <span className="text-[10px] font-black uppercase tracking-widest">Enviar WhatsApp</span>
                   </button>
                 </div>
 
                 <button 
                   onClick={() => setShowSuccessModal(false)}
-                  className="w-full py-4 bg-slate-900 text-white font-black rounded-2xl uppercase tracking-widest text-xs hover:bg-slate-800 transition-all"
+                  className="w-full py-4 bg-red-800 text-white font-black rounded-2xl uppercase tracking-widest text-xs hover:bg-black transition-all shadow-xl shadow-red-900/20"
                 >
                   Continuar Vendendo
                 </button>
@@ -424,11 +402,11 @@ export default function PDV() {
                    <X size={24} />
                  </button>
                  <div className="flex items-center gap-4 mb-2">
-                   <div className="size-12 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-lg">
+                   <div className="size-12 bg-red-800 rounded-2xl flex items-center justify-center shadow-lg border border-white/5">
                       <Receipt size={24} className="text-white" />
                    </div>
                    <div>
-                      <h3 className="text-2xl font-black italic tracking-tighter uppercase">Detalhes da <span className="text-indigo-400">Venda</span></h3>
+                      <h3 className="text-2xl font-black italic tracking-tighter uppercase font-serif">Detalhes da <span className="text-amber-500">Venda</span></h3>
                       <p className="text-[9px] font-black uppercase text-white/40 tracking-[0.3em]">ID: {lastSale.id}</p>
                    </div>
                  </div>
@@ -439,32 +417,32 @@ export default function PDV() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="bg-slate-50 p-4 rounded-3xl border border-slate-100">
                     <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1">Cliente</p>
-                    <p className="text-sm font-black text-slate-900">{lastSale.customerName}</p>
+                    <p className="text-sm font-black text-slate-900 uppercase tracking-tight">{lastSale.customerName}</p>
                   </div>
                   <div className="bg-slate-50 p-4 rounded-3xl border border-slate-100">
                     <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1">Pagamento</p>
-                    <p className="text-sm font-black text-indigo-600">{lastSale.paymentMethod}</p>
+                    <p className="text-sm font-black text-red-800 uppercase tracking-tight">{lastSale.paymentMethod}</p>
                   </div>
                 </div>
 
                 {/* Items List */}
                 <div className="space-y-4">
-                  <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest pl-2 border-l-2 border-indigo-500">Itens do Pedido</p>
+                  <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest pl-2 border-l-2 border-amber-500">Itens do Pedido</p>
                   <div className="space-y-2">
                     {lastSale.items.map((item: any, idx: number) => (
                       <div key={idx} className="flex justify-between items-center p-4 bg-white rounded-3xl border border-slate-100 shadow-sm">
                          <div>
-                            <p className="text-sm font-black text-slate-900">{item.name}</p>
+                            <p className="text-sm font-black text-slate-900 uppercase tracking-tight">{item.name}</p>
                             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">{item.variationName} x {item.quantity}</p>
                          </div>
-                         <p className="text-sm font-black text-indigo-600">{formatCurrency(item.price * item.quantity)}</p>
+                         <p className="text-sm font-black text-red-800">{formatCurrency(item.price * item.quantity)}</p>
                       </div>
                     ))}
                   </div>
                 </div>
 
                 {/* Financial Breakdown */}
-                <div className="bg-slate-900 rounded-[32px] p-6 text-white space-y-3">
+                <div className="bg-slate-950 rounded-[32px] p-6 text-white space-y-3 font-serif border border-slate-900">
                   <div className="flex justify-between items-center opacity-40 text-[10px] font-black uppercase tracking-widest">
                      <span>Subtotal</span>
                      <span>{formatCurrency(lastSale.items.reduce((acc: number, i: any) => acc + (i.price * i.quantity), 0))}</span>
@@ -474,18 +452,18 @@ export default function PDV() {
                      <span>-{formatCurrency(lastSale.items.reduce((acc: number, i: any) => acc + (i.price * i.quantity), 0) - lastSale.total)}</span>
                   </div>
                   <div className="pt-3 border-t border-white/10 flex justify-between items-center">
-                     <span className="text-xs font-black uppercase tracking-[0.2em] text-indigo-300">Total da Venda</span>
+                     <span className="text-xs font-black uppercase tracking-[0.2em] text-amber-500">Total da Venda</span>
                      <span className="text-3xl font-black italic tracking-tighter">{formatCurrency(lastSale.total)}</span>
                   </div>
                   {lastSale.downPayment > 0 && (
                     <div className="pt-3 border-t border-white/5 grid grid-cols-2 gap-4">
                        <div>
-                          <p className="text-[9px] font-black uppercase text-emerald-400 mb-1 tracking-widest">Entrada Paga</p>
-                          <p className="text-sm font-black">{formatCurrency(lastSale.downPayment)}</p>
+                          <p className="text-[9px] font-black uppercase text-amber-500 mb-1 tracking-widest">Entrada Paga</p>
+                          <p className="text-sm font-black text-white">{formatCurrency(lastSale.downPayment)}</p>
                        </div>
                        <div>
-                          <p className="text-[9px] font-black uppercase text-rose-400 mb-1 tracking-widest">Saldo Pendente</p>
-                          <p className="text-sm font-black">{formatCurrency(lastSale.debtAmount)}</p>
+                          <p className="text-[9px] font-black uppercase text-red-800 mb-1 tracking-widest">Saldo Pendente</p>
+                          <p className="text-sm font-black text-white">{formatCurrency(lastSale.debtAmount)}</p>
                        </div>
                     </div>
                   )}
@@ -494,14 +472,14 @@ export default function PDV() {
                 <div className="grid grid-cols-2 gap-3">
                   <button 
                     onClick={shareWhatsApp}
-                    className="flex items-center justify-center gap-2 p-4 bg-emerald-500 text-white rounded-2xl hover:bg-emerald-600 transition-all font-black uppercase tracking-widest text-[10px] shadow-lg shadow-emerald-500/20"
+                    className="flex items-center justify-center gap-2 p-4 bg-amber-500 text-slate-950 rounded-2xl hover:bg-amber-600 transition-all font-black uppercase tracking-widest text-[10px] shadow-lg shadow-amber-500/20"
                   >
                     <MessageCircle size={18} />
                     WhatsApp
                   </button>
                   <button 
                     onClick={() => setShowDetailsModal(false)}
-                    className="flex items-center justify-center gap-2 p-4 bg-slate-100 text-slate-700 rounded-2xl hover:bg-slate-200 transition-all font-black uppercase tracking-widest text-[10px]"
+                    className="flex items-center justify-center gap-2 p-4 bg-slate-900 text-white rounded-2xl hover:bg-black transition-all font-black uppercase tracking-widest text-[10px]"
                   >
                     Fechar
                   </button>
@@ -528,32 +506,32 @@ export default function PDV() {
           />
         </div>
 
-        <div className="flex-1 overflow-y-auto grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 pb-4">
+        <div className="flex-1 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 pb-4">
           {filteredProducts.map(product => (
-            <div key={product.id} className="bg-white p-2.5 md:p-4 rounded-xl md:rounded-2xl border border-gray-100 shadow-sm flex flex-col group hover:shadow-md transition-all">
+            <div key={product.id} className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm flex flex-col group hover:border-red-800/30 transition-all">
               <div className="mb-2">
-                <span className="px-2 py-0.5 bg-blue-50 text-[9px] md:text-[10px] font-bold text-blue-600 rounded uppercase tracking-wider">{product.category}</span>
-                <h4 className="font-bold text-gray-900 mt-0.5 line-clamp-2 leading-tight text-[11px] md:text-sm">{product.name}</h4>
+                <span className="px-1.5 py-0.5 bg-slate-100 text-[8px] font-black text-slate-400 rounded uppercase tracking-wider">{product.category}</span>
+                <h4 className="font-sans font-black text-slate-900 mt-1 line-clamp-1 leading-none text-[10px] md:text-[11px] uppercase tracking-tight">{product.name}</h4>
               </div>
-              <div className="mt-auto space-y-1.5 md:space-y-2">
-                <div className="text-sm md:text-lg font-black text-blue-600">{formatCurrency(product.sellingPrice)}</div>
-                <div className="grid grid-cols-2 gap-1">
+              <div className="mt-auto space-y-2">
+                <div className="text-xs md:text-sm font-black text-red-800 font-display tabular-nums leading-none">{formatCurrency(product.sellingPrice)}</div>
+                <div className="grid grid-cols-2 gap-1.5">
                   {product.variations.map(v => (
                     <button 
                       key={v.id}
-                      disabled={v.stock <= 0}
+                      disabled={!product.isDropshipping && v.stock <= 0}
                       onClick={() => {
                         addToCart(product, v);
-                        // On small screens, maybe show a toast or feedback
                       }}
                       className={cn(
-                        "text-[9px] md:text-[10px] py-1 border rounded font-bold transition-all truncate",
-                        v.stock <= 0 
-                          ? "bg-gray-50 border-gray-100 text-gray-300 cursor-not-allowed" 
-                          : "bg-white border-gray-200 text-gray-600 hover:border-blue-500 hover:bg-blue-50 active:scale-95"
+                        "text-[9px] py-1 border rounded font-black transition-all truncate uppercase relative",
+                        (!product.isDropshipping && v.stock <= 0) 
+                          ? "bg-gray-50 border-gray-100 text-gray-200 cursor-not-allowed opacity-40 shadow-none scale-100" 
+                          : "bg-white border-slate-200 text-slate-600 hover:border-red-800 hover:bg-red-50 hover:text-red-800 active:scale-95 shadow-sm",
+                        product.isDropshipping && "border-amber-100 text-amber-600 bg-amber-50/20"
                       )}
                     >
-                      {v.size} ({v.stock})
+                      {v.size} <span className="opacity-40">{product.isDropshipping ? 'DS' : v.stock}</span>
                     </button>
                   ))}
                 </div>
@@ -568,17 +546,19 @@ export default function PDV() {
         "w-full md:w-[400px] flex flex-col gap-6 h-full transition-all duration-300",
         isCartVisible ? "flex" : "hidden md:flex"
       )}>
-        <div className="bg-slate-900 text-white rounded-[32px] p-6 flex flex-col flex-1 shadow-2xl relative overflow-hidden">
+        <div className="bg-slate-950 text-white rounded-[32px] p-6 flex flex-col flex-1 shadow-2xl relative overflow-hidden border border-slate-900">
           <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
             <ShoppingCart size={120} />
           </div>
           
           <div className="flex items-center gap-3 mb-6 relative">
-            <div className="size-10 bg-indigo-500 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20">
+            <div className="size-10 bg-red-800 rounded-xl flex items-center justify-center shadow-lg shadow-red-900/20">
               <ShoppingCart size={20} />
             </div>
-            <h3 className="text-xl font-bold tracking-tight">Checkout</h3>
-            <span className="ml-auto bg-white/10 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider text-indigo-300">
+          <h2 className="text-3xl font-black italic tracking-tighter shadow-sm text-white">
+            Venda <span className="text-red-600 underline decoration-red-400 decoration-4 underline-offset-4 tracking-tighter font-black italic">Checkout</span>
+          </h2>
+            <span className="ml-auto bg-white/10 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider text-amber-500">
               {cart.reduce((a, b) => a + b.quantity, 0)} Itens
             </span>
           </div>
@@ -589,7 +569,7 @@ export default function PDV() {
                 <div className="size-16 rounded-full border-2 border-dashed border-white flex items-center justify-center">
                   <Plus />
                 </div>
-                <p className="font-bold text-sm tracking-tight">Adicione produtos</p>
+                <p className="font-black text-sm tracking-tight uppercase">Adicione produtos</p>
               </div>
             )}
             {cart.map(item => (
@@ -598,26 +578,32 @@ export default function PDV() {
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 key={item.variationId} 
-                className="bg-white/5 rounded-2xl p-4 border border-white/5 hover:bg-white/10 transition-colors"
+                className="bg-white/10 rounded-2xl p-4 border border-white/10 hover:border-red-500/50 transition-all shadow-lg group/item"
               >
                 <div className="flex justify-between items-start mb-2">
                   <div className="flex-1">
-                    <p className="font-bold text-sm leading-tight text-white">{item.name}</p>
-                    <p className="text-[10px] font-bold text-indigo-400 mt-1 uppercase tracking-wide">{item.variationName}</p>
+                    <div className="flex items-center gap-2">
+                       <p className="font-black text-sm leading-tight text-white uppercase group-hover/item:text-amber-400 transition-colors">{item.name}</p>
+                       {item.isDropshipping && (
+                         <span className="text-[7px] font-black bg-amber-500 text-white px-1.5 py-0.5 rounded italic animate-pulse">DS</span>
+                       )}
+                    </div>
+                    <p className="text-[10px] font-black text-white/50 mt-1 uppercase tracking-widest">{item.variationName}</p>
                   </div>
-                  <p className="font-bold text-sm ml-2 text-indigo-300">{formatCurrency(item.price * item.quantity)}</p>
+                  <p className="font-black text-base ml-2 text-white tabular-nums tracking-tighter">{formatCurrency(item.price * item.quantity)}</p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <div className="flex items-center bg-white/10 rounded-lg p-1">
-                    <button onClick={() => updateQuantity(item.productId, item.variationId, -1)} className="p-1 hover:bg-white/20 rounded-md transition-colors"><Minus size={14} /></button>
-                    <span className="w-8 text-center font-bold text-xs">{item.quantity}</span>
-                    <button onClick={() => updateQuantity(item.productId, item.variationId, 1)} className="p-1 hover:bg-white/20 rounded-md transition-colors"><Plus size={14} /></button>
+                  <div className="flex items-center bg-black/40 rounded-xl p-1 border border-white/5 shadow-inner">
+                    <button onClick={() => updateQuantity(item.productId, item.variationId, -1)} className="size-8 flex items-center justify-center hover:bg-white/10 rounded-lg transition-colors text-white/60 hover:text-white"><Minus size={14} /></button>
+                    <span className="w-10 text-center font-black text-sm text-white tabular-nums">{item.quantity}</span>
+                    <button onClick={() => updateQuantity(item.productId, item.variationId, 1)} className="size-8 flex items-center justify-center hover:bg-white/10 rounded-lg transition-colors text-white/60 hover:text-white"><Plus size={14} /></button>
                   </div>
+                  <div className="text-[9px] font-black text-white/30 uppercase tracking-widest">Un: {formatCurrency(item.price)}</div>
                   <button 
                     onClick={() => setCart(cart.filter(c => c.variationId !== item.variationId))}
-                    className="ml-auto p-2 text-rose-400 hover:bg-rose-500/20 rounded-xl transition-colors"
+                    className="ml-auto size-9 flex items-center justify-center text-red-500/40 hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-all"
                   >
-                    <Trash2 size={16} />
+                    <Trash2 size={18} />
                   </button>
                 </div>
               </motion.div>
@@ -627,9 +613,9 @@ export default function PDV() {
           <div className="mt-6 space-y-4 pt-6 border-t border-white/10 relative">
             {/* Customer Selector */}
             <div className="relative group">
-              <User className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 size-4 group-focus-within:text-indigo-400" />
+              <User className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 size-4 group-focus-within:text-amber-500" />
               <select 
-                className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs font-bold outline-none appearance-none hover:bg-white/10 focus:ring-1 focus:ring-indigo-500 transition-all text-white/80"
+                className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs font-black uppercase outline-none appearance-none hover:bg-white/10 focus:ring-1 focus:ring-amber-500 transition-all text-white/80"
                 value={selectedCustomer?.id || ''}
                 onChange={e => {
                   const c = customers.find(cust => cust.id === e.target.value);
@@ -640,6 +626,21 @@ export default function PDV() {
                 {customers.map(c => <option key={c.id} value={c.id} className="bg-slate-900 text-white">{c.name}</option>)}
               </select>
             </div>
+            {selectedCustomer && (
+              <motion.div 
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                className="px-4 py-2 bg-red-800/10 border border-red-800/20 rounded-xl flex items-center justify-between"
+              >
+                <div className="flex items-center gap-2">
+                  <User size={12} className="text-red-400" />
+                  <span className="text-[10px] font-black uppercase text-red-200">{selectedCustomer.name}</span>
+                </div>
+                <button onClick={() => setSelectedCustomer(null)} className="text-red-400 hover:text-white transition-colors">
+                  <Trash2 size={12} />
+                </button>
+              </motion.div>
+            )}
 
             {/* Payment Methods */}
             <div className="grid grid-cols-4 gap-2">
@@ -655,7 +656,7 @@ export default function PDV() {
                   className={cn(
                     "flex flex-col items-center gap-1 p-2 rounded-xl transition-all border",
                     paymentMethod === method.id 
-                      ? "bg-indigo-600 border-indigo-400 text-white shadow-lg shadow-indigo-500/10" 
+                      ? "bg-red-800 border-amber-500 text-white shadow-lg shadow-red-900/10" 
                       : "bg-white/5 border-white/5 text-white/40 hover:bg-white/10 hover:text-white"
                   )}
                 >
@@ -718,54 +719,31 @@ export default function PDV() {
               </motion.div>
             )}
 
-            <div className="relative group">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 text-[10px] font-black group-focus-within:text-indigo-400 uppercase tracking-widest">Data da Venda</span>
+            <div className="relative group font-sans">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 text-[9px] font-black group-focus-within:text-white uppercase tracking-widest leading-none">Venda em:</span>
               <input 
                 type="date"
-                className="w-full bg-white/5 border border-white/10 rounded-xl pl-24 pr-4 py-2.5 text-xs font-bold outline-none hover:bg-white/10 focus:ring-1 focus:ring-indigo-500 transition-all text-white/80"
+                className="w-full bg-white/5 border border-white/10 rounded-xl pl-24 pr-4 py-2.5 text-xs font-black outline-none hover:bg-white/10 focus:ring-1 focus:ring-red-800 transition-all text-white/90"
                 value={saleDate}
                 onChange={e => setSaleDate(e.target.value)}
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
-              <div className="relative group">
-                <select 
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-[10px] font-black uppercase outline-none appearance-none hover:bg-white/10 focus:ring-1 focus:ring-indigo-500 transition-all text-white/80"
-                  value={saleStatus}
-                  onChange={e => setSaleStatus(e.target.value as any)}
-                >
-                  {['Concluída', 'Processando', 'Postado', 'Entregue'].map(s => (
-                    <option key={s} value={s} className="bg-slate-900 text-white">{s}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="relative group">
-                <input 
-                  type="text"
-                  placeholder="Rastreio (opcional)"
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-[10px] font-black uppercase outline-none hover:bg-white/10 focus:ring-1 focus:ring-indigo-500 transition-all text-white/80"
-                  value={trackingCode}
-                  onChange={e => setTrackingCode(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-1 px-4 py-3 bg-white/5 rounded-2xl border border-white/5">
+            <div className="flex flex-col gap-1 px-4 py-3 bg-white/5 rounded-2xl border border-white/5 font-display">
               <div className="flex justify-between items-center opacity-40">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-white">Subtotal</span>
-                <span className="text-sm font-black text-white">{formatCurrency(subtotal)}</span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-white">Subtotal</span>
+                <span className="text-sm font-black text-white tabular-nums tracking-tight">{formatCurrency(subtotal)}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-xs font-bold text-white/50 uppercase tracking-widest">Total</span>
-                <span className="text-3xl font-black text-indigo-300">{formatCurrency(total)}</span>
+                <span className="text-xs font-black text-amber-500 uppercase tracking-widest">Total Líquido</span>
+                <span className="text-3xl font-black italic tracking-tighter text-white tabular-nums">{formatCurrency(total)}</span>
               </div>
             </div>
 
             <button 
               disabled={isFinishing || cart.length === 0}
               onClick={finishSale}
-              className="w-full bg-indigo-500 hover:bg-indigo-600 disabled:bg-slate-800 disabled:text-slate-600 disabled:cursor-not-allowed text-white font-black py-5 rounded-2xl transition-all shadow-xl shadow-indigo-900/40 flex items-center justify-center gap-3 active:scale-[0.98]"
+              className="w-full bg-red-800 hover:bg-black disabled:bg-slate-900 disabled:text-slate-700 disabled:shadow-none text-white font-black py-5 rounded-2xl transition-all shadow-xl shadow-red-900/30 flex items-center justify-center gap-3 active:scale-[0.98] uppercase tracking-widest text-xs"
             >
               {isFinishing ? 'PROCESSANDO...' : 'FINALIZAR VENDA'}
               {!isFinishing && <Send size={20} />}

@@ -21,6 +21,7 @@ export default function Products() {
   const [costPrice, setCostPrice] = useState<string>('0');
   const [sellingPrice, setSellingPrice] = useState<string>('0');
   const [minStock, setMinStock] = useState<string>('2');
+  const [isDropshipping, setIsDropshipping] = useState(false);
   const [variations, setVariations] = useState<Variation[]>([]);
 
   useEffect(() => {
@@ -38,6 +39,7 @@ export default function Products() {
       setCostPrice(product.costPrice.toString());
       setSellingPrice(product.sellingPrice.toString());
       setMinStock(product.minStock.toString());
+      setIsDropshipping(!!product.isDropshipping);
       setVariations(product.variations);
       setEditingProduct(isDuplicate ? null : product);
     } else {
@@ -46,6 +48,7 @@ export default function Products() {
       setCostPrice('0');
       setSellingPrice('0');
       setMinStock('2');
+      setIsDropshipping(false);
       setVariations([]);
       setEditingProduct(null);
     }
@@ -104,6 +107,7 @@ export default function Products() {
               markup: calculateMarkup(cPrice, sPrice),
               minStock: mStock,
               totalStock: 0,
+              isDropshipping: columns[5]?.toLowerCase() === 'sim' || columns[5]?.toLowerCase() === 'true',
               variations: [],
               updatedAt: serverTimestamp()
             });
@@ -145,6 +149,7 @@ export default function Products() {
         variations: variations.map(v => ({ ...v, stock: parseInt(v.stock?.toString() || '0') || 0 })),
         totalStock,
         minStock: mStock,
+        isDropshipping,
         updatedAt: serverTimestamp()
       };
 
@@ -181,7 +186,10 @@ export default function Products() {
   const filtered = products.filter(p => {
     const searchTerm = search.toLowerCase();
     if (searchTerm === 'estoque baixo') {
-      return (p.totalStock || 0) <= (p.minStock || 0);
+      return (p.totalStock || 0) <= (p.minStock || 0) && !p.isDropshipping;
+    }
+    if (searchTerm === 'dropshipping') {
+      return p.isDropshipping;
     }
     return p.name.toLowerCase().includes(searchTerm) || p.category.toLowerCase().includes(searchTerm);
   });
@@ -194,23 +202,25 @@ export default function Products() {
     >
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-black italic tracking-tighter">Gestão de <span className="text-indigo-500 underline decoration-indigo-200 decoration-4 underline-offset-4">Portfólio</span></h2>
-          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.3em] mt-1">Controle de Inventário e Margens</p>
+          <h2 className="text-3xl font-black italic tracking-tighter">
+            Catálogo de <span className="text-red-800 underline decoration-red-200 decoration-4 underline-offset-4 tracking-tighter font-black italic">Produtos</span>
+          </h2>
+          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.3em] mt-2">Controle de Inventário e Margens</p>
         </div>
         <div className="flex items-center gap-2">
           <label className={cn(
-            "flex items-center gap-2 px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl cursor-pointer transition-all active:scale-95 text-sm",
+            "flex items-center gap-2 px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-800 font-black rounded-xl cursor-pointer transition-all active:scale-95 text-[10px] uppercase tracking-widest",
             isImporting && "opacity-50 pointer-events-none"
           )}>
-            <Box size={20} className="text-slate-400" />
+            <Box size={20} className="text-red-800" />
             {isImporting ? 'Syncing...' : 'Import CSV'}
             <input type="file" accept=".csv" className="hidden" onChange={handleCSVImport} disabled={isImporting} />
           </label>
           <button 
             onClick={() => openModal()}
-            className="bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-md flex items-center gap-2 active:scale-95"
+            className="bg-slate-950 hover:bg-red-800 text-white font-black py-3 px-6 rounded-xl transition-all shadow-md flex items-center gap-2 active:scale-95 text-[10px] uppercase tracking-widest"
           >
-            <Plus size={20} /> Deploy Produto
+            <Plus size={20} className="text-amber-500" /> Deploy Produto
           </button>
         </div>
       </div>
@@ -241,36 +251,36 @@ export default function Products() {
 
       <div className="flex flex-col lg:flex-row items-center justify-between gap-4 p-6 bg-white/40 backdrop-blur-md rounded-3xl border border-white/60 shadow-xl shadow-slate-200/50">
         <div className="flex-1 max-w-md relative group">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 size-5 group-focus-within:text-indigo-500 transition-colors" />
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 size-5 group-focus-within:text-red-800 transition-colors" />
           <input 
             type="text" 
             placeholder="Search SKUs..." 
-            className="w-full pl-12 pr-4 py-3 bg-white/60 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm outline-none text-sm font-black italic"
+            className="w-full pl-12 pr-4 py-3 bg-white/60 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-red-800 transition-all shadow-sm outline-none text-sm font-black italic uppercase"
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
           {search.toLowerCase() === 'estoque baixo' && (
             <button 
               onClick={() => setSearch('')}
-              className="absolute right-4 top-1/2 -translate-y-1/2 p-1 bg-rose-100 text-rose-600 rounded-lg hover:bg-rose-200 transition-colors"
+              className="absolute right-4 top-1/2 -translate-y-1/2 p-1 bg-red-100 text-red-800 rounded-lg hover:bg-red-200 transition-colors"
               title="Limpar filtro de estoque"
             >
               <X size={16} />
             </button>
           )}
         </div>
-        <div className="flex items-center gap-8 px-6 border-l border-slate-200 hidden lg:flex">
+        <div className="flex items-center gap-8 px-6 border-l border-slate-200 hidden lg:flex font-serif">
            <div className="text-right">
               <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Ativos em Estoque</p>
               <p className="text-xl font-black text-slate-900">{products.reduce((acc, p) => acc + (p.totalStock || 0), 0)} un</p>
            </div>
            <div className="text-right">
               <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Valor de Inventário</p>
-              <p className="text-xl font-black text-indigo-600">{formatCurrency(products.reduce((acc, p) => acc + (p.costPrice * (p.totalStock || 0)), 0))}</p>
+              <p className="text-xl font-black text-red-800">{formatCurrency(products.reduce((acc, p) => acc + (p.costPrice * (p.totalStock || 0)), 0))}</p>
            </div>
            <div className="text-right">
               <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Margem Média</p>
-              <p className="text-xl font-black text-emerald-500">
+              <p className="text-xl font-black text-amber-600">
                 {(products.reduce((acc, p) => acc + (p.margin || 0), 0) / (products.length || 1)).toFixed(1)}%
               </p>
            </div>
@@ -292,54 +302,57 @@ export default function Products() {
           <tbody className="divide-y divide-slate-50">
             {filtered.map(product => (
               <tr key={product.id} className="hover:bg-slate-50/50 transition-colors group">
-                <td className="px-6 py-5">
-                  <div className="flex items-center gap-4">
-                    <div className="size-10 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-600 shadow-inner">
-                      <Package size={20} />
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <div className="size-8 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400 shadow-inner">
+                      <Package size={16} />
                     </div>
                     <div>
-                      <div className="font-bold text-slate-900 text-sm leading-tight">{product.name}</div>
+                      <div className="font-black text-slate-950 text-xs leading-none uppercase font-sans tracking-tight">{product.name}</div>
                       <div className="flex gap-2 mt-1">
-                        <div className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">Margem: {product.margin.toFixed(1)}%</div>
-                        <div className="text-[10px] text-indigo-400 font-bold uppercase tracking-tighter">Markup: {calculateMarkup(product.costPrice, product.sellingPrice).toFixed(1)}%</div>
+                        {product.isDropshipping && (
+                          <div className="text-[7px] px-1 py-0.5 bg-amber-500 text-white font-black italic rounded uppercase tracking-tighter shadow-sm">DS</div>
+                        )}
+                        <div className="text-[9px] text-slate-400 font-bold uppercase tracking-tighter">Mg: {product.margin.toFixed(0)}%</div>
+                        <div className="text-[9px] text-amber-600 font-bold uppercase tracking-tighter">Mk: {calculateMarkup(product.costPrice, product.sellingPrice).toFixed(0)}%</div>
                       </div>
                     </div>
                   </div>
                 </td>
-                <td className="px-6 py-5">
-                  <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-[9px] font-black rounded uppercase tracking-widest">{product.category}</span>
+                <td className="px-4 py-3">
+                  <span className="px-1.5 py-0.5 bg-slate-900 text-amber-500 text-[8px] font-black rounded uppercase tracking-widest leading-none">{product.category}</span>
                 </td>
-                <td className="px-6 py-5 text-right">
-                  <div className="text-sm font-bold text-slate-900">{formatCurrency(product.sellingPrice)}</div>
-                  <div className="text-[10px] text-slate-400 font-medium">Custo: {formatCurrency(product.costPrice)}</div>
+                <td className="px-4 py-3 text-right">
+                  <div className="text-xs font-black text-slate-950 font-display tabular-nums tracking-tight">{formatCurrency(product.sellingPrice)}</div>
+                  <div className="text-[9px] text-slate-400 font-bold uppercase tabular-nums">C: {formatCurrency(product.costPrice).replace('R$ ', '')}</div>
                 </td>
-                <td className="px-6 py-5 text-center">
+                <td className="px-4 py-3 text-center">
                   <div className="flex flex-col items-center">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1 font-display tabular-nums leading-none">
                       <span className={cn(
-                        "text-sm font-black italic tracking-tighter",
-                        (product.totalStock || 0) <= 5 ? "text-rose-500" : "text-slate-900"
+                        "text-xs font-black tracking-tight",
+                        (product.totalStock || 0) <= (product.minStock || 0) ? "text-red-600" : "text-slate-950"
                       )}>
-                        {product.totalStock} un
+                        {product.totalStock}
                       </span>
-                      {(product.totalStock || 0) <= 5 && (
-                        <div className="size-2 bg-rose-500 rounded-full animate-ping" />
+                      {(product.totalStock || 0) <= (product.minStock || 0) && (
+                        <div className="size-1.5 bg-red-600 rounded-full animate-pulse" />
                       )}
                     </div>
-                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none">
-                      {(product.totalStock || 0) <= 5 ? "Reposição" : "Operacional"}
+                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mt-0.5">
+                      STOCK
                     </span>
                   </div>
                 </td>
                 <td className="px-6 py-5">
                   <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => openModal(product, true)} className="p-2 hover:bg-indigo-50 text-indigo-600 rounded-lg transition-colors" title="Duplicar">
+                    <button onClick={() => openModal(product, true)} className="p-2 hover:bg-slate-50 text-slate-900 rounded-lg transition-colors bg-white shadow-sm" title="Duplicar">
                       <Copy size={16} />
                     </button>
-                    <button onClick={() => openModal(product)} className="p-2 hover:bg-indigo-50 text-indigo-600 rounded-lg transition-colors" title="Editar">
+                    <button onClick={() => openModal(product)} className="p-2 hover:bg-slate-50 text-red-800 rounded-lg transition-colors bg-white shadow-sm" title="Editar">
                       <Edit2 size={16} />
                     </button>
-                    <button onClick={() => confirmDelete(product)} className="p-2 hover:bg-rose-50 text-rose-600 rounded-lg transition-colors" title="Excluir">
+                    <button onClick={() => confirmDelete(product)} className="p-2 hover:bg-black text-white rounded-lg transition-colors bg-white shadow-sm" title="Excluir">
                       <Trash2 size={16} />
                     </button>
                   </div>
@@ -408,10 +421,10 @@ export default function Products() {
               <form onSubmit={handleSubmit}>
                 <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                   <div className="flex items-center gap-3">
-                    <div className="size-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white">
+                    <div className="size-8 bg-black rounded-lg flex items-center justify-center text-amber-500 border border-amber-500/20">
                       <Box size={18} />
                     </div>
-                    <h3 className="text-lg font-bold text-slate-900">
+                    <h3 className="text-lg font-black uppercase italic italic tracking-tighter text-slate-900 font-serif">
                       {editingProduct ? 'Configurar Produto' : 'Cadastrar Novo Item'}
                     </h3>
                   </div>
@@ -420,6 +433,29 @@ export default function Products() {
                 
                 <div className="p-8 overflow-y-auto max-h-[70vh] grid grid-cols-5 gap-8">
                   <div className="col-span-3 space-y-6">
+                    <div className="flex items-center gap-4 p-4 bg-amber-50 border border-amber-200 rounded-2xl">
+                      <div className={cn(
+                        "size-10 rounded-xl flex items-center justify-center transition-all",
+                        isDropshipping ? "bg-amber-500 text-white shadow-lg shadow-amber-200" : "bg-white text-slate-400 border border-slate-100"
+                      )}>
+                        <Package size={20} />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-[10px] font-black uppercase text-amber-600 tracking-widest">Modalidade Dropshipping</p>
+                        <p className="text-[9px] font-bold text-amber-800/60 uppercase">O envio é feito diretamente pelo fornecedor</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsDropshipping(!isDropshipping)}
+                        className={cn(
+                          "px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+                          isDropshipping ? "bg-amber-500 text-white" : "bg-white text-slate-400 border border-slate-200"
+                        )}
+                      >
+                        {isDropshipping ? 'Ativo' : 'Inativo'}
+                      </button>
+                    </div>
+
                     <div className="grid grid-cols-2 gap-6">
                       <div className="space-y-1.5">
                         <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Identificação</label>
@@ -428,7 +464,7 @@ export default function Products() {
                           type="text" 
                           value={name} 
                           onChange={e => setName(e.target.value)}
-                          className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-indigo-500 font-medium text-sm transition-all"
+                          className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-red-800 font-black text-sm transition-all uppercase placeholder:opacity-30"
                           placeholder="Nome do produto"
                         />
                       </div>
@@ -439,7 +475,7 @@ export default function Products() {
                           type="text" 
                           value={category} 
                           onChange={e => setCategory(e.target.value)}
-                          className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-indigo-500 font-medium text-sm transition-all"
+                          className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-red-800 font-black text-sm transition-all uppercase"
                           placeholder="Ex: Tênis"
                         />
                       </div>
@@ -459,7 +495,7 @@ export default function Products() {
                           }}
                           onFocus={e => e.target.value === '0' && setCostPrice('')}
                           onBlur={e => e.target.value === '' && setCostPrice('0')}
-                          className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-indigo-500 font-medium text-sm transition-all"
+                          className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-red-800 font-black text-sm transition-all"
                         />
                       </div>
                       <div className="space-y-1.5">
@@ -475,7 +511,7 @@ export default function Products() {
                           }}
                           onFocus={e => e.target.value === '0' && setSellingPrice('')}
                           onBlur={e => e.target.value === '' && setSellingPrice('0')}
-                          className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-indigo-500 font-medium text-sm transition-all"
+                          className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-red-800 font-black text-sm transition-all"
                         />
                       </div>
                       <div className="space-y-1.5">
@@ -490,25 +526,25 @@ export default function Products() {
                           }}
                           onFocus={e => e.target.value === '0' && setMinStock('')}
                           onBlur={e => e.target.value === '' && setMinStock('0')}
-                          className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-indigo-500 font-medium text-sm transition-all"
+                          className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-red-800 font-black text-sm transition-all"
                         />
                       </div>
                     </div>
 
-                    <div className="p-5 bg-indigo-600 rounded-2xl shadow-lg shadow-indigo-100 flex items-center justify-between text-white">
+                    <div className="p-5 bg-slate-950 border border-amber-500/30 rounded-2xl shadow-xl flex items-center justify-between text-white font-serif italic">
                       <div className="flex gap-8">
                         <div>
-                          <p className="text-[10px] font-black uppercase opacity-60 tracking-widest mb-1">Margem Lucro</p>
-                          <div className="text-2xl font-black">{calculateMargin(parseFloat(costPrice) || 0, parseFloat(sellingPrice) || 0).toFixed(1)}%</div>
+                          <p className="text-[10px] font-black uppercase opacity-60 tracking-widest mb-1 font-sans not-italic">Margem Lucro</p>
+                          <div className="text-2xl font-black text-amber-500">{calculateMargin(parseFloat(costPrice) || 0, parseFloat(sellingPrice) || 0).toFixed(1)}%</div>
                         </div>
                         <div>
-                          <p className="text-[10px] font-black uppercase opacity-60 tracking-widest mb-1">Markup (Mark-on)</p>
-                          <div className="text-2xl font-black">{calculateMarkup(parseFloat(costPrice) || 0, parseFloat(sellingPrice) || 0).toFixed(1)}%</div>
+                          <p className="text-[10px] font-black uppercase opacity-60 tracking-widest mb-1 font-sans not-italic">Markup (Mark-on)</p>
+                          <div className="text-2xl font-black text-amber-500">{calculateMarkup(parseFloat(costPrice) || 0, parseFloat(sellingPrice) || 0).toFixed(1)}%</div>
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="text-[10px] font-black uppercase opacity-60 tracking-widest mb-1">Lucro un.</p>
-                        <p className="text-xl font-bold">{formatCurrency((parseFloat(sellingPrice) || 0) - (parseFloat(costPrice) || 0))}</p>
+                        <p className="text-[10px] font-black uppercase opacity-60 tracking-widest mb-1 font-sans not-italic">Lucro un.</p>
+                        <p className="text-xl font-black text-red-500">{formatCurrency((parseFloat(sellingPrice) || 0) - (parseFloat(costPrice) || 0))}</p>
                       </div>
                     </div>
                   </div>
@@ -519,16 +555,16 @@ export default function Products() {
                       <button 
                         type="button" 
                         onClick={addVariation}
-                        className="text-[10px] font-black text-indigo-600 uppercase flex items-center gap-1 hover:bg-indigo-50 px-2 py-1 rounded"
+                        className="text-[10px] font-black text-red-800 uppercase flex items-center gap-1 hover:bg-red-50 px-2 py-1 rounded transition-colors"
                       >
-                        <Plus size={14} /> Adicionar
+                        <Plus size={14} className="text-amber-500" /> Adicionar
                       </button>
                     </div>
                     <div className="space-y-3 p-4 bg-slate-50 border border-slate-200 rounded-2xl overflow-y-auto max-h-[350px]">
                       {variations.length === 0 && (
-                        <div className="text-center py-10">
-                          <Plus className="mx-auto text-slate-300 mb-2" size={32} strokeWidth={1} />
-                          <p className="text-[11px] font-bold text-slate-400 uppercase">Defina a grade do produto</p>
+                        <div className="text-center py-10 opacity-30">
+                          <Plus className="mx-auto text-slate-800 mb-2" size={32} strokeWidth={1} />
+                          <p className="text-[11px] font-black text-slate-800 uppercase tracking-widest">Defina a grade do produto</p>
                         </div>
                       )}
                       {variations.map((v, i) => (
@@ -536,7 +572,7 @@ export default function Products() {
                           <div className="col-span-3">
                             <input 
                               placeholder="Tamanho"
-                              className="w-full text-xs px-2 py-2 border rounded-lg border-slate-200 bg-white"
+                              className="w-full text-[10px] font-black uppercase px-2 py-2 border rounded-lg border-slate-200 bg-white focus:ring-1 focus:ring-red-800 outline-none"
                               value={v.size}
                               onChange={e => {
                                 const next = [...variations];
@@ -548,7 +584,7 @@ export default function Products() {
                           <div className="col-span-4">
                             <input 
                               placeholder="Cor/Variante"
-                              className="w-full text-xs px-2 py-2 border rounded-lg border-slate-200 bg-white"
+                              className="w-full text-[10px] font-black uppercase px-2 py-2 border rounded-lg border-slate-200 bg-white focus:ring-1 focus:ring-red-800 outline-none"
                               value={v.color}
                               onChange={e => {
                                 const next = [...variations];
@@ -562,7 +598,7 @@ export default function Products() {
                               type="text"
                               inputMode="numeric"
                               placeholder="Est"
-                              className="w-full text-xs px-2 py-2 border rounded-lg border-slate-200 bg-white font-bold"
+                              className="w-full text-[10px] font-black uppercase px-2 py-2 border rounded-lg border-slate-200 bg-white font-black text-red-800 focus:ring-1 focus:ring-red-800 outline-none"
                               value={v.stock}
                               onChange={e => {
                                 const next = [...variations];
@@ -588,7 +624,7 @@ export default function Products() {
                           <button 
                             type="button"
                             onClick={() => setVariations(variations.filter((_, idx) => idx !== i))}
-                            className="col-span-1 text-slate-300 hover:text-rose-500 transition-colors flex justify-center"
+                            className="col-span-1 text-slate-300 hover:text-red-800 transition-colors flex justify-center"
                           >
                             <Trash2 size={14} />
                           </button>
@@ -608,9 +644,9 @@ export default function Products() {
                   </button>
                   <button 
                     type="submit"
-                    className="px-10 py-2.5 bg-indigo-600 hover:bg-slate-900 text-white text-[11px] font-black uppercase rounded-xl transition-all shadow-lg shadow-indigo-100 tracking-widest"
+                    className="px-10 py-3 bg-red-800 hover:bg-black text-white text-[11px] font-black uppercase rounded-xl transition-all shadow-lg shadow-red-900/20 tracking-widest"
                   >
-                    Salvar Alterações
+                    Confirmar Produto
                   </button>
                 </div>
               </form>
@@ -652,7 +688,7 @@ export default function Products() {
                 </button>
                 <button 
                   onClick={handleDelete}
-                  className="px-6 py-3 bg-rose-500 text-white text-[10px] font-black uppercase tracking-widest rounded-2xl hover:bg-rose-600 shadow-lg shadow-rose-200 transition-all"
+                  className="px-6 py-3 bg-red-800 text-white text-[10px] font-black uppercase tracking-widest rounded-2xl hover:bg-black shadow-lg shadow-red-200 transition-all"
                 >
                   Confirmar
                 </button>

@@ -119,7 +119,8 @@ export default function Dashboard() {
       totalRevenue: revenue,
       totalProfit: profit - paidTaxes,
       avgTicket: filteredSales.length > 0 ? revenue / filteredSales.length : 0,
-      lowStockItems: products.filter(p => p.totalStock <= p.minStock).length,
+      lowStockItems: products.filter(p => !p.isDropshipping && p.totalStock <= p.minStock).length,
+      dropshippingOrders: filteredSales.filter(s => s.items.some(i => i.isDropshipping)).length,
       totalDebt: debt,
       totalOrders: filteredSales.length,
       paidTaxes,
@@ -248,22 +249,24 @@ export default function Dashboard() {
     return Object.values(ranking).sort((a, b) => b.totalTax - a.totalTax).slice(0, 5);
   }, [shipments]);
 
-  const categoryData = products.reduce((acc: any[], p) => {
+      const categoryData = products.reduce((acc: any[], p) => {
     const existing = acc.find(a => a.name === p.category);
     if (existing) existing.value++;
     else acc.push({ name: p.category, value: 1 });
     return acc;
   }, []);
 
-  const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#f43f5e', '#8b5cf6'];
+  const COLORS = ['#991b1b', '#d4af37', '#0f172a', '#450a0a', '#78350f'];
 
   return (
     <div className="space-y-8 pb-10">
       {/* Header Summary */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-black italic tracking-tighter">Business <span className="text-indigo-500 underline decoration-indigo-200 decoration-4 underline-offset-4">Insights</span></h2>
-          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.3em] mt-1">Global Intelligence Dashboard</p>
+          <h2 className="text-3xl font-black italic tracking-tighter">
+            Dashboard <span className="text-red-800 underline decoration-red-200 decoration-4 underline-offset-4 tracking-tighter font-black italic">Analítico</span>
+          </h2>
+          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.3em] mt-2">Visão Geral de Performance e Operações</p>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex -space-x-2">
@@ -305,7 +308,7 @@ export default function Dashboard() {
           whileHover={{ y: -2 }}
           className="bg-white/40 backdrop-blur-md p-5 rounded-3xl border border-white/60 shadow-xl shadow-slate-200/50 flex items-center gap-5 hover:bg-white/60 transition-all group"
         >
-          <div className="size-12 bg-indigo-600 text-white rounded-2xl flex items-center justify-center shrink-0 shadow-lg group-hover:scale-110 transition-transform">
+          <div className="size-12 bg-red-800 text-white rounded-2xl flex items-center justify-center shrink-0 shadow-lg group-hover:scale-110 transition-transform">
              <Package size={22} />
           </div>
           <div className="flex-1">
@@ -335,18 +338,18 @@ export default function Dashboard() {
           variant="glass"
         />
         <StatCard 
-          title="Margem Operacional" 
-          value={`${((stats.totalProfit / (stats.totalRevenue || 1)) * 100).toFixed(1)}%`} 
-          icon={DollarSign} 
-          trend={formatCurrency(stats.totalProfit)} 
+          title="Performance Logística" 
+          value={`${((stats.dropshippingOrders / (stats.totalOrders || 1)) * 100).toFixed(1)}%`} 
+          icon={Truck} 
+          trend={`${stats.dropshippingOrders} Lotes em Trânsito`} 
           positive 
-          variant="gradient"
+          variant="glass"
         />
         <StatCard 
-          title="Volume de Vendas" 
+          title="Receita Operacional" 
           value={formatCurrency(stats.totalRevenue)} 
           icon={ShoppingCart} 
-          trend="Receita Bruta" 
+          trend="Faturamento Bruto" 
           positive 
           variant="glass"
         />
@@ -356,7 +359,7 @@ export default function Dashboard() {
           icon={Wallet} 
           trend={`${debtors.length} Contas em Aberto`}
           positive={stats.totalDebt === 0} 
-          variant="dark"
+          variant="glass"
         />
       </div>
 
@@ -411,7 +414,7 @@ export default function Dashboard() {
               </div>
            </div>
            <div className="text-right">
-              <p className="text-[10px] font-black uppercase text-indigo-400 tracking-widest">Total Itens: {shipments.reduce((acc, s) => acc + s.items.length, 0)}</p>
+              <p className="text-[10px] font-black uppercase text-amber-500 tracking-widest">Total Itens: {shipments.reduce((acc, s) => acc + s.items.length, 0)}</p>
               <p className="text-[9px] font-bold text-slate-400 mt-1 uppercase">Monitoramento via rádio/rastreio</p>
            </div>
         </div>
@@ -419,16 +422,16 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         {/* Debtors Section */}
-        <div className="bg-slate-900 rounded-[32px] p-8 text-white shadow-2xl relative overflow-hidden group">
+        <div className="bg-slate-950 rounded-[32px] p-8 text-white shadow-2xl relative overflow-hidden group border border-slate-900">
           <div className="absolute top-0 right-0 p-8 opacity-5 pointer-events-none group-hover:scale-110 transition-transform duration-500">
             <Users size={160} />
           </div>
           <div className="relative z-10">
             <h3 className="text-lg font-black uppercase tracking-widest mb-6 flex items-center gap-2">
-              <div className="size-8 bg-rose-500 rounded-lg flex items-center justify-center text-white">
+              <div className="size-8 bg-red-800 rounded-lg flex items-center justify-center text-white">
                 <Wallet size={16} />
               </div>
-              Pendências Ativas
+              Inadimplência
             </h3>
             
             <div className="space-y-4 max-h-[360px] overflow-y-auto pr-2 custom-scrollbar">
@@ -442,10 +445,10 @@ export default function Dashboard() {
                 <div key={debtor.id} className="bg-white/5 border border-white/5 rounded-2xl p-4 flex items-center justify-between hover:bg-white/10 transition-colors">
                   <div>
                     <div className="text-xs font-black uppercase tracking-tight">{debtor.name}</div>
-                    <div className="text-[10px] font-bold text-white/40 uppercase tracking-widest mt-1 italic">ERP CLUB DA BOLA</div>
+                    <div className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-1">AUDITORIA INTERNA</div>
                   </div>
                   <div className="text-right">
-                    <div className="text-sm font-black text-rose-400">{formatCurrency(debtor.totalDebt || 0)}</div>
+                    <div className="text-sm font-black text-rose-400 font-mono tracking-tighter tabular-nums">{formatCurrency(debtor.totalDebt || 0)}</div>
                     <button 
                       onClick={() => {
                         setSelectedSale({ 
@@ -462,7 +465,7 @@ export default function Dashboard() {
                       }}
                       className="text-[9px] font-black uppercase text-emerald-400 hover:text-emerald-300 transition-colors mt-1"
                     >
-                      Compensar
+                      Liquidado
                     </button>
                   </div>
                 </div>
@@ -472,16 +475,16 @@ export default function Dashboard() {
         </div>
 
         {/* TOP Customers Ranking */}
-        <div className="bg-indigo-600 rounded-[32px] p-8 text-white shadow-2xl relative overflow-hidden group">
+        <div className="bg-red-800 rounded-[32px] p-8 text-white shadow-2xl relative overflow-hidden group border border-white/5">
           <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none group-hover:scale-110 transition-transform duration-500">
             <TrendingUp size={160} />
           </div>
           <div className="relative z-10">
             <h3 className="text-lg font-black uppercase tracking-widest mb-6 flex items-center gap-2">
-              <div className="size-8 bg-white/20 rounded-lg flex items-center justify-center text-white">
+              <div className="size-8 bg-amber-500 rounded-lg flex items-center justify-center text-slate-900 shadow-lg shadow-amber-500/20">
                 <ArrowUpRight size={16} />
               </div>
-              Ranking de Compras
+              Top Adquirentes
             </h3>
             
             <div className="space-y-4">
@@ -489,15 +492,15 @@ export default function Dashboard() {
                 <div key={index} className="bg-white/10 backdrop-blur-sm border border-white/10 rounded-2xl p-4 flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="size-8 rounded-full bg-amber-400 text-slate-900 flex items-center justify-center font-black text-sm">
-                      {index + 1}º
+                      {index + 1}
                     </div>
                     <div>
                       <div className="text-xs font-black uppercase tracking-tight">{rank.name}</div>
-                      <div className="text-[9px] font-bold text-white/60 uppercase tracking-widest">{rank.count} pedidos realizados</div>
+                      <div className="text-[9px] font-bold text-white/60 uppercase tracking-widest">{rank.count} OPERAÇÕES</div>
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-sm font-black">{formatCurrency(rank.total)}</div>
+                    <div className="text-sm font-black font-mono tracking-tighter tabular-nums">{formatCurrency(rank.total)}</div>
                   </div>
                 </div>
               ))}
@@ -510,38 +513,38 @@ export default function Dashboard() {
 
         {/* Global Business Health Index */}
         <div className="xl:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-slate-900 rounded-[40px] p-8 text-white relative overflow-hidden group">
+          <div className="bg-slate-950 rounded-[40px] p-8 text-white relative overflow-hidden group border border-slate-800">
              <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:scale-110 transition-transform">
                 <Activity size={120} />
              </div>
              <div className="relative z-10">
-                <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em] mb-2">Efficiency Rating</p>
+                <p className="text-[10px] font-black text-amber-500 uppercase tracking-[0.3em] mb-2">Performance Index</p>
                 <div className="flex items-end gap-3">
-                   <h4 className="text-5xl font-black italic tracking-tighter">94<span className="text-2xl text-indigo-500">.2</span></h4>
-                   <p className="text-[10px] font-bold text-emerald-400 mb-2 uppercase tracking-widest">+2.4% from last audit</p>
+                   <h4 className="text-5xl font-black italic tracking-tighter">94<span className="text-2xl text-amber-500">.2</span></h4>
+                   <p className="text-[10px] font-bold text-amber-400/60 mb-2 uppercase tracking-widest">+2.4% last audit</p>
                 </div>
                 <div className="mt-6 flex gap-2">
-                   {['Fiscal', 'Logistics', 'Stock'].map(tag => (
+                   {['Fiscal', 'Logistics', 'Portfolio'].map(tag => (
                      <span key={tag} className="px-3 py-1 bg-white/5 border border-white/10 rounded-full text-[8px] font-black uppercase tracking-widest">{tag}</span>
                    ))}
                 </div>
              </div>
           </div>
           
-          <div className="md:col-span-2 bg-indigo-600 rounded-[40px] p-8 text-white flex flex-col justify-center relative overflow-hidden">
+          <div className="md:col-span-2 bg-red-900 rounded-[40px] p-8 text-white flex flex-col justify-center relative overflow-hidden border border-white/5">
              <div className="absolute top-0 right-0 p-8 opacity-20">
                 <LayoutDashboard size={100} />
              </div>
              <div className="relative z-10">
-                <h4 className="text-xl font-black italic tracking-tighter mb-4 uppercase">Directives for Growth</h4>
+                <h4 className="text-xl font-black italic tracking-tighter mb-4 uppercase font-serif">Executive Directives</h4>
                 <div className="grid grid-cols-2 gap-4">
-                   <div className="bg-white/10 backdrop-blur-sm p-4 rounded-3xl border border-white/5">
-                      <p className="text-[9px] font-black text-white/60 uppercase mb-1">Optimizar</p>
-                      <p className="text-xs font-bold leading-tight">Taxas do fornecedor {supplierRanking[0]?.name || 'Global'} estão acima da média (High Risk)</p>
+                   <div className="bg-black/20 backdrop-blur-sm p-4 rounded-3xl border border-white/5">
+                      <p className="text-[9px] font-black text-amber-500 uppercase mb-1">Optimizar</p>
+                      <p className="text-xs font-black leading-tight uppercase tracking-tight">Custos Logísticos Operacionais Elevados</p>
                    </div>
-                   <div className="bg-white/10 backdrop-blur-sm p-4 rounded-3xl border border-white/5">
-                      <p className="text-[9px] font-black text-white/60 uppercase mb-1">Oportunidade</p>
-                      <p className="text-xs font-bold leading-tight">{products.filter(p => !p.totalStock).length} SKUs sem estoque com demanda ativa</p>
+                   <div className="bg-black/20 backdrop-blur-sm p-4 rounded-3xl border border-white/5">
+                      <p className="text-[9px] font-black text-amber-500 uppercase mb-1">Oportunidade</p>
+                      <p className="text-xs font-black leading-tight uppercase tracking-tight">Expansão de SKUs com Alta Variância</p>
                    </div>
                 </div>
              </div>
@@ -549,33 +552,33 @@ export default function Dashboard() {
         </div>
 
         {/* TOP Suppliers Ranking */}
-        <div className="bg-emerald-600 rounded-[32px] p-8 text-white shadow-2xl relative overflow-hidden group">
+        <div className="bg-slate-900 rounded-[32px] p-8 text-white shadow-2xl relative overflow-hidden group border border-slate-800">
           <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none group-hover:scale-110 transition-transform duration-500">
             <Truck size={160} />
           </div>
           <div className="relative z-10">
             <h3 className="text-lg font-black uppercase tracking-widest mb-6 flex items-center gap-2">
-              <div className="size-8 bg-white/20 rounded-lg flex items-center justify-center text-white">
+              <div className="size-8 bg-amber-500 rounded-lg flex items-center justify-center text-slate-900">
                 <Receipt size={16} />
               </div>
-              Taxas por Fornecedor
+              Fornecedores
             </h3>
             
             <div className="space-y-4">
               {supplierRanking.map((rank, index) => (
-                <div key={index} className="bg-white/10 backdrop-blur-sm border border-white/10 rounded-2xl p-4 flex items-center justify-between">
+                <div key={index} className="bg-white/5 border border-white/5 rounded-2xl p-4 flex items-center justify-between hover:bg-white/10 transition-colors">
                   <div className="flex items-center gap-3">
-                    <div className="size-8 rounded-full bg-white text-emerald-600 flex items-center justify-center font-black text-sm">
-                      {index + 1}º
+                    <div className="size-8 rounded-full bg-slate-800 text-slate-400 flex items-center justify-center font-black text-xs border border-slate-700">
+                      {index + 1}
                     </div>
                     <div>
                       <div className="text-xs font-black uppercase tracking-tight truncate max-w-[100px]">{rank.name}</div>
-                      <div className="text-[9px] font-bold text-white/60 uppercase tracking-widest">{rank.count} lotes</div>
+                      <div className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">{rank.count} ENTREGAS</div>
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-sm font-black">{formatCurrency(rank.totalTax)}</div>
-                    <div className="text-[8px] font-bold text-emerald-200 uppercase">Total Tributos</div>
+                    <div className="text-sm font-black text-amber-500 font-mono tracking-tighter tabular-nums">{formatCurrency(rank.totalTax)}</div>
+                    <div className="text-[8px] font-bold text-slate-500 uppercase">TRIBUTAÇÃO ∑</div>
                   </div>
                 </div>
               ))}
@@ -590,15 +593,15 @@ export default function Dashboard() {
         <div className="xl:col-span-2 bg-white p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden flex flex-col">
           <div className="flex items-center justify-between mb-8">
             <div>
-              <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
-                <Calendar size={18} className="text-indigo-500" />
-                Vendas por Período
+              <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                <Calendar size={18} className="text-red-800" />
+                Matriz de Desempenho
               </h3>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Consolidado dos últimos 10 dias</p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Série Temporal (10 DIB)</p>
             </div>
             <div className="flex items-center gap-4 text-[9px] font-black uppercase tracking-widest">
-              <div className="flex items-center gap-1.5"><span className="size-2 bg-indigo-500 rounded-full"></span> Valor</div>
-              <div className="flex items-center gap-1.5"><span className="size-2 bg-emerald-500 rounded-full"></span> Quantidade</div>
+              <div className="flex items-center gap-1.5"><span className="size-2 bg-red-800 rounded-full"></span> Receita</div>
+              <div className="flex items-center gap-1.5"><span className="size-2 bg-amber-500 rounded-full"></span> Unidades</div>
             </div>
           </div>
           <div className="flex-1 min-h-[300px]">
@@ -609,12 +612,13 @@ export default function Dashboard() {
                 <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: '#64748b' }} />
                 <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: '#64748b' }} />
                 <Tooltip 
-                  contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', padding: '16px' }}
-                  itemStyle={{ fontSize: '12px', fontWeight: 'bold' }}
-                  labelStyle={{ fontWeight: 'black', marginBottom: '8px', color: '#0f172a' }}
+                   cursor={{ fill: 'rgba(153, 27, 27, 0.05)' }}
+                   contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', padding: '16px' }}
+                   itemStyle={{ fontSize: '12px', fontWeight: 'bold' }}
+                   labelStyle={{ fontWeight: 'black', marginBottom: '8px', color: '#0f172a' }}
                 />
-                <Bar yAxisId="left" dataKey="total" fill="#6366f1" radius={[6, 6, 0, 0]} label={{ position: 'top', fontSize: 10, fontWeight: 900, fill: '#6366f1', formatter: (val: number) => val > 0 ? `R$${val}` : '' }} />
-                <Bar yAxisId="right" dataKey="quantity" fill="#10b981" radius={[6, 6, 0, 0]} label={{ position: 'top', fontSize: 10, fontWeight: 900, fill: '#10b981', formatter: (val: number) => val > 0 ? val : '' }} />
+                <Bar yAxisId="left" dataKey="total" fill="#991b1b" radius={[6, 6, 0, 0]} />
+                <Bar yAxisId="right" dataKey="quantity" fill="#d4af37" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -661,10 +665,10 @@ export default function Dashboard() {
                     <span className={cn(
                       "px-2 py-0.5 text-[9px] rounded font-bold uppercase",
                       sale.paymentMethod === 'Fiado' 
-                        ? (balance === 0 ? "bg-indigo-100 text-indigo-700" : "bg-amber-100 text-amber-700") 
-                        : "bg-emerald-100 text-emerald-700"
+                        ? (balance === 0 ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-800") 
+                        : "bg-slate-900 text-white"
                     )}>
-                      {sale.paymentMethod} {balance === 0 && sale.paymentMethod === 'Fiado' && '• Paga'}
+                      {sale.paymentMethod} {balance === 0 && sale.paymentMethod === 'Fiado' && '• Liquidada'}
                     </span>
                   </td>
                   <td className="px-6 py-4 text-right flex justify-end gap-2">
@@ -674,13 +678,13 @@ export default function Dashboard() {
                           setSelectedSale(sale);
                           setCompAmount(balance.toString());
                         }}
-                        className="flex items-center gap-1.5 px-3 py-1 bg-emerald-500 text-white text-[9px] font-black uppercase rounded-lg hover:bg-emerald-600 transition-all shadow-md shadow-emerald-200"
+                        className="flex items-center gap-1.5 px-3 py-1 bg-red-800 text-white text-[9px] font-black uppercase rounded-lg hover:bg-black transition-all shadow-md shadow-red-900/20"
                       >
                         <Wallet size={12} />
-                        Compensar
+                        Amortizar
                       </button>
                     )}
-                    <button className="p-1 text-indigo-600 hover:bg-indigo-50 rounded border border-transparent hover:border-indigo-100 transition-all">
+                    <button className="p-1 text-red-800 hover:bg-red-50 rounded border border-transparent hover:border-red-100 transition-all">
                       <ArrowUpRight size={14} />
                     </button>
                   </td>
@@ -709,8 +713,8 @@ export default function Dashboard() {
                 <div className="size-16 bg-white/10 rounded-2xl flex items-center justify-center mx-auto mb-4 backdrop-blur-md overflow-hidden p-3 border border-white/10">
                    <LayoutDashboard size={32} className="text-white" />
                 </div>
-                <h3 className="text-2xl font-black tracking-tight italic uppercase">ERP CLUB DA <span className="text-indigo-400">BOLA</span></h3>
-                <p className="text-indigo-400 text-[9px] font-black uppercase tracking-[0.3em] mt-3">{selectedSale.customerName}</p>
+                <h3 className="text-2xl font-black tracking-tight italic uppercase">ERP CLUB DA <span className="text-amber-500">BOLA</span></h3>
+                <p className="text-amber-500 text-[9px] font-black uppercase tracking-[0.3em] mt-3">{selectedSale.customerName}</p>
               </div>
 
               <div className="p-8 space-y-6">
@@ -719,7 +723,7 @@ export default function Dashboard() {
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Valor da Amortização</label>
                     <button 
                       onClick={() => setCompAmount(selectedSale.total.toString())}
-                      className="text-[9px] font-black text-indigo-600 uppercase tracking-widest hover:text-indigo-700"
+                      className="text-[9px] font-black text-red-800 uppercase tracking-widest hover:text-black"
                     >
                       Valor Total
                     </button>
@@ -728,7 +732,7 @@ export default function Dashboard() {
                     <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
                     <input 
                       type="number"
-                      className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-xl font-black text-slate-900 outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
+                      className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-xl font-black text-slate-900 outline-none focus:ring-2 focus:ring-amber-500 transition-all font-serif"
                       value={compAmount}
                       onChange={e => setCompAmount(e.target.value)}
                       onFocus={e => e.target.value === '0' || e.target.value === selectedSale.total.toString() ? setCompAmount('') : null}
@@ -751,7 +755,7 @@ export default function Dashboard() {
                         className={cn(
                           "flex flex-col items-center gap-2 p-4 rounded-2xl border transition-all",
                           compMethod === method.id 
-                            ? "bg-emerald-50 border-emerald-200 text-emerald-700 font-bold" 
+                            ? "bg-amber-50 border-amber-500 text-amber-600 font-black" 
                             : "bg-white border-slate-100 text-slate-400 hover:bg-slate-50"
                         )}
                       >
@@ -765,9 +769,9 @@ export default function Dashboard() {
                 <button 
                   disabled={isCompensating}
                   onClick={handleCompensate}
-                  className="w-full py-5 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-2xl uppercase tracking-widest text-xs shadow-xl shadow-emerald-200 transition-all flex items-center justify-center gap-2 active:scale-95"
+                  className="w-full py-5 bg-red-800 hover:bg-black text-white font-black rounded-2xl uppercase tracking-widest text-xs shadow-xl shadow-red-900/20 transition-all flex items-center justify-center gap-2 active:scale-95"
                 >
-                  {isCompensating ? 'PROCESSANDO...' : 'CONFIRMAR PAGAMENTO'}
+                  {isCompensating ? 'PROCESSANDO...' : 'CONFIRMAR AMORTIZAÇÃO'}
                   {!isCompensating && <CheckCircle2 size={18} />}
                 </button>
               </div>
@@ -781,58 +785,53 @@ export default function Dashboard() {
 
 function StatCard({ title, value, icon: Icon, trend, positive, variant = 'glass' }: any) {
   const containerVariants = {
-    glass: "bg-white/60 backdrop-blur-md border-white/80 shadow-slate-200/60",
-    gradient: "bg-gradient-to-br from-indigo-600 to-indigo-800 text-white border-indigo-500/30 shadow-indigo-200",
-    dark: "bg-slate-900 text-white border-slate-800 shadow-slate-900/10",
+    glass: "bg-white border-slate-200 shadow-sm",
+    gradient: "bg-slate-900 text-white border-slate-800 shadow-xl",
+    dark: "bg-slate-950 text-white border-slate-900 shadow-xl",
   };
 
   return (
     <motion.div 
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 10 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
-      whileHover={{ scale: 1.02, y: -4 }}
       className={cn(
-        "p-6 rounded-[32px] border shadow-2xl relative overflow-hidden transition-all duration-300",
+        "p-5 rounded-2xl border relative overflow-hidden transition-all duration-300 group",
         containerVariants[variant as keyof typeof containerVariants]
       )}
     >
-      {variant === 'gradient' && (
-        <div className="absolute -top-10 -right-10 size-40 bg-white/10 rounded-full blur-3xl" />
-      )}
-      
-      <div className="flex justify-between items-start mb-6">
+      <div className="flex justify-between items-start mb-4">
         <div className={cn(
-          "p-3 rounded-2xl shadow-lg transition-transform",
-          variant === 'gradient' ? "bg-white/20 text-white" : "bg-white text-slate-900"
+          "p-2 rounded-xl shadow-sm transition-all group-hover:scale-110",
+          variant === 'glass' ? "bg-red-800 text-white" : "bg-white/20 text-white"
         )}>
-          <Icon size={20} />
+          <Icon size={16} />
         </div>
         <div className={cn(
-          "px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest",
-          variant === 'gradient' ? "bg-white/20 text-white" : "bg-emerald-50 text-emerald-600"
+          "px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest",
+          variant === 'glass' ? "bg-red-50 text-red-800" : "bg-white/10 text-white/60"
         )}>
-          {positive ? 'Optimized' : 'Warning'}
+          {positive ? 'Optimal' : 'Variance'}
         </div>
       </div>
 
-      <div className="space-y-1">
+      <div className="space-y-1 relative z-10">
         <p className={cn(
-          "text-[9px] font-black uppercase tracking-[0.2em]",
-          variant === 'glass' ? "text-slate-400" : "text-white/60"
+          "text-[8px] font-black uppercase tracking-[0.2em] leading-none mb-1",
+          variant === 'glass' ? "text-slate-400" : "text-white/40"
         )}>{title}</p>
-        <h3 className="text-2xl font-black italic tracking-tighter leading-tight">{value}</h3>
+        <h3 className="text-2xl font-black tracking-tighter leading-none font-display tabular-nums uppercase">{value}</h3>
       </div>
 
-      <div className="mt-6 flex items-center justify-between border-t border-current/10 pt-4">
+      <div className="mt-4 pt-3 border-t border-current/5 flex items-center justify-between">
         <p className={cn(
-          "text-[10px] font-bold flex items-center gap-1.5",
-          variant === 'glass' ? "text-slate-500" : "text-white/80"
+          "text-[9px] font-bold flex items-center gap-1.5",
+          variant === 'glass' ? "text-slate-500" : "text-white/70"
         )}>
           {trend}
         </p>
-        <div className="size-5 rounded-full border border-current/20 flex items-center justify-center opacity-40">
-           <ArrowUpRight size={10} />
+        <div className="size-4 rounded-full border border-current/20 flex items-center justify-center opacity-30">
+           <ArrowUpRight size={8} />
         </div>
       </div>
     </motion.div>

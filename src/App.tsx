@@ -35,20 +35,6 @@ export default function App() {
   const [activePage, setActivePage] = useState<Page>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [theme, setTheme] = useState<'light' | 'dark'>('light');
-
-  useEffect(() => {
-    const updateTheme = () => {
-      const hour = new Date().getHours();
-      // Dark mode between 18:00 and 06:00
-      const isDark = hour >= 18 || hour < 6;
-      setTheme(isDark ? 'dark' : 'light');
-    };
-    
-    updateTheme();
-    const interval = setInterval(updateTheme, 60000); // Check every minute
-    return () => clearInterval(interval);
-  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
@@ -90,48 +76,39 @@ export default function App() {
   };
 
   if (loading) return (
-    <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-950 text-indigo-400 gap-4">
-      <div className="size-16 border-2 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin" />
-      <p className="text-[10px] font-black uppercase tracking-[0.4em] animate-pulse">Enterprise System</p>
+    <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-50 text-slate-900 gap-4">
+      <div className="size-16 border-2 border-slate-200 border-t-red-800 rounded-full animate-spin" />
+      <p className="text-[10px] font-black uppercase tracking-[0.4em] animate-pulse">Intelligence Suite</p>
     </div>
   );
 
   if (!user) {
     return (
-      <div className={cn("min-h-screen flex items-center justify-center p-4 transition-colors duration-700", theme === 'dark' ? "bg-slate-950" : "bg-slate-50")}>
+      <div className="min-h-screen flex items-center justify-center p-4 bg-slate-50">
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className={cn(
-            "p-12 rounded-[48px] shadow-2xl max-w-md w-full text-center border relative overflow-hidden group transition-colors duration-700",
-            theme === 'dark' ? "bg-slate-900 border-slate-800" : "bg-white border-slate-100"
-          )}
+          className="p-12 rounded-[48px] shadow-2xl max-w-md w-full text-center border relative overflow-hidden group bg-white border-slate-100"
         >
-          <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500" />
+          <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-red-900 via-amber-600 to-red-900" />
           
           <div className="flex flex-col items-center justify-center gap-4 mb-10">
-            <div className={cn(
-                "w-16 h-16 rounded-3xl flex items-center justify-center shadow-2xl border transition-colors",
-                theme === 'dark' ? "bg-slate-800 border-slate-700" : "bg-indigo-600 border-indigo-500"
-              )}>
+            <div className="w-16 h-16 rounded-3xl flex items-center justify-center shadow-2xl border bg-red-800 border-red-700">
               <LayoutDashboard size={32} className="text-white" />
             </div>
             <div>
-              <h1 className={cn("text-4xl font-black italic tracking-tighter transition-colors", theme === 'dark' ? "text-white" : "text-slate-900")}>
-                ERP CLUB DA <span className="text-indigo-500">BOLA</span>
+              <h1 className="text-3xl font-black tracking-tight text-slate-900 font-sans">
+                ERP CLUB DA <span className="text-red-800 uppercase">BOLA</span>
               </h1>
-              <p className={cn("mt-2 font-bold uppercase tracking-widest text-[10px] transition-colors", theme === 'dark' ? "text-slate-400" : "text-slate-500")}>
-                Executive Management Suite
+              <p className="mt-2 font-bold uppercase tracking-widest text-[9px] text-slate-400">
+                Analytical Management Portfolio
               </p>
             </div>
           </div>
           
           <button 
             onClick={login}
-            className={cn(
-              "w-full py-5 px-8 rounded-2xl transition-all shadow-xl flex items-center justify-center gap-4 group/btn font-black uppercase tracking-widest text-xs",
-              theme === 'dark' ? "bg-white text-slate-900 hover:bg-slate-100" : "bg-slate-900 text-white hover:bg-slate-800"
-            )}
+            className="w-full py-5 px-8 rounded-2xl transition-all shadow-xl flex items-center justify-center gap-4 group/btn font-black uppercase tracking-widest text-xs bg-slate-900 text-white hover:bg-slate-800"
           >
             <img src="https://www.google.com/favicon.ico" className="w-4 h-4" alt="Google" />
             Autenticação Digital
@@ -152,7 +129,7 @@ export default function App() {
   ];
 
   return (
-    <div className={cn("flex h-screen font-sans overflow-hidden relative transition-colors duration-700", theme === 'dark' ? "bg-slate-950 text-slate-200" : "bg-slate-50 text-slate-900")}>
+    <div className="flex h-screen font-sans overflow-hidden relative bg-slate-50 text-slate-900">
       {/* Mobile Drawer Overlay */}
       <AnimatePresence>
         {isMobileMenuOpen && (
@@ -178,8 +155,7 @@ export default function App() {
             }}
             exit={isMobileMenuOpen ? { x: -300 } : undefined}
             className={cn(
-              "flex flex-col shrink-0 shadow-2xl z-[90] transition-all duration-300 h-full border-r",
-              theme === 'dark' ? "bg-slate-900 border-slate-800" : "bg-slate-900 border-slate-800", // Sidebar remains dark for executive feel
+              "flex flex-col shrink-0 shadow-2xl z-[90] transition-all duration-300 h-full border-r bg-slate-900 border-slate-800",
               !isMobileMenuOpen && "hidden md:flex",
               isMobileMenuOpen && "fixed top-0 left-0"
             )}
@@ -190,12 +166,12 @@ export default function App() {
                 animate={{ opacity: 1 }}
                 className="flex items-center gap-3"
               >
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center p-1 bg-gradient-to-br from-indigo-500 to-indigo-700 border border-white/10 shadow-lg group-hover:scale-110 transition-transform">
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center p-1 bg-gradient-to-br from-red-800 to-red-950 border border-white/10 shadow-lg group-hover:scale-110 transition-transform">
                   <LayoutDashboard size={18} className="text-white" />
                 </div>
                 {(isSidebarOpen || isMobileMenuOpen) && (
-                  <h1 className="text-white font-black tracking-tighter leading-none text-xs italic">
-                    ERP CLUB DA <span className="text-indigo-400">BOLA</span>
+                  <h1 className="text-white font-black tracking-tighter leading-none text-xs font-sans">
+                    ERP CLUB DA <span className="text-amber-500 uppercase">BOLA</span>
                   </h1>
                 )}
               </motion.div>
@@ -221,11 +197,11 @@ export default function App() {
                   className={cn(
                     "w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all text-sm font-bold group",
                     activePage === item.id 
-                      ? 'bg-gradient-to-r from-indigo-600 to-indigo-500 text-white shadow-lg shadow-indigo-600/20' 
+                      ? 'bg-red-800 text-white shadow-lg shadow-red-900/20 border border-white/10' 
                       : 'text-slate-400 hover:bg-white/5 hover:text-slate-100'
                   )}
                 >
-                  <item.icon size={20} className={cn(activePage === item.id ? 'text-white' : 'text-slate-500 group-hover:text-indigo-400 transition-colors')} />
+                  <item.icon size={20} className={cn(activePage === item.id ? 'text-white' : 'text-slate-500 group-hover:text-amber-500 transition-colors')} />
                   {(isSidebarOpen || isMobileMenuOpen) && <span className="tracking-tight">{item.label}</span>}
                   {(isSidebarOpen || isMobileMenuOpen) && activePage === item.id && (
                     <motion.div layoutId="activeIndicator" className="ml-auto w-1.5 h-1.5 bg-white rounded-full shadow-glow" />
@@ -236,11 +212,11 @@ export default function App() {
 
             <div className="p-4 mt-auto border-t border-slate-800/50 space-y-4">
               {(isSidebarOpen || isMobileMenuOpen) && (
-                <div className="bg-indigo-500/5 p-4 rounded-2xl border border-indigo-500/10">
-                  <p className="text-[10px] uppercase font-black text-indigo-400 mb-1 tracking-widest">Base de Dados</p>
+                <div className="bg-amber-500/5 p-4 rounded-2xl border border-amber-500/10">
+                  <p className="text-[10px] uppercase font-black text-amber-500 mb-1 tracking-widest">Base de Dados</p>
                   <button 
                     onClick={handleSeed}
-                    className="mt-2 w-full text-[10px] bg-slate-800 text-white py-2 px-3 rounded-xl font-black uppercase hover:bg-indigo-600 transition-all border border-slate-700"
+                    className="mt-2 w-full text-[10px] bg-slate-800 text-white py-2 px-3 rounded-xl font-black uppercase hover:bg-red-800 transition-all border border-slate-700 font-sans"
                   >
                     Importar Excel
                   </button>
@@ -260,18 +236,12 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col overflow-hidden relative">
-         <header className={cn(
-           "h-16 md:h-20 border-b flex items-center justify-between px-4 md:px-10 shrink-0 z-50 transition-colors duration-700",
-           theme === 'dark' ? "bg-slate-900 border-slate-800" : "bg-white border-slate-100"
-         )}>
+         <header className="h-16 md:h-20 border-b flex items-center justify-between px-4 md:px-10 shrink-0 z-50 bg-white border-slate-100">
           <div className="flex items-center gap-4">
              {/* Hamburger Menu - 3 Bars */}
              <button 
                onClick={() => setIsMobileMenuOpen(true)}
-               className={cn(
-                 "p-2.5 rounded-xl transition-all md:hidden border shadow-sm",
-                 theme === 'dark' ? "text-slate-400 bg-slate-800 border-slate-700 hover:bg-slate-700" : "text-slate-600 bg-slate-50 border-slate-100 hover:bg-slate-100"
-               )}
+               className="p-2.5 rounded-xl transition-all md:hidden border shadow-sm text-slate-600 bg-slate-50 border-slate-100 hover:bg-slate-100"
              >
                <Menu size={20} />
              </button>
@@ -279,25 +249,19 @@ export default function App() {
              {/* Sidebar Toggle - Desktop */}
              <button 
                 onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                className={cn(
-                  "hidden md:flex p-2.5 rounded-xl transition-all border",
-                  theme === 'dark' ? "text-slate-400 bg-slate-800 border-slate-700 hover:text-white" : "text-slate-400 bg-slate-50 border-slate-100 hover:text-slate-900"
-                )}
+                className="hidden md:flex p-2.5 rounded-xl transition-all border text-slate-400 bg-slate-50 border-slate-100 hover:text-slate-900"
               >
                 <Menu size={20} />
               </button>
 
              <div className="flex items-center gap-3">
                 <div className="flex items-center gap-2 group cursor-pointer">
-                  <div className={cn(
-                    "w-8 h-8 rounded-lg flex items-center justify-center p-1 shadow-lg transition-transform",
-                    theme === 'dark' ? "bg-indigo-600 shadow-indigo-900/20" : "bg-slate-900 shadow-slate-200"
-                  )}>
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center p-1 shadow-lg transition-transform bg-slate-900 shadow-slate-200">
                     <LayoutDashboard size={16} className="text-white" />
                   </div>
                   <div className="flex flex-col -space-y-0.5">
-                    <span className={cn("text-xs font-black italic uppercase tracking-tighter transition-colors", theme === 'dark' ? "text-white" : "text-slate-900")}>
-                      ERP CLUB DA <span className="text-indigo-500">BOLA</span>
+                    <span className="text-xs font-black uppercase tracking-tight text-slate-900 font-sans">
+                      ERP CLUB DA <span className="text-red-800 uppercase">BOLA</span>
                     </span>
                     <span className="text-[10px] font-bold text-slate-400 uppercase hidden sm:block tracking-widest leading-tight">
                       Intelligence & Logistics
@@ -307,21 +271,18 @@ export default function App() {
              </div>
           </div>
           <div className="flex items-center gap-3 md:gap-6">
-            <button className="hidden md:flex items-center gap-2 bg-gradient-to-r from-emerald-500 to-teal-600 text-white px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg shadow-emerald-500/20 hover:scale-105 transition-all">
+            <button className="hidden md:flex items-center gap-2 bg-slate-900 text-white px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-widest shadow-xl shadow-slate-200 hover:bg-black transition-all">
               <Send size={14} />
-              Service Active
+              Protocolo Ativo
             </button>
-            <div className="flex items-center gap-3 md:border-l md:pl-6 border-slate-700">
+            <div className="flex items-center gap-3 md:border-l md:pl-6 border-slate-200">
               <div className="text-right hidden sm:block">
-                <p className={cn("text-xs font-black uppercase tracking-tight", theme === 'dark' ? "text-white" : "text-slate-900")}>
+                <p className="text-xs font-black uppercase tracking-tight text-slate-900">
                   {user.displayName || user.email.split('@')[0]}
                 </p>
                 <p className="text-[9px] text-slate-500 uppercase font-bold tracking-widest">Master Admin</p>
               </div>
-              <div className={cn(
-                "w-9 h-9 sm:w-10 sm:h-10 rounded-2xl overflow-hidden p-0.5 shadow-xl transition-colors",
-                theme === 'dark' ? "bg-slate-800 border border-slate-700" : "bg-white border border-slate-100"
-              )}>
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl overflow-hidden p-0.5 shadow-xl bg-white border border-slate-100">
                 <img className="rounded-[14px] w-full h-full object-cover" src={user.photoURL || `https://ui-avatars.com/api/?name=${user.email}&background=6366f1&color=fff`} alt="User" />
               </div>
             </div>
