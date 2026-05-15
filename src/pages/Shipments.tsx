@@ -36,6 +36,7 @@ export default function Shipments() {
   // Form State
   const [trackingCode, setTrackingCode] = useState('');
   const [status, setStatus] = useState<Shipment['status']>('Processando');
+  const [statusDate, setStatusDate] = useState(new Date().toISOString().split('T')[0]);
   const [items, setItems] = useState<ShipmentItem[]>([]);
   const [hasTax, setHasTax] = useState(false);
   const [taxAmount, setTaxAmount] = useState<string>('0');
@@ -77,6 +78,7 @@ export default function Shipments() {
       setEditingShipment(shipment);
       setTrackingCode(shipment.trackingCode);
       setStatus(shipment.status);
+      setStatusDate(new Date().toISOString().split('T')[0]);
       setItems(shipment.items);
       setHasTax(shipment.hasTax);
       setTaxAmount(shipment.taxAmount.toString());
@@ -87,6 +89,7 @@ export default function Shipments() {
       setEditingShipment(null);
       setTrackingCode('');
       setStatus('Processando');
+      setStatusDate(new Date().toISOString().split('T')[0]);
       setItems([]);
       setHasTax(false);
       setTaxAmount('0');
@@ -215,9 +218,14 @@ export default function Shipments() {
         const newHistory = [...(editingShipment.history || [])];
         
         if (oldStatus !== status) {
+          const selectedDate = new Date(statusDate);
+          // Adjust for timezone to ensure the date is correctly recorded as the start of the day in UTC or local as preferred
+          // Here we use the time provided by statusDate input
+          const finalDate = new Date(statusDate + 'T12:00:00'); 
+
           newHistory.push({
             status,
-            updatedAt: new Date(),
+            updatedAt: finalDate,
             notes: `Status alterado de ${oldStatus} para ${status}`
           });
         }
@@ -233,9 +241,10 @@ export default function Shipments() {
           }
         }
       } else {
+        const finalDate = new Date(statusDate + 'T12:00:00');
         await addDoc(collection(db, 'shipments'), {
           ...data,
-          history: [{ status, updatedAt: new Date(), notes: 'Grupo criado' }],
+          history: [{ status, updatedAt: finalDate, notes: 'Grupo criado' }],
           createdAt: serverTimestamp()
         });
       }
@@ -298,10 +307,20 @@ export default function Shipments() {
 
   const updateShipmentStatus = async (shipment: Shipment, newStatus: Shipment['status']) => {
     try {
+      const today = new Date().toISOString().split('T')[0];
+      const customDate = prompt(`Selecione a data da movimentação para "${newStatus}" (AAAA-MM-DD):`, today);
+      if (customDate === null) return;
+      
+      const finalDate = new Date(customDate + 'T12:00:00');
+      if (isNaN(finalDate.getTime())) {
+        alert('Data inválida. Use o formato AAAA-MM-DD');
+        return;
+      }
+
       const history = [...(shipment.history || [])];
       history.push({
         status: newStatus,
-        updatedAt: new Date(),
+        updatedAt: finalDate,
         notes: `Alteração rápida de status para ${newStatus}`
       });
 
@@ -695,7 +714,7 @@ export default function Shipments() {
               </div>
 
               <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-2">
                     <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Código de Rastreio</label>
                     <input 
@@ -716,6 +735,15 @@ export default function Shipments() {
                     >
                       {SHIPMENT_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Data do Status</label>
+                    <input 
+                      type="date"
+                      value={statusDate} 
+                      onChange={e => setStatusDate(e.target.value)}
+                      className="w-full px-4 py-3 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-sm bg-slate-50/50 transition-all"
+                    />
                   </div>
                 </div>
 
