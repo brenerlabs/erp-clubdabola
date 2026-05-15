@@ -12,6 +12,8 @@ export default function Products() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isImporting, setIsImporting] = useState(false);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null);
 
   // Form State
   const [name, setName] = useState('');
@@ -48,6 +50,22 @@ export default function Products() {
       setEditingProduct(null);
     }
     setIsModalOpen(true);
+  };
+
+  const confirmDelete = (product: Product) => {
+    setProductToDelete(product);
+    setIsDeleteConfirmOpen(true);
+  };
+
+  const handleDelete = async () => {
+    if (!productToDelete) return;
+    try {
+      await deleteDoc(doc(db, 'products', productToDelete.id!));
+      setIsDeleteConfirmOpen(false);
+      setProductToDelete(null);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `products/${productToDelete.id}`);
+    }
   };
 
   const handleCSVImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -160,7 +178,13 @@ export default function Products() {
     }
   };
 
-  const filtered = products.filter(p => p.name.toLowerCase().includes(search.toLowerCase()) || p.category.toLowerCase().includes(search.toLowerCase()));
+  const filtered = products.filter(p => {
+    const searchTerm = search.toLowerCase();
+    if (searchTerm === 'estoque baixo') {
+      return (p.totalStock || 0) <= (p.minStock || 0);
+    }
+    return p.name.toLowerCase().includes(searchTerm) || p.category.toLowerCase().includes(searchTerm);
+  });
 
   return (
     <motion.div 
@@ -191,6 +215,30 @@ export default function Products() {
         </div>
       </div>
 
+      {products.some(p => (p.totalStock || 0) <= (p.minStock || 0)) && (
+        <motion.div 
+          initial={{ height: 0, opacity: 0 }}
+          animate={{ height: 'auto', opacity: 1 }}
+          className="bg-rose-50 border border-rose-100 rounded-[28px] p-4 flex items-center gap-4 shadow-sm"
+        >
+          <div className="size-10 bg-rose-500 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-rose-200 shrink-0">
+            <Package size={20} className="animate-pulse" />
+          </div>
+          <div className="flex-1">
+            <h4 className="text-sm font-black text-rose-900 uppercase italic tracking-tighter">Atenção: Estoque Crítico Detectado</h4>
+            <p className="text-[10px] font-bold text-rose-600/70 uppercase tracking-widest">
+              Existem {products.filter(p => (p.totalStock || 0) <= (p.minStock || 0)).length} produtos que atingiram ou estão abaixo do limite de segurança.
+            </p>
+          </div>
+          <button 
+            onClick={() => setSearch('Estoque Baixo')} 
+            className="px-4 py-2 bg-rose-900 text-white text-[9px] font-black uppercase tracking-widest rounded-xl hover:bg-black transition-all"
+          >
+            Filtrar Itens
+          </button>
+        </motion.div>
+      )}
+
       <div className="flex flex-col lg:flex-row items-center justify-between gap-4 p-6 bg-white/40 backdrop-blur-md rounded-3xl border border-white/60 shadow-xl shadow-slate-200/50">
         <div className="flex-1 max-w-md relative group">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 size-5 group-focus-within:text-indigo-500 transition-colors" />
@@ -201,6 +249,15 @@ export default function Products() {
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
+          {search.toLowerCase() === 'estoque baixo' && (
+            <button 
+              onClick={() => setSearch('')}
+              className="absolute right-4 top-1/2 -translate-y-1/2 p-1 bg-rose-100 text-rose-600 rounded-lg hover:bg-rose-200 transition-colors"
+              title="Limpar filtro de estoque"
+            >
+              <X size={16} />
+            </button>
+          )}
         </div>
         <div className="flex items-center gap-8 px-6 border-l border-slate-200 hidden lg:flex">
            <div className="text-right">
@@ -282,7 +339,7 @@ export default function Products() {
                     <button onClick={() => openModal(product)} className="p-2 hover:bg-indigo-50 text-indigo-600 rounded-lg transition-colors" title="Editar">
                       <Edit2 size={16} />
                     </button>
-                    <button onClick={() => deleteDoc(doc(db, 'products', product.id!))} className="p-2 hover:bg-rose-50 text-rose-600 rounded-lg transition-colors" title="Excluir">
+                    <button onClick={() => confirmDelete(product)} className="p-2 hover:bg-rose-50 text-rose-600 rounded-lg transition-colors" title="Excluir">
                       <Trash2 size={16} />
                     </button>
                   </div>
@@ -323,7 +380,7 @@ export default function Products() {
                 </div>
                 <div className="flex gap-2">
                   <button onClick={() => openModal(product)} className="p-2 bg-slate-100 text-slate-600 rounded-lg"><Edit2 size={14} /></button>
-                  <button onClick={() => deleteDoc(doc(db, 'products', product.id!))} className="p-2 bg-rose-50 text-rose-600 rounded-lg"><Trash2 size={14} /></button>
+                  <button onClick={() => confirmDelete(product)} className="p-2 bg-rose-50 text-rose-600 rounded-lg"><Trash2 size={14} /></button>
                 </div>
               </div>
             </div>
@@ -557,6 +614,49 @@ export default function Products() {
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Delete Confirmation Modal */}
+      <AnimatePresence>
+        {isDeleteConfirmOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }}
+              onClick={() => setIsDeleteConfirmOpen(false)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" 
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="bg-white rounded-[32px] shadow-2xl relative z-10 w-full max-w-sm overflow-hidden border border-slate-200 p-8 text-center"
+            >
+              <div className="size-20 bg-rose-50 text-rose-500 rounded-3xl flex items-center justify-center mx-auto mb-6">
+                <Trash2 size={40} strokeWidth={1.5} />
+              </div>
+              <h3 className="text-xl font-black italic tracking-tighter text-slate-900 mb-2 uppercase">Excluir Produto?</h3>
+              <p className="text-sm font-medium text-slate-500 mb-8 leading-relaxed">
+                Você está prestes a remover <span className="font-black text-slate-900">"{productToDelete?.name}"</span>. Esta ação não poderá ser desfeita.
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <button 
+                  onClick={() => setIsDeleteConfirmOpen(false)}
+                  className="px-6 py-3 bg-slate-100 text-slate-600 text-[10px] font-black uppercase tracking-widest rounded-2xl hover:bg-slate-200 transition-all"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  onClick={handleDelete}
+                  className="px-6 py-3 bg-rose-500 text-white text-[10px] font-black uppercase tracking-widest rounded-2xl hover:bg-rose-600 shadow-lg shadow-rose-200 transition-all"
+                >
+                  Confirmar
+                </button>
+              </div>
             </motion.div>
           </div>
         )}

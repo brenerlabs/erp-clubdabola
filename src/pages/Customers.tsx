@@ -19,6 +19,9 @@ export default function Customers() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState<string>('');
+  const [historyTypeFilter, setHistoryTypeFilter] = useState<'all' | 'payment' | 'debt'>('all');
+  const [historyStartDate, setHistoryStartDate] = useState('');
+  const [historyEndDate, setHistoryEndDate] = useState('');
 
   // Form State
   const [name, setName] = useState('');
@@ -107,6 +110,9 @@ export default function Customers() {
   const openHistory = (customer: Customer) => {
     setSelectedCustomer(customer);
     setIsHistoryOpen(true);
+    setHistoryTypeFilter('all');
+    setHistoryStartDate('');
+    setHistoryEndDate('');
     // Fetch transactions
     const q = query(
       collection(db, 'transactions'), 
@@ -196,9 +202,21 @@ export default function Customers() {
   };
 
   const filtered = customers.filter(c => {
-    const matchesSearch = c.name.toLowerCase().includes(debouncedSearch.toLowerCase()) || c.contact.includes(debouncedSearch);
+    const matchesSearch = (c.name || '').toLowerCase().includes(debouncedSearch.toLowerCase()) || (c.contact || '').includes(debouncedSearch);
     const matchesPending = filterPending ? c.totalDebt > 0 : true;
     return matchesSearch && matchesPending;
+  });
+
+  const filteredTransactions = transactions.filter(t => {
+    const matchesType = historyTypeFilter === 'all' ? true : t.type === historyTypeFilter;
+    
+    if (!t.createdAt) return matchesType;
+    
+    const transDate = new Date(t.createdAt.seconds * 1000);
+    const matchesStart = historyStartDate ? transDate >= new Date(historyStartDate + 'T00:00:00') : true;
+    const matchesEnd = historyEndDate ? transDate <= new Date(historyEndDate + 'T23:59:59') : true;
+    
+    return matchesType && matchesStart && matchesEnd;
   });
 
   return (
@@ -483,17 +501,71 @@ export default function Customers() {
               </div>
               
               <div className="flex-1 overflow-y-auto p-8 bg-slate-50">
-                <div className="flex items-center gap-2 mb-6">
-                   <History size={16} className="text-slate-400" />
-                   <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Extrato de Movimentações</h4>
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+                  <div className="flex items-center gap-2">
+                    <History size={16} className="text-slate-400" />
+                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Extrato de Movimentações</h4>
+                  </div>
+                  
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-4 px-4 py-2 bg-white border border-slate-200 rounded-xl shadow-sm">
+                      <div className="text-right">
+                        <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest">Compensado</p>
+                        <p className="text-xs font-black text-emerald-600">
+                          {formatCurrency(filteredTransactions.filter(t => t.type === 'payment').reduce((acc, t) => acc + t.amount, 0))}
+                        </p>
+                      </div>
+                      <div className="w-px h-6 bg-slate-100" />
+                      <div className="text-right">
+                        <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest">Devido</p>
+                        <p className="text-xs font-black text-rose-500">
+                          {formatCurrency(filteredTransactions.filter(t => t.type === 'debt').reduce((acc, t) => acc + t.amount, 0))}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex bg-white border border-slate-200 rounded-xl p-1 shadow-sm">
+                      {(['all', 'payment', 'debt'] as const).map((type) => (
+                        <button
+                          key={type}
+                          onClick={() => setHistoryTypeFilter(type)}
+                          className={cn(
+                            "px-3 py-1.5 text-[8px] font-black uppercase tracking-wider rounded-lg transition-all",
+                            historyTypeFilter === type 
+                              ? "bg-slate-900 text-white shadow-md" 
+                              : "text-slate-400 hover:text-slate-600"
+                          )}
+                        >
+                          {type === 'all' ? 'Tudo' : type === 'payment' ? 'Pagos' : 'Débitos'}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-1.5 shadow-sm">
+                       <input 
+                         type="date" 
+                         value={historyStartDate}
+                         onChange={e => setHistoryStartDate(e.target.value)}
+                         className="text-[9px] font-bold text-slate-600 outline-none w-24 bg-transparent"
+                       />
+                       <span className="text-slate-300">|</span>
+                       <input 
+                         type="date" 
+                         value={historyEndDate}
+                         onChange={e => setHistoryEndDate(e.target.value)}
+                         className="text-[9px] font-bold text-slate-600 outline-none w-24 bg-transparent"
+                       />
+                    </div>
+                  </div>
                 </div>
+
                 <div className="space-y-3">
-                  {transactions.length === 0 && (
+                  {filteredTransactions.length === 0 && (
                     <div className="text-center py-12 bg-white rounded-2xl border border-slate-200 border-dashed">
-                      <p className="text-xs font-bold text-slate-400 uppercase">Nenhum registro encontrado</p>
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Nenhuma transação filtrada</p>
                     </div>
                   )}
-                  {transactions.map(t => (
+                  {filteredTransactions.map(t => (
                     <div key={t.id} className="flex items-center justify-between p-5 bg-white rounded-2xl border border-slate-200 shadow-sm transition-all hover:shadow-md">
                       <div className="flex items-center gap-4">
                         {t.type === 'payment' ? (

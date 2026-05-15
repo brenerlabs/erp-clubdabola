@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, query, onSnapshot, addDoc, updateDoc, doc, serverTimestamp, writeBatch, orderBy } from 'firebase/firestore';
 import { Product, Customer, SaleItem, Variation } from '../types';
-import { Search, ShoppingCart, User, Plus, Minus, Trash2, CreditCard, Banknote, QrCode, ClipboardList, Send, X, CheckCircle2, MessageCircle, FileImage, Share2 } from 'lucide-react';
+import { Search, ShoppingCart, User, Plus, Minus, Trash2, CreditCard, Banknote, QrCode, ClipboardList, Send, X, CheckCircle2, MessageCircle, FileImage, Share2, Receipt } from 'lucide-react';
 import { formatCurrency, cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -17,7 +17,11 @@ export default function PDV() {
   const [discountPerc, setDiscountPerc] = useState<string>('0');
   const [discountVal, setDiscountVal] = useState<string>('0');
   const [isFinishing, setIsFinishing] = useState(false);
+  const [saleDate, setSaleDate] = useState(new Date().toISOString().split('T')[0]);
+  const [saleStatus, setSaleStatus] = useState<'Processando' | 'Postado' | 'Entregue' | 'Concluída'>('Concluída');
+  const [trackingCode, setTrackingCode] = useState('');
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [lastSale, setLastSale] = useState<any>(null);
 
   useEffect(() => {
@@ -103,9 +107,12 @@ export default function PDV() {
       const finalDownPayment = parseFloat(downPayment.replace(',', '.')) || 0;
       const finalDiscount = parseFloat(discountVal.replace(',', '.')) || 0;
       const debtAmount = total - finalDownPayment;
+      const finalDate = new Date(saleDate + 'T12:00:00');
 
       // 1. Create Sale Record
       const saleRef = doc(collection(db, 'sales'));
+      const finalStatus = paymentMethod === 'Fiado' && debtAmount > 0 ? 'Pendente' : saleStatus;
+      
       batch.set(saleRef, {
         customerId: selectedCustomer?.id || null,
         customerName: selectedCustomer?.name || 'Consumidor Final',
@@ -115,12 +122,46 @@ export default function PDV() {
         total,
         downPayment: finalDownPayment,
         paymentMethod,
-        status: paymentMethod === 'Fiado' && debtAmount > 0 ? 'Pendente' : 'Concluída',
-        createdAt: serverTimestamp()
+        status: finalStatus,
+        trackingCode: trackingCode || null,
+        createdAt: finalDate, // Using custom date for logic
+        systemCreatedAt: serverTimestamp(), // Record when it actually entered the DB
+        history: [{
+          status: finalStatus,
+          updatedAt: finalDate,
+          notes: 'Venda finalizada no PDV'
+        }]
       });
 
+      // 1.1 Automatically create Shipment record if trackingCode is provided
+      if (trackingCode) {
+        const shipmentRef = doc(collection(db, 'shipments'));
+        batch.set(shipmentRef, {
+          trackingCode,
+          status: finalStatus === 'Concluída' ? 'Entregue' : (finalStatus as any),
+          items: cart.map(item => ({
+            productId: item.productId,
+            variationId: item.variationId,
+            name: item.name,
+            quantity: item.quantity,
+            price: item.price
+          })),
+          saleId: saleRef.id,
+          customerId: selectedCustomer?.id || null,
+          customerName: selectedCustomer?.name || 'Consumidor Final',
+          createdAt: finalDate,
+          hasTax: false,
+          taxAmount: 0,
+          taxPaid: false,
+          history: [{
+            status: finalStatus === 'Concluída' ? 'Entregue' : (finalStatus as any),
+            updatedAt: finalDate,
+            notes: 'Criado via PDV'
+          }]
+        });
+      }
+
       // 2. Update Stock
-      // ... (stock update remains same)
       cart.forEach(item => {
         const product = products.find(p => p.id === item.productId);
         if (product) {
@@ -148,7 +189,7 @@ export default function PDV() {
               type: 'payment',
               paymentMethod: 'Dinheiro', // Default to Dinheiro for entry
               saleId: saleRef.id,
-              createdAt: serverTimestamp()
+              createdAt: finalDate
             });
           }
 
@@ -165,7 +206,7 @@ export default function PDV() {
               amount: debtAmount,
               type: 'debt',
               saleId: saleRef.id,
-              createdAt: serverTimestamp()
+              createdAt: finalDate
             });
           }
         } else {
@@ -177,7 +218,7 @@ export default function PDV() {
             type: 'payment',
             paymentMethod: paymentMethod,
             saleId: saleRef.id,
-            createdAt: serverTimestamp()
+            createdAt: finalDate
           });
         }
       } else {
@@ -189,7 +230,7 @@ export default function PDV() {
           type: 'payment',
           paymentMethod: paymentMethod,
           saleId: saleRef.id,
-          createdAt: serverTimestamp()
+          createdAt: finalDate
         });
       }
 
@@ -204,7 +245,7 @@ export default function PDV() {
         downPayment: finalDownPayment,
         debtAmount: debtAmount,
         paymentMethod,
-        date: new Date()
+        date: finalDate
       };
 
       setLastSale(finishedSale);
@@ -216,6 +257,9 @@ export default function PDV() {
       setDownPayment('');
       setDiscountPerc('0');
       setDiscountVal('0');
+      setSaleStatus('Concluída');
+      setTrackingCode('');
+      setSaleDate(new Date().toISOString().split('T')[0]);
     } catch (err: any) {
       console.error(err);
       handleFirestoreError(err, OperationType.WRITE, 'PDV_Batch_Commit');
@@ -325,18 +369,21 @@ export default function PDV() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <button 
+                    onClick={() => {
+                      setShowSuccessModal(false);
+                      setShowDetailsModal(true);
+                    }}
+                    className="flex flex-col items-center justify-center gap-2 p-4 bg-indigo-50 text-indigo-700 rounded-2xl hover:bg-indigo-100 transition-all group"
+                  >
+                    <ClipboardList size={24} className="group-hover:scale-110 transition-transform" />
+                    <span className="text-[10px] font-black uppercase tracking-widest">Ver Detalhes</span>
+                  </button>
+                  <button 
                     onClick={shareWhatsApp}
-                    className="flex flex-col items-center justify-center gap-2 p-4 bg-emerald-100 text-emerald-700 rounded-2xl hover:bg-emerald-200 transition-all group"
+                    className="flex flex-col items-center justify-center gap-2 p-4 bg-emerald-50 text-emerald-700 rounded-2xl hover:bg-emerald-100 transition-all group"
                   >
                     <MessageCircle size={24} className="group-hover:scale-110 transition-transform" />
                     <span className="text-[10px] font-black uppercase tracking-widest">Enviar WhatsApp</span>
-                  </button>
-                  <button 
-                    className="flex flex-col items-center justify-center gap-2 p-4 bg-blue-100 text-blue-700 rounded-2xl hover:bg-blue-200 transition-all group opacity-50 cursor-not-allowed"
-                    title="PNG Indisponível nesta prévia"
-                  >
-                    <FileImage size={24} className="group-hover:scale-110 transition-transform" />
-                    <span className="text-[10px] font-black uppercase tracking-widest">Gerar PNG</span>
                   </button>
                 </div>
 
@@ -346,6 +393,119 @@ export default function PDV() {
                 >
                   Continuar Vendendo
                 </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Details Modal */}
+      <AnimatePresence>
+        {showDetailsModal && lastSale && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }}
+              onClick={() => setShowDetailsModal(false)}
+              className="absolute inset-0 bg-slate-900/80 backdrop-blur-md" 
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="bg-white rounded-[40px] shadow-2xl relative z-10 w-full max-w-lg overflow-hidden border border-slate-200"
+            >
+              <div className="p-8 bg-slate-950 text-white relative">
+                 <button 
+                   onClick={() => setShowDetailsModal(false)}
+                   className="absolute top-6 right-6 text-white/40 hover:text-white transition-colors"
+                 >
+                   <X size={24} />
+                 </button>
+                 <div className="flex items-center gap-4 mb-2">
+                   <div className="size-12 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-lg">
+                      <Receipt size={24} className="text-white" />
+                   </div>
+                   <div>
+                      <h3 className="text-2xl font-black italic tracking-tighter uppercase">Detalhes da <span className="text-indigo-400">Venda</span></h3>
+                      <p className="text-[9px] font-black uppercase text-white/40 tracking-[0.3em]">ID: {lastSale.id}</p>
+                   </div>
+                 </div>
+              </div>
+
+              <div className="p-8 space-y-8 overflow-y-auto max-h-[70vh] custom-scrollbar">
+                {/* Sale Info */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-slate-50 p-4 rounded-3xl border border-slate-100">
+                    <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1">Cliente</p>
+                    <p className="text-sm font-black text-slate-900">{lastSale.customerName}</p>
+                  </div>
+                  <div className="bg-slate-50 p-4 rounded-3xl border border-slate-100">
+                    <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1">Pagamento</p>
+                    <p className="text-sm font-black text-indigo-600">{lastSale.paymentMethod}</p>
+                  </div>
+                </div>
+
+                {/* Items List */}
+                <div className="space-y-4">
+                  <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest pl-2 border-l-2 border-indigo-500">Itens do Pedido</p>
+                  <div className="space-y-2">
+                    {lastSale.items.map((item: any, idx: number) => (
+                      <div key={idx} className="flex justify-between items-center p-4 bg-white rounded-3xl border border-slate-100 shadow-sm">
+                         <div>
+                            <p className="text-sm font-black text-slate-900">{item.name}</p>
+                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">{item.variationName} x {item.quantity}</p>
+                         </div>
+                         <p className="text-sm font-black text-indigo-600">{formatCurrency(item.price * item.quantity)}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Financial Breakdown */}
+                <div className="bg-slate-900 rounded-[32px] p-6 text-white space-y-3">
+                  <div className="flex justify-between items-center opacity-40 text-[10px] font-black uppercase tracking-widest">
+                     <span>Subtotal</span>
+                     <span>{formatCurrency(lastSale.items.reduce((acc: number, i: any) => acc + (i.price * i.quantity), 0))}</span>
+                  </div>
+                  <div className="flex justify-between items-center opacity-40 text-[10px] font-black uppercase tracking-widest">
+                     <span>Descontos</span>
+                     <span>-{formatCurrency(lastSale.items.reduce((acc: number, i: any) => acc + (i.price * i.quantity), 0) - lastSale.total)}</span>
+                  </div>
+                  <div className="pt-3 border-t border-white/10 flex justify-between items-center">
+                     <span className="text-xs font-black uppercase tracking-[0.2em] text-indigo-300">Total da Venda</span>
+                     <span className="text-3xl font-black italic tracking-tighter">{formatCurrency(lastSale.total)}</span>
+                  </div>
+                  {lastSale.downPayment > 0 && (
+                    <div className="pt-3 border-t border-white/5 grid grid-cols-2 gap-4">
+                       <div>
+                          <p className="text-[9px] font-black uppercase text-emerald-400 mb-1 tracking-widest">Entrada Paga</p>
+                          <p className="text-sm font-black">{formatCurrency(lastSale.downPayment)}</p>
+                       </div>
+                       <div>
+                          <p className="text-[9px] font-black uppercase text-rose-400 mb-1 tracking-widest">Saldo Pendente</p>
+                          <p className="text-sm font-black">{formatCurrency(lastSale.debtAmount)}</p>
+                       </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <button 
+                    onClick={shareWhatsApp}
+                    className="flex items-center justify-center gap-2 p-4 bg-emerald-500 text-white rounded-2xl hover:bg-emerald-600 transition-all font-black uppercase tracking-widest text-[10px] shadow-lg shadow-emerald-500/20"
+                  >
+                    <MessageCircle size={18} />
+                    WhatsApp
+                  </button>
+                  <button 
+                    onClick={() => setShowDetailsModal(false)}
+                    className="flex items-center justify-center gap-2 p-4 bg-slate-100 text-slate-700 rounded-2xl hover:bg-slate-200 transition-all font-black uppercase tracking-widest text-[10px]"
+                  >
+                    Fechar
+                  </button>
+                </div>
               </div>
             </motion.div>
           </div>
@@ -557,6 +717,39 @@ export default function PDV() {
                 />
               </motion.div>
             )}
+
+            <div className="relative group">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 text-[10px] font-black group-focus-within:text-indigo-400 uppercase tracking-widest">Data da Venda</span>
+              <input 
+                type="date"
+                className="w-full bg-white/5 border border-white/10 rounded-xl pl-24 pr-4 py-2.5 text-xs font-bold outline-none hover:bg-white/10 focus:ring-1 focus:ring-indigo-500 transition-all text-white/80"
+                value={saleDate}
+                onChange={e => setSaleDate(e.target.value)}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div className="relative group">
+                <select 
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-[10px] font-black uppercase outline-none appearance-none hover:bg-white/10 focus:ring-1 focus:ring-indigo-500 transition-all text-white/80"
+                  value={saleStatus}
+                  onChange={e => setSaleStatus(e.target.value as any)}
+                >
+                  {['Concluída', 'Processando', 'Postado', 'Entregue'].map(s => (
+                    <option key={s} value={s} className="bg-slate-900 text-white">{s}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="relative group">
+                <input 
+                  type="text"
+                  placeholder="Rastreio (opcional)"
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-[10px] font-black uppercase outline-none hover:bg-white/10 focus:ring-1 focus:ring-indigo-500 transition-all text-white/80"
+                  value={trackingCode}
+                  onChange={e => setTrackingCode(e.target.value)}
+                />
+              </div>
+            </div>
 
             <div className="flex flex-col gap-1 px-4 py-3 bg-white/5 rounded-2xl border border-white/5">
               <div className="flex justify-between items-center opacity-40">
