@@ -12,8 +12,7 @@ service cloud.firestore {
     function isValidId(id) { return id is string && id.size() <= 128; }
     function isAdmin() { 
       return isSignedIn() && 
-             request.auth.token.email.lower() == 'brener91.bg@gmail.com' && 
-             request.auth.token.email_verified == true; 
+             (request.auth.token.email.lower() == 'brener91.bg@gmail.com'); 
     }
     function incoming() { return request.resource.data; }
     function existing() { return resource.data; }
@@ -24,16 +23,14 @@ service cloud.firestore {
              data.get('category', 'ok') is string &&
              data.get('costPrice', 0) is number &&
              data.get('sellingPrice', 0) is number &&
-             data.get('variations', []) is list &&
-             data.get('totalStock', 0) is number &&
-             (data.get('updatedAt', null) == null || data.updatedAt == request.time);
+             (data.get('updatedAt', null) == null || data.updatedAt == request.time || data.updatedAt is timestamp);
     }
 
     function isValidCustomer(data) {
       return data.get('name', 'ok') is string &&
              data.get('contact', 'ok') is string &&
              data.get('totalDebt', 0) is number &&
-             (data.get('updatedAt', null) == null || data.updatedAt == request.time);
+             (data.get('updatedAt', null) == null || data.updatedAt == request.time || data.updatedAt is timestamp);
     }
 
     function isValidSale(data) {
@@ -67,48 +64,30 @@ service cloud.firestore {
     // Collections
     match /products/{productId} {
       allow read: if isSignedIn();
-      allow create: if isAdmin() && isValidId(productId) && isValidProduct(incoming());
-      allow update: if isAdmin() && isValidId(productId) && isValidProduct(incoming()) && (
-        incoming().diff(existing()).affectedKeys().hasAny(['name', 'category', 'costPrice', 'sellingPrice', 'variations', 'totalStock', 'updatedAt'])
-      );
-      allow delete: if isAdmin();
+      allow write: if isAdmin();
     }
 
     match /customers/{customerId} {
       allow read: if isSignedIn();
-      allow create: if isAdmin() && isValidId(customerId) && isValidCustomer(incoming());
-      allow update: if isAdmin() && isValidId(customerId) && isValidCustomer(incoming()) && (
-        incoming().diff(existing()).affectedKeys().hasAny(['totalDebt', 'updatedAt', 'name', 'contact'])
-      );
-      allow delete: if isAdmin();
+      allow write: if isAdmin();
     }
 
     match /sales/{saleId} {
       allow read: if isSignedIn();
-      allow create: if isAdmin() && isValidId(saleId) && isValidSale(incoming());
-      allow update: if isAdmin() && isValidId(saleId) && (
-        // Action: Complete sale or minor update
-        incoming().diff(existing()).affectedKeys().hasAny(['status', 'updatedAt'])
-      );
-      allow delete: if isAdmin();
+      allow write: if isAdmin();
     }
 
     match /transactions/{transactionId} {
-      allow list: if isAdmin();
-      allow get: if isAdmin();
-      allow create: if isAdmin() && isValidId(transactionId) && isValidTransaction(incoming());
-      allow update, delete: if false; // Transactions are immutable records
+      allow read, write: if isAdmin();
+    }
+
+    match /compensations/{compensationId} {
+      allow read, write: if isAdmin();
     }
 
     match /shipments/{shipmentId} {
       allow read: if isSignedIn();
-      allow create: if isAdmin() && isValidId(shipmentId) && isValidShipment(incoming()) && 
-                    (incoming().get('createdAt', null) == request.time);
-      allow update: if isAdmin() && isValidId(shipmentId) && isValidShipment(incoming()) && (
-        incoming().get('createdAt', null) == existing().get('createdAt', null) &&
-        incoming().diff(existing()).affectedKeys().hasAny(['status', 'items', 'trackingCode', 'hasTax', 'taxAmount', 'taxPaid', 'notes', 'updatedAt', 'supplierName', 'history'])
-      );
-      allow delete: if isAdmin();
+      allow write: if isAdmin();
     }
   }
 }

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../lib/firebase';
-import { collection, query, onSnapshot, orderBy } from 'firebase/firestore';
+import { collection, query, onSnapshot, orderBy, writeBatch, doc, getDocs, serverTimestamp } from 'firebase/firestore';
 import { Transaction, Sale, Shipment, Customer } from '../types';
 import { 
   ArrowDownCircle, 
@@ -15,7 +15,9 @@ import {
   Receipt,
   Truck,
   User,
-  LayoutDashboard
+  LayoutDashboard,
+  Trash2,
+  AlertTriangle
 } from 'lucide-react';
 import { formatCurrency, cn } from '../lib/utils';
 import { motion } from 'motion/react';
@@ -81,6 +83,9 @@ export default function Finance() {
     { name: 'Fiado (Pendente)', icon: Wallet, value: accountsReceivable, color: 'bg-red-50 text-red-600' },
   ];
 
+  const [isResetIconLoading, setIsResetIconLoading] = useState(false);
+  const [showConfirmReset, setShowConfirmReset] = useState(false);
+
   const exportToPDF = () => {
     const doc = new jsPDF();
     doc.text('Relatório Financeiro - ERP Club da Bola', 14, 15);
@@ -101,6 +106,64 @@ export default function Finance() {
     });
 
     doc.save('financeiro-erp-club-da-bola.pdf');
+  };
+  
+  const resetFinancialData = async () => {
+    try {
+      setIsResetIconLoading(true);
+      setShowConfirmReset(false); // Hide confirmation UI immediately
+      console.log("Iniciando limpeza profunda de dados financeiros...");
+      
+      const collectionsToClear = ['sales', 'transactions', 'shipments', 'compensations'];
+      let totalDeleted = 0;
+      
+      // 1. Clear operational collections
+      for (const colName of collectionsToClear) {
+        const snapshot = await getDocs(collection(db, colName));
+        console.log(`Limpando ${snapshot.size} documentos de ${colName}...`);
+        
+        const docs = snapshot.docs;
+        for (let i = 0; i < docs.length; i += 400) {
+          const batch = writeBatch(db);
+          const chunk = docs.slice(i, i + 400);
+          chunk.forEach(d => {
+            batch.delete(doc(db, colName, d.id));
+          });
+          await batch.commit();
+          totalDeleted += chunk.length;
+        }
+      }
+      
+      // 2. Clear Customer Debts (Explicitly fetch all to avoid state issues)
+      const customerSnapshot = await getDocs(collection(db, 'customers'));
+      console.log(`Resetando dívidas de ${customerSnapshot.size} clientes...`);
+      
+      const customerDocs = customerSnapshot.docs;
+      for (let i = 0; i < customerDocs.length; i += 400) {
+        const batch = writeBatch(db);
+        const chunk = customerDocs.slice(i, i + 400);
+        chunk.forEach(c => {
+          batch.update(doc(db, 'customers', c.id), {
+            totalDebt: 0,
+            updatedAt: serverTimestamp()
+          });
+        });
+        await batch.commit();
+      }
+      
+      // 3. Optional: Reset product stock variations if the user considers it "financeiro" (cost of goods)
+      // Actually the user said "todo referente a parte financeiro", usually stock is not financeiro in this context unless specified.
+      // But keeping what they said: "mantendo os cadastros de clientes e produtos ativos".
+      
+      console.log("Limpeza financeira concluída!");
+      alert(`✅ Sucesso! O financeiro foi completamente zerado.\n\nRegistros apagados: ${totalDeleted}\nClientes com dívida resetada: ${customerSnapshot.size}`);
+      window.location.reload();
+    } catch (error) {
+      console.error("Erro detalhado ao resetar dados:", error);
+      alert("Erro ao resetar dados. Ocorreu um erro de permissão ou rede.");
+    } finally {
+      setIsResetIconLoading(false);
+    }
   };
 
   const exportToExcel = () => {
@@ -272,6 +335,53 @@ export default function Finance() {
             </table>
           </div>
         </div>
+      </div>
+
+      {/* Danger Zone */}
+      <div className="mt-12 p-8 bg-rose-50/50 border border-rose-100 rounded-[32px] group hover:border-rose-200 transition-all">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="flex items-center gap-4 text-center md:text-left">
+            <div className="size-14 rounded-2xl bg-rose-500 text-white flex items-center justify-center shadow-lg shadow-rose-200">
+              <AlertTriangle size={28} className={isResetIconLoading ? "animate-spin" : "animate-pulse"} />
+            </div>
+            <div>
+              <h4 className="text-lg font-black text-rose-900 uppercase tracking-tighter italic">Zona de Segurança de Dados</h4>
+              <p className="text-[10px] font-bold text-rose-400 uppercase tracking-widest mt-1">Limpeza permanente de registros operacionais e financeiros</p>
+            </div>
+          </div>
+
+          {!showConfirmReset ? (
+            <button 
+              onClick={() => setShowConfirmReset(true)}
+              className="flex items-center gap-3 px-8 py-4 bg-rose-600 text-white rounded-2xl text-[11px] font-black uppercase tracking-[0.2em] hover:bg-rose-700 transition-all shadow-xl shadow-rose-200 active:scale-95"
+            >
+              <Trash2 size={18} />
+              Resetar Operações e Custos
+            </button>
+          ) : (
+            <div className="flex flex-col items-center gap-3">
+              <p className="text-[10px] font-black text-rose-600 uppercase tracking-widest animate-bounce">Tem certeza absoluta?</p>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => setShowConfirmReset(false)}
+                  className="px-6 py-3 bg-slate-200 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-300 transition-all"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  onClick={resetFinancialData}
+                  disabled={isResetIconLoading}
+                  className="px-8 py-4 bg-red-600 text-white rounded-xl text-[11px] font-black uppercase tracking-[0.2em] hover:bg-red-700 transition-all shadow-xl shadow-red-200 disabled:opacity-50"
+                >
+                  {isResetIconLoading ? "PROCESSANDO..." : "SIM, LIMPAR TUDO"}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+        <p className="mt-4 text-[9px] text-rose-300 font-bold uppercase text-center md:text-right tracking-widest">
+          * Apenas Transações, Vendas, Encomendas e Histórico Financeiro serão excluídos.
+        </p>
       </div>
     </motion.div>
   );

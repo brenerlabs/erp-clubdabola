@@ -18,6 +18,7 @@ export default function Products() {
   // Form State
   const [name, setName] = useState('');
   const [category, setCategory] = useState('');
+  const [gender, setGender] = useState<'Masculino' | 'Feminino' | 'Ambos'>('Ambos');
   const [costPrice, setCostPrice] = useState<string>('0');
   const [sellingPrice, setSellingPrice] = useState<string>('0');
   const [minStock, setMinStock] = useState<string>('2');
@@ -36,6 +37,7 @@ export default function Products() {
     if (product) {
       setName(isDuplicate ? `${product.name} (Cópia)` : product.name);
       setCategory(product.category);
+      setGender(product.gender || 'Ambos');
       setCostPrice(product.costPrice.toString());
       setSellingPrice(product.sellingPrice.toString());
       setMinStock(product.minStock.toString());
@@ -50,6 +52,7 @@ export default function Products() {
       setMinStock('2');
       setIsDropshipping(false);
       setVariations([]);
+      setGender('Ambos');
       setEditingProduct(null);
     }
     setIsModalOpen(true);
@@ -80,27 +83,52 @@ export default function Products() {
     reader.onload = async (event) => {
       try {
         const text = event.target?.result as string;
-        const lines = text.split('\n').filter(line => line.trim() !== '');
+        const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
         
+        if (lines.length === 0) return;
+
+        // Detect delimiter
+        const firstLine = lines[0];
+        const delimiter = firstLine.includes(';') ? ';' : ',';
+
         let startIndex = 0;
-        if (lines[0].toLowerCase().includes('nome') || lines[0].toLowerCase().includes('produto')) {
+        const headerLower = firstLine.toLowerCase();
+        if (headerLower.includes('nome') || headerLower.includes('produto') || headerLower.includes('categoria')) {
           startIndex = 1;
         }
 
         const batch = writeBatch(db);
         let count = 0;
+        let skipped = 0;
+
+        // Criar um set com nomes normalizados para comparação rápida
+        const existingNames = new Set(products.map(p => (p.name || '').toLowerCase().trim()));
+        const processedInThisCSV = new Set<string>();
 
         for (let i = startIndex; i < lines.length; i++) {
-          const columns = lines[i].split(',').map(c => c.trim());
+          const columns = lines[i].split(delimiter).map(c => c.trim());
           if (columns[0]) {
+            // Clean up name from encoding issues
+            const cleanName = columns[0].replace(/[^\w\s\u00C0-\u00FF]/gi, '');
+            
+            const rawName = cleanName || columns[0];
+            const normalizedName = rawName.toLowerCase().trim();
+
+            // Verificar se já existe no banco ou se está repetido no CSV
+            if (existingNames.has(normalizedName) || processedInThisCSV.has(normalizedName)) {
+              skipped++;
+              continue;
+            }
+
             const cPrice = parseFloat(columns[2]?.replace(',', '.') || '0') || 0;
             const sPrice = parseFloat(columns[3]?.replace(',', '.') || '0') || 0;
             const mStock = parseInt(columns[4]) || 2;
             
             const productRef = doc(collection(db, 'products'));
             batch.set(productRef, {
-              name: columns[0],
+              name: rawName,
               category: columns[1] || 'Geral',
+              gender: (columns[6] as any) || 'Ambos',
               costPrice: cPrice,
               sellingPrice: sPrice,
               margin: calculateMargin(cPrice, sPrice),
@@ -111,21 +139,27 @@ export default function Products() {
               variations: [],
               updatedAt: serverTimestamp()
             });
+            
+            processedInThisCSV.add(normalizedName);
             count++;
           }
         }
 
-        await batch.commit();
-        alert(`${count} produtos importados com sucesso!`);
+        if (count > 0) {
+          await batch.commit();
+          alert(`✅ Sucesso!\n\nImportados: ${count}\nIgnorados (já existentes): ${skipped}`);
+        } else {
+          alert(`ℹ️ Nenhum produto novo para importar.\n\nIgnorados: ${skipped}`);
+        }
       } catch (err: any) {
         console.error(err);
-        alert('Erro ao processar CSV. Use o formato: Nome, Categoria, Custo, Venda, Estoque Min');
+        alert('Erro ao processar CSV. Use o formato: Nome; Categoria; Custo; Venda; Estoque Min');
       } finally {
         setIsImporting(false);
         if (e.target) e.target.value = '';
       }
     };
-    reader.readAsText(file);
+    reader.readAsText(file, 'ISO-8859-1');
   };
 
   const addVariation = () => {
@@ -142,6 +176,7 @@ export default function Products() {
       const productData = {
         name,
         category,
+        gender,
         costPrice: cPrice,
         sellingPrice: sPrice,
         margin: calculateMargin(cPrice, sPrice),
@@ -319,6 +354,16 @@ export default function Products() {
                       <div className="flex gap-2 mt-2">
                         {product.isDropshipping && (
                           <div className="text-[8px] px-1.5 py-0.5 bg-amber-500 text-white font-black italic rounded uppercase tracking-tighter shadow-sm">DS</div>
+                        )}
+                        {product.gender && (
+                          <div className={cn(
+                            "text-[8px] px-1.5 py-0.5 font-black italic rounded uppercase tracking-tighter shadow-sm",
+                            product.gender === 'Masculino' ? "bg-blue-500 text-white" : 
+                            product.gender === 'Feminino' ? "bg-pink-500 text-white" : 
+                            "bg-slate-500 text-white"
+                          )}>
+                            {product.gender}
+                          </div>
                         )}
                         <div className="text-[9px] text-slate-400 font-black uppercase tracking-widest">Mg: {product.margin.toFixed(0)}%</div>
                         <div className="text-[9px] text-amber-600 font-black uppercase tracking-widest">Mk: {calculateMarkup(product.costPrice, product.sellingPrice).toFixed(0)}%</div>
@@ -520,6 +565,18 @@ export default function Products() {
                           onBlur={e => e.target.value === '' && setSellingPrice('0')}
                           className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-red-800 font-black text-sm transition-all"
                         />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Perfis/Público</label>
+                        <select 
+                          value={gender} 
+                          onChange={e => setGender(e.target.value as any)}
+                          className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-red-800 font-black text-sm transition-all uppercase"
+                        >
+                          <option value="Masculino">Masculino</option>
+                          <option value="Feminino">Feminino</option>
+                          <option value="Ambos">Ambos</option>
+                        </select>
                       </div>
                       <div className="space-y-1.5">
                         <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Estoque Mínimo</label>

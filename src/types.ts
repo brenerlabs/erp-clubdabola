@@ -9,6 +9,7 @@ export interface Product {
   id?: string;
   name: string;
   category: string;
+  gender?: 'Masculino' | 'Feminino' | 'Ambos';
   costPrice: number;
   sellingPrice: number;
   margin: number;

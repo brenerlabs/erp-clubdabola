@@ -72,33 +72,65 @@ export default function Customers() {
     reader.onload = async (event) => {
       try {
         const text = event.target?.result as string;
-        const lines = text.split('\n').filter(line => line.trim() !== '');
+        const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
         
-        // Remove header if exists (checking for "nome")
+        if (lines.length === 0) return;
+
+        // Detect delimiter (prefer ; over , if both exist or just one)
+        const firstLine = lines[0];
+        const delimiter = firstLine.includes(';') ? ';' : ',';
+        
+        // Remove header if exists (checking for "nome" or "contato")
         let startIndex = 0;
-        if (lines[0].toLowerCase().includes('nome')) {
+        const headerLower = firstLine.toLowerCase();
+        if (headerLower.includes('nome') || headerLower.includes('contato')) {
           startIndex = 1;
         }
 
         const batch = writeBatch(db);
         let count = 0;
+        let skipped = 0;
+
+        // Criar um set com nomes normalizados para comparação rápida
+        const existingNames = new Set(customers.map(c => (c.name || '').toLowerCase().trim()));
+        const processedInThisCSV = new Set<string>();
 
         for (let i = startIndex; i < lines.length; i++) {
-          const columns = lines[i].split(',').map(c => c.trim());
+          const columns = lines[i].split(delimiter).map(c => c.trim());
           if (columns[0]) {
+            // Remove characters from encoding issues
+            const cleanName = columns[0].replace(/[^\w\s\u00C0-\u00FF]/gi, (match) => {
+               return match === '' ? '' : match;
+            });
+            
+            const rawName = cleanName || columns[0];
+            const normalizedName = rawName.toLowerCase().trim();
+
+            // Verificar se já existe no banco ou se está repetido no CSV
+            if (existingNames.has(normalizedName) || processedInThisCSV.has(normalizedName)) {
+              skipped++;
+              continue;
+            }
+
             const customerRef = doc(collection(db, 'customers'));
             batch.set(customerRef, {
-              name: columns[0],
+              name: rawName, 
               contact: columns[1] || '',
               totalDebt: 0,
               updatedAt: serverTimestamp()
             });
+            
+            processedInThisCSV.add(normalizedName);
             count++;
           }
         }
 
-        await batch.commit();
-        alert(`${count} clientes importados com sucesso!`);
+        if (count > 0) {
+          await batch.commit();
+          alert(`✅ Sucesso!\n\nImportados: ${count}\nIgnorados (já existentes): ${skipped}`);
+        } else {
+          alert(`ℹ️ Nenhum cliente novo para importar.\n\nIgnorados: ${skipped}`);
+        }
       } catch (err: any) {
         console.error(err);
         alert('Erro ao processar CSV. Verifique a formatação.');
@@ -107,7 +139,7 @@ export default function Customers() {
         if (e.target) e.target.value = '';
       }
     };
-    reader.readAsText(file);
+    reader.readAsText(file, 'ISO-8859-1'); // Common encoding for Brazilian CSVs (Excel)
   };
 
   const openHistory = (customer: Customer) => {

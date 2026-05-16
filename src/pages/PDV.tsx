@@ -553,7 +553,19 @@ export default function PDV() {
           {filteredProducts.map(product => (
             <div key={product.id} className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm flex flex-col group hover:border-red-800/30 transition-all">
               <div className="mb-2">
-                <span className="px-1.5 py-0.5 bg-slate-100 text-[8px] font-black text-slate-400 rounded uppercase tracking-wider">{product.category}</span>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="px-1.5 py-0.5 bg-slate-100 text-[8px] font-black text-slate-400 rounded uppercase tracking-wider">{product.category}</span>
+                  {product.gender && (
+                    <span className={cn(
+                      "px-1.5 py-0.5 text-[8px] font-black rounded uppercase tracking-wider",
+                      product.gender === 'Masculino' ? "bg-blue-50 text-blue-600" : 
+                      product.gender === 'Feminino' ? "bg-pink-50 text-pink-600" : 
+                      "bg-slate-50 text-slate-400"
+                    )}>
+                      {product.gender === 'Ambos' ? 'UNI' : product.gender.substring(0, 3)}
+                    </span>
+                  )}
+                </div>
                 <h4 className="font-sans font-black text-slate-900 mt-1 line-clamp-1 leading-none text-xs uppercase tracking-tight">{product.name}</h4>
               </div>
               <div className="mt-auto space-y-2">
