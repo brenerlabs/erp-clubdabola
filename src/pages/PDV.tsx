@@ -447,7 +447,7 @@ export default function PDV() {
                       <Receipt size={24} className="text-white" />
                    </div>
                    <div>
-                      <h3 className="text-2xl font-black italic tracking-tighter uppercase font-serif">Detalhes da <span className="text-amber-500">Venda</span></h3>
+                      <h3 className="text-2xl font-bold tracking-tight uppercase font-display">Detalhes da <span className="text-amber-500">Venda</span></h3>
                       <p className="text-[9px] font-black uppercase text-white/40 tracking-[0.3em]">ID: {lastSale.id}</p>
                    </div>
                  </div>
@@ -494,7 +494,7 @@ export default function PDV() {
                   </div>
                   <div className="pt-3 border-t border-white/10 flex justify-between items-center">
                      <span className="text-xs font-black uppercase tracking-[0.2em] text-amber-500">Total da Venda</span>
-                     <span className="text-3xl font-black italic tracking-tighter">{formatCurrency(lastSale.total)}</span>
+                     <span className="text-3xl font-bold tracking-tight">{formatCurrency(lastSale.total)}</span>
                   </div>
                   {lastSale.downPayment > 0 && (
                     <div className="pt-3 border-t border-white/5 grid grid-cols-2 gap-4">
@@ -611,8 +611,8 @@ export default function PDV() {
               <ShoppingCart size={20} />
             </div>
             <div>
-              <h2 className="text-2xl md:text-3xl font-black italic tracking-tighter text-white leading-none">
-                Venda <span className="text-red-600 underline decoration-red-400 decoration-4 underline-offset-4 tracking-tighter font-black italic">Checkout</span>
+              <h2 className="text-2xl md:text-3xl font-bold tracking-tight text-white leading-none">
+                Venda <span className="text-red-600 underline decoration-red-400 decoration-4 underline-offset-4 tracking-tight font-bold">Checkout</span>
               </h2>
               <p className="text-[9px] font-bold text-white/40 uppercase tracking-[0.2em] font-sans mt-0.5">Finalização de pedido</p>
             </div>
@@ -820,7 +820,7 @@ export default function PDV() {
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-xs font-black text-amber-500 uppercase tracking-widest">Total Líquido</span>
-                  <span className="text-3xl font-black italic tracking-tighter text-white tabular-nums">{formatCurrency(total)}</span>
+                  <span className="text-3xl font-bold tracking-tight text-white tabular-nums">{formatCurrency(total)}</span>
                 </div>
               </div>
 

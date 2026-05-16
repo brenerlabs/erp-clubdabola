@@ -367,8 +367,8 @@ export default function Shipments() {
     >
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-black italic tracking-tighter text-slate-900 leading-none">
-            Rastreio de <span className="text-red-800 underline decoration-red-200 decoration-4 underline-offset-4 tracking-tighter font-black italic">Encomendas</span>
+          <h2 className="text-3xl font-bold tracking-tight text-slate-900 leading-none">
+            Rastreio de <span className="text-red-800 underline decoration-red-200 decoration-4 underline-offset-4 tracking-tight font-bold">Encomendas</span>
           </h2>
           <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.3em] font-sans mt-2">Gestão de Importação e Rastreamento</p>
         </div>
@@ -420,7 +420,7 @@ export default function Shipments() {
           <input 
             type="text" 
             placeholder="Search Rastreio ou Cliente..." 
-            className="w-full pl-12 pr-4 py-3 bg-white/60 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-red-800 transition-all shadow-sm outline-none text-sm font-black italic tracking-tight"
+            className="w-full pl-12 pr-4 py-3 bg-white/60 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-red-800 transition-all shadow-sm outline-none text-sm font-bold tracking-tight"
             value={search}
             onChange={e => setSearch(e.target.value)}
           />

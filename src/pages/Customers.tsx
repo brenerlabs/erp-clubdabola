@@ -274,8 +274,8 @@ export default function Customers() {
     >
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-black italic tracking-tighter text-slate-900 leading-none">
-            Gestão de <span className="text-red-800 underline decoration-red-200 decoration-4 underline-offset-4 tracking-tighter font-black italic">Clientes</span>
+          <h2 className="text-3xl font-bold tracking-tight text-slate-900 leading-none">
+            Gestão de <span className="text-red-800 underline decoration-red-200 decoration-4 underline-offset-4 tracking-tight font-bold">Clientes</span>
           </h2>
           <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.3em] font-sans mt-2">Base Global de Clientes e Créditos</p>
         </div>
@@ -359,7 +359,7 @@ export default function Customers() {
               <tr key={customer.id} className="hover:bg-slate-50/80 transition-colors group">
                 <td className="px-8 py-5">
                   <div className="flex flex-col">
-                    <div className="font-black text-slate-950 text-sm tracking-tight leading-tight uppercase underline decoration-red-200 decoration-2 underline-offset-2 font-sans italic">{customer.name}</div>
+                    <div className="font-bold text-slate-900 text-base tracking-tight leading-tight font-display">{customer.name}</div>
                     <div className="flex items-center gap-2 mt-2">
                        <span className="px-2 py-0.5 bg-slate-100 text-slate-400 text-[8px] font-black uppercase rounded tracking-widest font-mono">ERP ID: {customer.id?.slice(-4)}</span>
                        {customer.totalDebt > 0 ? (
@@ -378,7 +378,7 @@ export default function Customers() {
                 </td>
                 <td className="px-8 py-5 text-right font-display tabular-nums">
                   <div className={cn(
-                    "text-xl font-black italic tracking-tighter",
+                    "text-xl font-bold tracking-tight",
                     customer.totalDebt > 0 ? 'text-red-800' : 'text-slate-900'
                   )}>
                     {formatCurrency(customer.totalDebt)}
@@ -566,7 +566,7 @@ export default function Customers() {
                                  </div>
                                </div>
                                <p className={cn(
-                                 "text-sm font-black italic tracking-tighter font-serif",
+                                 "text-sm font-bold tracking-tight font-display",
                                  t.type === 'payment' ? "text-amber-600" : "text-red-800"
                                )}>
                                  {t.type === 'payment' ? '-' : '+'}{formatCurrency(t.amount)}
@@ -610,7 +610,7 @@ export default function Customers() {
                       <User size={24} />
                     </div>
                     <div>
-                      <h3 className="text-2xl font-black italic tracking-tighter uppercase">Exibição de Status: <span className="text-amber-500">{selectedCustomer.name}</span></h3>
+                      <h3 className="text-2xl font-bold tracking-tight uppercase font-display">Exibição de Status: <span className="text-amber-500">{selectedCustomer.name}</span></h3>
                       <p className="text-white/40 text-[10px] font-black uppercase tracking-[0.3em] font-sans">{selectedCustomer.contact} • Intelligence Audit</p>
                     </div>
                   </div>
@@ -735,7 +735,7 @@ export default function Customers() {
                         </div>
                       </div>
                       <div className={cn(
-                        "text-lg font-black italic tracking-tighter",
+                        "text-lg font-bold tracking-tight",
                         t.type === 'payment' ? 'text-amber-600' : 'text-red-800'
                       )}>
                         {t.type === 'payment' ? '-' : '+'}{formatCurrency(t.amount)}

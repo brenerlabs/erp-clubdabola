@@ -78,7 +78,7 @@ export default function App() {
   if (loading) return (
     <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-50 text-slate-900 gap-4">
       <div className="size-16 border-2 border-slate-200 border-t-red-800 rounded-full animate-spin" />
-      <p className="text-[10px] font-black uppercase tracking-[0.4em] animate-pulse">Intelligence Suite</p>
+      <p className="text-[10px] font-bold uppercase tracking-[0.4em] animate-pulse">Intelligence Suite</p>
     </div>
   );
 
@@ -97,7 +97,7 @@ export default function App() {
               <LayoutDashboard size={32} className="text-white" />
             </div>
             <div>
-              <h1 className="text-3xl font-black tracking-tight text-slate-900 font-sans">
+              <h1 className="text-3xl font-bold tracking-tight text-slate-900 font-display">
                 ERP CLUB DA <span className="text-red-800 uppercase">BOLA</span>
               </h1>
               <p className="mt-2 font-bold uppercase tracking-widest text-[9px] text-slate-400">
@@ -108,7 +108,7 @@ export default function App() {
           
           <button 
             onClick={login}
-            className="w-full py-5 px-8 rounded-2xl transition-all shadow-xl flex items-center justify-center gap-4 group/btn font-black uppercase tracking-widest text-xs bg-slate-900 text-white hover:bg-slate-800"
+            className="w-full py-5 px-8 rounded-2xl transition-all shadow-xl flex items-center justify-center gap-4 group/btn font-bold uppercase tracking-widest text-xs bg-slate-900 text-white hover:bg-slate-800"
           >
             <img src="https://www.google.com/favicon.ico" className="w-4 h-4" alt="Google" />
             Autenticação Digital
@@ -170,8 +170,8 @@ export default function App() {
                   <LayoutDashboard size={18} className="text-white" />
                 </div>
                 {(isSidebarOpen || isMobileMenuOpen) && (
-                  <h1 className="text-white font-black tracking-tighter leading-none text-xs font-sans">
-                    ERP CLUB DA <span className="text-amber-500 uppercase">BOLA</span>
+                  <h1 className="text-white font-bold tracking-tight leading-none text-sm font-display">
+                    ERP CLUB DA <span className="text-amber-500 uppercase font-display">BOLA</span>
                   </h1>
                 )}
               </motion.div>

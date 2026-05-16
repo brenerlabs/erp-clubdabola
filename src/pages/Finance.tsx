@@ -188,8 +188,8 @@ export default function Finance() {
     >
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-black italic tracking-tighter text-slate-900 leading-none">
-            Auditoria <span className="text-red-800 underline decoration-red-200 decoration-4 underline-offset-4 tracking-tighter font-black italic">Financeira</span>
+          <h2 className="text-3xl font-bold tracking-tight text-slate-900 leading-none">
+            Auditoria <span className="text-red-800 underline decoration-red-200 decoration-4 underline-offset-4 tracking-tight font-bold">Financeira</span>
           </h2>
           <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.3em] font-sans mt-2">Gestão de Ativos e Fluxo de Caixa</p>
         </div>
@@ -323,7 +323,7 @@ export default function Finance() {
                     </td>
                     <td className="px-8 py-5 text-right">
                       <span className={cn(
-                        "text-lg font-black italic tracking-tighter font-display tabular-nums",
+                        "text-lg font-bold tracking-tight font-display tabular-nums",
                         t.type === 'payment' ? "text-emerald-600" : "text-rose-500"
                       )}>
                         {t.type === 'payment' ? '+' : '-'}{formatCurrency(t.amount)}
@@ -425,7 +425,7 @@ function FinanceCard({ title, value, icon: Icon, color }: any) {
           "text-[10px] font-black uppercase tracking-[0.3em] mb-2 leading-none",
           color === 'red' || color === 'black' ? "text-white/40" : "text-slate-400"
         )}>{title}</p>
-        <h4 className="text-2xl font-black italic tracking-tighter leading-none font-display tabular-nums uppercase">{value}</h4>
+        <h4 className="text-2xl font-bold tracking-tight leading-none font-display tabular-nums uppercase">{value}</h4>
       </div>
     </motion.div>
   );

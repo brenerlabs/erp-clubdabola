@@ -24,6 +24,7 @@ export default function Products() {
   const [minStock, setMinStock] = useState<string>('2');
   const [isDropshipping, setIsDropshipping] = useState(false);
   const [variations, setVariations] = useState<Variation[]>([]);
+  const [lastAddedId, setLastAddedId] = useState<string | null>(null);
 
   useEffect(() => {
     const q = query(collection(db, 'products'), orderBy('name', 'asc'));
@@ -34,6 +35,7 @@ export default function Products() {
   }, []);
 
   const openModal = (product?: Product, isDuplicate = false) => {
+    setLastAddedId(null);
     if (product) {
       setName(isDuplicate ? `${product.name} (Cópia)` : product.name);
       setCategory(product.category);
@@ -163,7 +165,9 @@ export default function Products() {
   };
 
   const addVariation = () => {
-    setVariations([...variations, { id: Math.random().toString(36).substr(2, 9), size: '', color: '', stock: 0 }]);
+    const id = Math.random().toString(36).substr(2, 9);
+    setVariations([...variations, { id, size: '', color: '', stock: 0 }]);
+    setLastAddedId(id);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -237,8 +241,8 @@ export default function Products() {
     >
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-black italic tracking-tighter text-slate-900 leading-none">
-            Catálogo de <span className="text-red-800 underline decoration-red-200 decoration-4 underline-offset-4 tracking-tighter font-black italic">Produtos</span>
+          <h2 className="text-3xl font-bold tracking-tight text-slate-900 leading-none">
+            Catálogo de <span className="text-red-800 underline decoration-red-200 decoration-4 underline-offset-4 tracking-tight font-bold">Produtos</span>
           </h2>
           <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.3em] font-sans mt-2">Controle de Inventário e Margens</p>
         </div>
@@ -350,14 +354,14 @@ export default function Products() {
                       <Package size={20} />
                     </div>
                     <div>
-                      <div className="font-black text-slate-950 text-sm leading-none uppercase font-sans tracking-tight italic underline decoration-red-200 decoration-2 underline-offset-2">{product.name}</div>
+                      <div className="font-bold text-slate-900 text-sm leading-none font-display tracking-tight">{product.name}</div>
                       <div className="flex gap-2 mt-2">
                         {product.isDropshipping && (
-                          <div className="text-[8px] px-1.5 py-0.5 bg-amber-500 text-white font-black italic rounded uppercase tracking-tighter shadow-sm">DS</div>
+                          <div className="text-[8px] px-1.5 py-0.5 bg-amber-500 text-white font-bold rounded uppercase tracking-tight shadow-sm">DS</div>
                         )}
                         {product.gender && (
                           <div className={cn(
-                            "text-[8px] px-1.5 py-0.5 font-black italic rounded uppercase tracking-tighter shadow-sm",
+                            "text-[8px] px-1.5 py-0.5 font-bold rounded uppercase tracking-tight shadow-sm",
                             product.gender === 'Masculino' ? "bg-blue-500 text-white" : 
                             product.gender === 'Feminino' ? "bg-pink-500 text-white" : 
                             "bg-slate-500 text-white"
@@ -635,6 +639,7 @@ export default function Products() {
                         <div key={v.id} className="grid grid-cols-11 gap-2 items-center group/row">
                           <div className="col-span-3">
                             <input 
+                              autoFocus={v.id === lastAddedId}
                               placeholder="Tamanho"
                               className="w-full text-[10px] font-black uppercase px-2 py-2 border rounded-lg border-slate-200 bg-white focus:ring-1 focus:ring-red-800 outline-none"
                               value={v.size}
@@ -664,6 +669,12 @@ export default function Products() {
                               placeholder="Est"
                               className="w-full text-[10px] font-black uppercase px-2 py-2 border rounded-lg border-slate-200 bg-white font-black text-red-800 focus:ring-1 focus:ring-red-800 outline-none"
                               value={v.stock}
+                              onKeyDown={e => {
+                                if (e.key === 'Tab' && !e.shiftKey && i === variations.length - 1) {
+                                  e.preventDefault();
+                                  addVariation();
+                                }
+                              }}
                               onChange={e => {
                                 const next = [...variations];
                                 next[i].stock = e.target.value.replace(/[^0-9]/g, '') as any;
@@ -739,7 +750,7 @@ export default function Products() {
               <div className="size-20 bg-rose-50 text-rose-500 rounded-3xl flex items-center justify-center mx-auto mb-6">
                 <Trash2 size={40} strokeWidth={1.5} />
               </div>
-              <h3 className="text-xl font-black italic tracking-tighter text-slate-900 mb-2 uppercase">Excluir Produto?</h3>
+              <h3 className="text-xl font-bold tracking-tight text-slate-900 mb-2 uppercase font-display">Excluir Produto?</h3>
               <p className="text-sm font-medium text-slate-500 mb-8 leading-relaxed">
                 Você está prestes a remover <span className="font-black text-slate-900">"{productToDelete?.name}"</span>. Esta ação não poderá ser desfeita.
               </p>

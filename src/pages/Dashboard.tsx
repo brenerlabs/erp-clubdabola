@@ -263,8 +263,8 @@ export default function Dashboard() {
       {/* Header Summary */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-black italic tracking-tighter shadow-sm text-slate-950">
-            Painel de <span className="text-red-800 underline decoration-red-200 decoration-4 underline-offset-4 tracking-tighter font-black italic">Performance</span>
+          <h2 className="text-3xl font-bold tracking-tight shadow-sm text-slate-950">
+            Painel de <span className="text-red-800 underline decoration-red-200 decoration-4 underline-offset-4 tracking-tight font-bold">Performance</span>
           </h2>
           <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.3em] mt-2">Visão Geral de Performance e Operações</p>
         </div>
@@ -379,7 +379,7 @@ export default function Dashboard() {
               </div>
               <div>
                 <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest leading-none mb-1">Eficiência Receita</p>
-                <h4 className="text-xl font-black text-slate-900 leading-tight font-display tabular-nums">{stats.efficiencyRatio.toFixed(1)}%</h4>
+                <h4 className="text-xl font-bold text-slate-900 leading-tight font-display tabular-nums">{stats.efficiencyRatio.toFixed(1)}%</h4>
               </div>
            </div>
            <div className="text-right">
@@ -399,7 +399,7 @@ export default function Dashboard() {
               </div>
               <div>
                 <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest leading-none mb-1">Taxas Pagas</p>
-                <h4 className="text-xl font-black text-slate-900 leading-tight font-display tabular-nums">{formatCurrency(stats.paidTaxes)}</h4>
+                <h4 className="text-xl font-bold text-slate-900 leading-tight font-display tabular-nums">{formatCurrency(stats.paidTaxes)}</h4>
               </div>
            </div>
            <div className="text-right">
@@ -413,7 +413,7 @@ export default function Dashboard() {
               </div>
               <div>
                 <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest leading-none mb-1">Lotes Ativos</p>
-                <h4 className="text-xl font-black text-slate-900 leading-tight font-display tabular-nums">{shipments.filter(s => s.status !== 'Entregue').length}</h4>
+                <h4 className="text-xl font-bold text-slate-900 leading-tight font-display tabular-nums">{shipments.filter(s => s.status !== 'Entregue').length}</h4>
               </div>
            </div>
            <div className="text-right">
@@ -522,7 +522,7 @@ export default function Dashboard() {
              <div className="relative z-10">
                 <p className="text-[8px] font-black text-amber-500 uppercase tracking-[0.3em] mb-1">Performance Index</p>
                 <div className="flex items-end gap-2">
-                   <h4 className="text-3xl font-black italic tracking-tighter">94<span className="text-xl text-amber-500">.2</span></h4>
+                   <h4 className="text-3xl font-bold tracking-tight">94<span className="text-xl text-amber-500">.2</span></h4>
                    <p className="text-[8px] font-bold text-amber-400/60 mb-1 uppercase tracking-widest">+2.4%</p>
                 </div>
                 <div className="mt-4 flex gap-1.5 overflow-x-auto">
@@ -538,7 +538,7 @@ export default function Dashboard() {
                 <LayoutDashboard size={60} />
              </div>
              <div className="relative z-10">
-                <h4 className="text-sm font-black italic tracking-tighter mb-4 uppercase font-serif">Executive Directives</h4>
+                <h4 className="text-sm font-bold tracking-tight mb-4 uppercase font-display">Executive Directives</h4>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                    <div className="bg-black/20 backdrop-blur-sm p-3 rounded-2xl border border-white/5">
                       <p className="text-[8px] font-black text-amber-500 uppercase mb-1">Optimizar</p>
@@ -826,7 +826,7 @@ function StatCard({ title, value, icon: Icon, trend, positive, variant = 'glass'
           "text-[8px] font-black uppercase tracking-[0.2em] leading-none mb-1",
           variant === 'glass' ? "text-slate-400" : "text-white/40"
         )}>{title}</p>
-        <h3 className="text-2xl font-black tracking-tighter leading-none font-display tabular-nums uppercase">{value}</h3>
+        <h3 className="text-2xl font-bold tracking-tight leading-none font-display tabular-nums uppercase">{value}</h3>
       </div>
 
       <div className="mt-4 pt-3 border-t border-current/5 flex items-center justify-between">
