@@ -321,27 +321,27 @@ export default function PDV() {
     <motion.div 
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="h-full flex flex-col md:flex-row gap-6 relative pb-10"
+      className="h-full flex flex-col md:flex-row gap-4 md:gap-6 relative pb-6 md:pb-10"
     >
       {/* Mobile Cart Toggle Bar */}
-      <div className="md:hidden sticky top-0 bg-slate-950/95 backdrop-blur-md p-3 rounded-2xl text-white shadow-xl z-[45] flex items-center justify-between border border-white/5 mx-1">
+      <div className="md:hidden sticky top-0 bg-slate-950/95 backdrop-blur-md p-3 rounded-2xl text-white shadow-xl z-[45] flex items-center justify-between border border-white/5 mx-1 mb-2">
         <div className="flex items-center gap-2">
-          <div className="size-9 bg-red-800/20 rounded-lg flex items-center justify-center border border-red-800/30">
-            <ShoppingCart size={18} className="text-red-800" />
+          <div className="size-10 bg-red-800/20 rounded-xl flex items-center justify-center border border-red-800/30">
+            <ShoppingCart size={20} className="text-red-500" />
           </div>
           <div>
-            <p className="text-[8px] font-black uppercase tracking-widest text-white/50 leading-none mb-1 font-sans">Total Carrinho</p>
-            <p className="text-base font-black leading-none font-display tabular-nums tracking-tight">{formatCurrency(total)}</p>
+            <p className="text-[7px] font-black uppercase tracking-widest text-white/50 leading-none mb-1 font-sans">Subtotal</p>
+            <p className="text-lg font-black leading-none font-display tabular-nums tracking-tight">{formatCurrency(total)}</p>
           </div>
         </div>
         <button 
           onClick={() => setIsCartVisible(!isCartVisible)}
           className={cn(
-            "px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all shadow-lg",
+            "px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all shadow-lg",
             isCartVisible ? "bg-slate-800 text-white" : "bg-red-800 text-white shadow-red-800/20"
           )}
         >
-          {isCartVisible ? 'Voltar aos Produtos' : 'Finalizar Pedido'}
+          {isCartVisible ? 'Voltar' : 'Finalizar'}
         </button>
       </div>
 
@@ -536,15 +536,17 @@ export default function PDV() {
         "flex-1 flex flex-col gap-6 overflow-hidden transition-all duration-300",
         isCartVisible ? "hidden md:flex" : "flex"
       )}>
-        <div className="relative">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 size-6" />
-          <input 
-            type="text" 
-            placeholder="Buscar por nome ou código..." 
-            className="w-full pl-14 pr-6 py-4 bg-white border border-gray-100 rounded-2xl shadow-sm outline-none focus:ring-2 focus:ring-blue-500 font-medium text-sm md:text-base"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
+        <div className="sticky top-0 z-20 bg-slate-50/80 backdrop-blur-md pb-4 pt-1">
+          <div className="relative group">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-red-800 transition-colors size-6" />
+            <input 
+              type="text" 
+              placeholder="Buscar por nome ou categoria..." 
+              className="w-full pl-14 pr-6 py-4 bg-white border border-gray-100 rounded-2xl shadow-sm outline-none focus:ring-2 focus:ring-red-800/20 focus:border-red-800 font-black text-sm md:text-base uppercase tracking-tight placeholder:text-slate-300 transition-all"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 pb-4">
@@ -552,7 +554,7 @@ export default function PDV() {
             <div key={product.id} className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm flex flex-col group hover:border-red-800/30 transition-all">
               <div className="mb-2">
                 <span className="px-1.5 py-0.5 bg-slate-100 text-[8px] font-black text-slate-400 rounded uppercase tracking-wider">{product.category}</span>
-                <h4 className="font-sans font-black text-slate-900 mt-1 line-clamp-1 leading-none text-[10px] md:text-[11px] uppercase tracking-tight">{product.name}</h4>
+                <h4 className="font-sans font-black text-slate-900 mt-1 line-clamp-1 leading-none text-xs uppercase tracking-tight">{product.name}</h4>
               </div>
               <div className="mt-auto space-y-2">
                 <div className="text-xs md:text-sm font-black text-red-800 font-display tabular-nums leading-none">{formatCurrency(product.sellingPrice)}</div>
@@ -565,7 +567,7 @@ export default function PDV() {
                         addToCart(product, v);
                       }}
                       className={cn(
-                        "text-[9px] py-1 border rounded font-black transition-all truncate uppercase relative",
+                        "text-[10px] py-2 md:py-1 border rounded font-black transition-all truncate uppercase relative",
                         (!product.isDropshipping && v.stock <= 0) 
                           ? "bg-gray-50 border-gray-100 text-gray-200 cursor-not-allowed opacity-40 shadow-none scale-100" 
                           : "bg-white border-slate-200 text-slate-600 hover:border-red-800 hover:bg-red-50 hover:text-red-800 active:scale-95 shadow-sm",
@@ -587,221 +589,244 @@ export default function PDV() {
         "w-full md:w-[400px] flex flex-col gap-6 h-full transition-all duration-300",
         isCartVisible ? "flex" : "hidden md:flex"
       )}>
-        <div className="bg-slate-950 text-white rounded-[32px] p-6 flex flex-col flex-1 shadow-2xl relative overflow-hidden border border-slate-900">
+        <div className="bg-slate-950 text-white rounded-2xl md:rounded-[32px] p-4 md:p-6 flex flex-col h-full shadow-2xl relative overflow-hidden border border-slate-900">
           <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
             <ShoppingCart size={120} />
           </div>
           
-          <div className="flex items-center gap-3 mb-6 relative">
+          <div className="flex items-center gap-3 mb-4 md:mb-6 shrink-0 relative">
             <div className="size-10 bg-red-800 rounded-xl flex items-center justify-center shadow-lg shadow-red-900/20">
               <ShoppingCart size={20} />
             </div>
             <div>
-              <h2 className="text-3xl font-black italic tracking-tighter text-white leading-none">
+              <h2 className="text-2xl md:text-3xl font-black italic tracking-tighter text-white leading-none">
                 Venda <span className="text-red-600 underline decoration-red-400 decoration-4 underline-offset-4 tracking-tighter font-black italic">Checkout</span>
               </h2>
               <p className="text-[9px] font-bold text-white/40 uppercase tracking-[0.2em] font-sans mt-0.5">Finalização de pedido</p>
             </div>
             <span className="ml-auto bg-white/10 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider text-amber-500">
-              {cart.reduce((a, b) => a + b.quantity, 0)} Itens
+              {cart.reduce((a, b) => a + b.quantity, 0)}
             </span>
           </div>
 
-          <div className="flex-1 overflow-y-auto space-y-3 pr-2 -mr-2 relative">
-            {cart.length === 0 && (
-              <div className="h-full flex flex-col items-center justify-center opacity-30 gap-4">
-                <div className="size-16 rounded-full border-2 border-dashed border-white flex items-center justify-center">
-                  <Plus />
-                </div>
-                <p className="font-black text-sm tracking-tight uppercase">Adicione produtos</p>
-              </div>
-            )}
-            {cart.map(item => (
-              <motion.div 
-                layout
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                key={item.variationId} 
-                className="bg-white/10 rounded-2xl p-4 border border-white/10 hover:border-red-500/50 transition-all shadow-lg group/item"
-              >
-                <div className="flex justify-between items-start mb-2">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                       <p className="font-black text-xs leading-tight text-white uppercase group-hover/item:text-amber-400 transition-colors">{item.name}</p>
-                       {item.isDropshipping && (
-                         <span className="text-[7px] font-black bg-amber-500 text-white px-1.5 py-0.5 rounded italic animate-pulse">DS</span>
-                       )}
-                    </div>
-                    <p className="text-[8px] font-black text-white/30 mt-1 uppercase tracking-widest">{item.variationName}</p>
-                  </div>
-                  <p className="font-black text-sm ml-2 text-white tabular-nums tracking-tighter">{formatCurrency(item.price * item.quantity)}</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center bg-black/40 rounded-xl p-1 border border-white/5 shadow-inner">
-                    <button onClick={() => updateQuantity(item.productId, item.variationId, -1)} className="size-8 flex items-center justify-center hover:bg-white/10 rounded-lg transition-colors text-white/60 hover:text-white"><Minus size={14} /></button>
-                    <span className="w-10 text-center font-black text-sm text-white tabular-nums">{item.quantity}</span>
-                    <button onClick={() => updateQuantity(item.productId, item.variationId, 1)} className="size-8 flex items-center justify-center hover:bg-white/10 rounded-lg transition-colors text-white/60 hover:text-white"><Plus size={14} /></button>
-                  </div>
-                  <div className="text-[9px] font-black text-white/30 uppercase tracking-widest">Un: {formatCurrency(item.price)}</div>
-                  <button 
-                    onClick={() => setCart(cart.filter(c => c.variationId !== item.variationId))}
-                    className="ml-auto size-9 flex items-center justify-center text-red-500/40 hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-all"
+          <div className="flex-1 flex flex-col min-h-0 relative overflow-hidden">
+            {/* Scrollable Area for Cart and Fields */}
+            <div className="flex-1 overflow-y-auto pr-1 -mr-1 custom-scrollbar space-y-6 pb-20">
+              {/* Checkout Form (Top) */}
+              <div className="space-y-4 pb-6 border-b border-white/10">
+                 <div className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-2">Informações da Venda</div>
+                 {/* Customer Selector */}
+                 <div className="relative group">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 size-4 group-focus-within:text-amber-500" />
+                  <select 
+                    className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs font-black uppercase outline-none appearance-none hover:bg-white/10 focus:ring-1 focus:ring-amber-500 transition-all text-white/80"
+                    value={selectedCustomer?.id || ''}
+                    onChange={e => {
+                      const c = customers.find(cust => cust.id === e.target.value);
+                      setSelectedCustomer(c || null);
+                    }}
                   >
-                    <Trash2 size={18} />
-                  </button>
+                    <option value="" className="bg-slate-900 text-white">Consumidor Final</option>
+                    {customers.map(c => <option key={c.id} value={c.id} className="bg-slate-900 text-white">{c.name}</option>)}
+                  </select>
                 </div>
-              </motion.div>
-            ))}
-          </div>
+                {selectedCustomer && (
+                  <motion.div 
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    className="px-4 py-2 bg-red-800/10 border border-red-800/20 rounded-xl flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-2">
+                      <User size={12} className="text-red-400" />
+                      <span className="text-[10px] font-black uppercase text-red-200">{selectedCustomer.name}</span>
+                    </div>
+                    <button onClick={() => setSelectedCustomer(null)} className="text-red-400 hover:text-white transition-colors">
+                      <Trash2 size={12} />
+                    </button>
+                  </motion.div>
+                )}
 
-          <div className="mt-6 space-y-4 pt-6 border-t border-white/10 relative">
-            {/* Customer Selector */}
-            <div className="relative group">
-              <User className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 size-4 group-focus-within:text-amber-500" />
-              <select 
-                className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs font-black uppercase outline-none appearance-none hover:bg-white/10 focus:ring-1 focus:ring-amber-500 transition-all text-white/80"
-                value={selectedCustomer?.id || ''}
-                onChange={e => {
-                  const c = customers.find(cust => cust.id === e.target.value);
-                  setSelectedCustomer(c || null);
-                }}
-              >
-                <option value="" className="bg-slate-900 text-white">Consumidor Final</option>
-                {customers.map(c => <option key={c.id} value={c.id} className="bg-slate-900 text-white">{c.name}</option>)}
-              </select>
-            </div>
-            {selectedCustomer && (
-              <motion.div 
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                className="px-4 py-2 bg-red-800/10 border border-red-800/20 rounded-xl flex items-center justify-between"
-              >
-                <div className="flex items-center gap-2">
-                  <User size={12} className="text-red-400" />
-                  <span className="text-[10px] font-black uppercase text-red-200">{selectedCustomer.name}</span>
+                {/* Payment Methods */}
+                <div className="grid grid-cols-4 gap-2">
+                  {[
+                    { id: 'Dinheiro', icon: Banknote },
+                    { id: 'Pix', icon: QrCode },
+                    { id: 'Cartão', icon: CreditCard },
+                    { id: 'Fiado', icon: ClipboardList },
+                  ].map(method => (
+                    <button
+                      key={method.id}
+                      onClick={() => setPaymentMethod(method.id as any)}
+                      className={cn(
+                        "flex flex-col items-center gap-1 p-2 rounded-xl transition-all border",
+                        paymentMethod === method.id 
+                          ? "bg-red-800 border-amber-500 text-white shadow-lg shadow-red-900/10" 
+                          : "bg-white/5 border-white/5 text-white/40 hover:bg-white/10 hover:text-white"
+                      )}
+                    >
+                      <method.icon size={18} />
+                      <span className="text-[8px] font-black uppercase tracking-tight">{method.id}</span>
+                    </button>
+                  ))}
                 </div>
-                <button onClick={() => setSelectedCustomer(null)} className="text-red-400 hover:text-white transition-colors">
-                  <Trash2 size={12} />
-                </button>
-              </motion.div>
-            )}
 
-            {/* Payment Methods */}
-            <div className="grid grid-cols-4 gap-2">
-              {[
-                { id: 'Dinheiro', icon: Banknote },
-                { id: 'Pix', icon: QrCode },
-                { id: 'Cartão', icon: CreditCard },
-                { id: 'Fiado', icon: ClipboardList },
-              ].map(method => (
-                <button
-                  key={method.id}
-                  onClick={() => setPaymentMethod(method.id as any)}
-                  className={cn(
-                    "flex flex-col items-center gap-1 p-2 rounded-xl transition-all border",
-                    paymentMethod === method.id 
-                      ? "bg-red-800 border-amber-500 text-white shadow-lg shadow-red-900/10" 
-                      : "bg-white/5 border-white/5 text-white/40 hover:bg-white/10 hover:text-white"
-                  )}
-                >
-                  <method.icon size={18} />
-                  <span className="text-[8px] font-black uppercase tracking-tight">{method.id}</span>
-                </button>
-              ))}
+                {paymentMethod === 'Fiado' && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="relative group"
+                  >
+                    <Banknote className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 size-4 group-focus-within:text-emerald-400" />
+                    <input 
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="Valor de Entrada (Opcional)"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs font-bold outline-none hover:bg-white/10 focus:ring-1 focus:ring-emerald-500 transition-all text-white/80"
+                      value={downPayment}
+                      onChange={e => setDownPayment(e.target.value.replace(/[^0-9,.]/g, ''))}
+                      onFocus={e => e.target.value === '0' ? setDownPayment('') : null}
+                      onBlur={e => e.target.value === '' ? setDownPayment('') : null}
+                    />
+                  </motion.div>
+                )}
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="relative group">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 text-[10px] font-black group-focus-within:text-amber-400">% Desc.</span>
+                    <input 
+                      type="text"
+                      inputMode="decimal"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl pl-16 pr-4 py-2.5 text-xs font-bold outline-none hover:bg-white/10 focus:ring-1 focus:ring-amber-500 transition-all text-white/80"
+                      value={discountPerc}
+                      onChange={e => {
+                        const val = e.target.value.replace(/[^0-9,.]/g, '');
+                        handleDiscountPercChange(val);
+                      }}
+                      onFocus={e => e.target.value === '0' ? setDiscountPerc('') : null}
+                      onBlur={e => e.target.value === '' ? setDiscountPerc('0') : null}
+                    />
+                  </div>
+                  <div className="relative group">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 text-[10px] font-black group-focus-within:text-amber-400">R$ Desc.</span>
+                    <input 
+                      type="text"
+                      inputMode="decimal"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl pl-16 pr-4 py-2.5 text-xs font-bold outline-none hover:bg-white/10 focus:ring-1 focus:ring-amber-500 transition-all text-white/80"
+                      value={discountVal}
+                      onChange={e => {
+                        const val = e.target.value.replace(/[^0-9,.]/g, '');
+                        handleDiscountValChange(val);
+                      }}
+                      onFocus={e => e.target.value === '0' ? setDiscountVal('') : null}
+                      onBlur={e => e.target.value === '' ? setDiscountVal('0') : null}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="relative group font-sans">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 text-[9px] font-black group-focus-within:text-white uppercase tracking-widest leading-none">Venda em:</span>
+                    <input 
+                      type="date"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl pl-24 pr-4 py-2.5 text-xs font-black outline-none hover:bg-white/10 focus:ring-1 focus:ring-red-800 transition-all text-white/90"
+                      value={saleDate}
+                      onChange={e => setSaleDate(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-3 px-4 py-2 bg-white/5 rounded-xl border border-white/10 cursor-pointer group hover:bg-white/10 transition-all" onClick={() => setSendWhatsAppOnFinish(!sendWhatsAppOnFinish)}>
+                    <div className={cn(
+                      "size-5 rounded flex items-center justify-center border transition-all",
+                      sendWhatsAppOnFinish ? "bg-amber-500 border-amber-600 text-slate-950" : "bg-transparent border-white/20"
+                    )}>
+                      {sendWhatsAppOnFinish && <MessageCircle size={12} />}
+                    </div>
+                    <span className="text-[10px] font-black uppercase text-white/60 group-hover:text-white transition-colors tracking-widest">WhatsApp</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Cart Items List */}
+              <div className="space-y-3">
+                <div className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-2">Itens no Carrinho ({cart.length})</div>
+                {cart.length === 0 && (
+                  <div className="py-12 flex flex-col items-center justify-center opacity-30 gap-4">
+                    <div className="size-16 rounded-full border-2 border-dashed border-white flex items-center justify-center">
+                      <Plus />
+                    </div>
+                    <p className="font-black text-sm tracking-tight uppercase">Carrinho Vazio</p>
+                  </div>
+                )}
+                <AnimatePresence mode="popLayout">
+                  {cart.map(item => (
+                    <motion.div 
+                      layout
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, scale: 0.8 }}
+                      key={item.variationId} 
+                      className="bg-white/10 rounded-2xl p-4 border border-white/10 hover:border-red-500/50 transition-all shadow-lg group/item"
+                    >
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                             <p className="font-black text-xs leading-tight text-white uppercase group-hover/item:text-amber-400 transition-colors">{item.name}</p>
+                             {item.isDropshipping && (
+                               <span className="text-[7px] font-black bg-amber-500 text-white px-1.5 py-0.5 rounded italic animate-pulse">DS</span>
+                             )}
+                          </div>
+                          <p className="text-[8px] font-black text-white/30 mt-1 uppercase tracking-widest">{item.variationName}</p>
+                        </div>
+                        <p className="font-black text-sm ml-2 text-white tabular-nums tracking-tighter">{formatCurrency(item.price * item.quantity)}</p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center bg-black/40 rounded-xl p-1 border border-white/5 shadow-inner">
+                          <button onClick={() => updateQuantity(item.productId, item.variationId, -1)} className="size-8 flex items-center justify-center hover:bg-white/10 rounded-lg transition-colors text-white/60 hover:text-white"><Minus size={14} /></button>
+                          <span className="w-10 text-center font-black text-sm text-white tabular-nums">{item.quantity}</span>
+                          <button onClick={() => updateQuantity(item.productId, item.variationId, 1)} className="size-8 flex items-center justify-center hover:bg-white/10 rounded-lg transition-colors text-white/60 hover:text-white"><Plus size={14} /></button>
+                        </div>
+                        <div className="text-[9px] font-black text-white/30 uppercase tracking-widest">Un: {formatCurrency(item.price)}</div>
+                        <button 
+                          onClick={() => setCart(cart.filter(c => c.variationId !== item.variationId))}
+                          className="ml-auto size-9 flex items-center justify-center text-red-500/40 hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-all"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+              </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
-              <div className="relative group">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 text-[10px] font-black group-focus-within:text-amber-400">% Desc.</span>
-                <input 
-                  type="text"
-                  inputMode="decimal"
-                  className="w-full bg-white/5 border border-white/10 rounded-xl pl-16 pr-4 py-2.5 text-xs font-bold outline-none hover:bg-white/10 focus:ring-1 focus:ring-amber-500 transition-all text-white/80"
-                  value={discountPerc}
-                  onChange={e => {
-                    const val = e.target.value.replace(/[^0-9,.]/g, '');
-                    handleDiscountPercChange(val);
-                  }}
-                  onFocus={e => e.target.value === '0' ? setDiscountPerc('') : null}
-                  onBlur={e => e.target.value === '' ? setDiscountPerc('0') : null}
-                />
+            {/* Sticky Bottom Summary */}
+            <div className="mt-auto space-y-4 pt-6 border-t border-white/10 shrink-0 bg-slate-950 z-10 -mx-4 md:-mx-6 px-4 md:px-6">
+              <div className="flex flex-col gap-1 px-4 py-3 bg-white/5 rounded-2xl border border-white/5 font-display">
+                <div className="flex justify-between items-center opacity-40">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-white">Subtotal</span>
+                  <span className="text-sm font-black text-white tabular-nums tracking-tight">{formatCurrency(subtotal)}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-black text-amber-500 uppercase tracking-widest">Total Líquido</span>
+                  <span className="text-3xl font-black italic tracking-tighter text-white tabular-nums">{formatCurrency(total)}</span>
+                </div>
               </div>
-              <div className="relative group">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 text-[10px] font-black group-focus-within:text-amber-400">R$ Desc.</span>
-                <input 
-                  type="text"
-                  inputMode="decimal"
-                  className="w-full bg-white/5 border border-white/10 rounded-xl pl-16 pr-4 py-2.5 text-xs font-bold outline-none hover:bg-white/10 focus:ring-1 focus:ring-amber-500 transition-all text-white/80"
-                  value={discountVal}
-                  onChange={e => {
-                    const val = e.target.value.replace(/[^0-9,.]/g, '');
-                    handleDiscountValChange(val);
-                  }}
-                  onFocus={e => e.target.value === '0' ? setDiscountVal('') : null}
-                  onBlur={e => e.target.value === '' ? setDiscountVal('0') : null}
-                />
-              </div>
-            </div>
 
-            {paymentMethod === 'Fiado' && (
-              <motion.div 
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="relative group"
+              {paymentMethod === 'Fiado' && !selectedCustomer && (
+                <div className="bg-red-950/50 border border-red-800/50 p-2 rounded-xl text-center">
+                  <p className="text-[9px] font-black uppercase text-red-400">Selecione um cliente para Fiado</p>
+                </div>
+              )}
+
+              <button 
+                disabled={isFinishing || cart.length === 0 || (paymentMethod === 'Fiado' && !selectedCustomer)}
+                onClick={finishSale}
+                className="w-full bg-red-800 hover:bg-black disabled:bg-slate-900 disabled:text-slate-700 disabled:shadow-none text-white font-black py-5 rounded-2xl transition-all shadow-xl shadow-red-900/30 flex items-center justify-center gap-3 active:scale-[0.98] uppercase tracking-widest text-xs mb-2 md:mb-0"
               >
-                <Banknote className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 size-4 group-focus-within:text-emerald-400" />
-                <input 
-                  type="text"
-                  inputMode="decimal"
-                  placeholder="Valor de Entrada (Opcional)"
-                  className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs font-bold outline-none hover:bg-white/10 focus:ring-1 focus:ring-emerald-500 transition-all text-white/80"
-                  value={downPayment}
-                  onChange={e => setDownPayment(e.target.value.replace(/[^0-9,.]/g, ''))}
-                  onFocus={e => e.target.value === '0' ? setDownPayment('') : null}
-                  onBlur={e => e.target.value === '' ? setDownPayment('') : null}
-                />
-              </motion.div>
-            )}
-
-            <div className="relative group font-sans">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 text-[9px] font-black group-focus-within:text-white uppercase tracking-widest leading-none">Venda em:</span>
-              <input 
-                type="date"
-                className="w-full bg-white/5 border border-white/10 rounded-xl pl-24 pr-4 py-2.5 text-xs font-black outline-none hover:bg-white/10 focus:ring-1 focus:ring-red-800 transition-all text-white/90"
-                value={saleDate}
-                onChange={e => setSaleDate(e.target.value)}
-              />
+                {isFinishing ? 'PROCESSANDO...' : 'FINALIZAR VENDA'}
+                {!isFinishing && <Send size={20} />}
+              </button>
             </div>
-
-            <div className="flex items-center gap-3 px-4 py-2 bg-white/5 rounded-xl border border-white/10 cursor-pointer group hover:bg-white/10 transition-all" onClick={() => setSendWhatsAppOnFinish(!sendWhatsAppOnFinish)}>
-              <div className={cn(
-                "size-5 rounded flex items-center justify-center border transition-all",
-                sendWhatsAppOnFinish ? "bg-amber-500 border-amber-600 text-slate-950" : "bg-transparent border-white/20"
-              )}>
-                {sendWhatsAppOnFinish && <MessageCircle size={12} />}
-              </div>
-              <span className="text-[10px] font-black uppercase text-white/60 group-hover:text-white transition-colors tracking-widest">Enviar WhatsApp ao Finalizar</span>
-            </div>
-
-            <div className="flex flex-col gap-1 px-4 py-3 bg-white/5 rounded-2xl border border-white/5 font-display">
-              <div className="flex justify-between items-center opacity-40">
-                <span className="text-[10px] font-black uppercase tracking-widest text-white">Subtotal</span>
-                <span className="text-sm font-black text-white tabular-nums tracking-tight">{formatCurrency(subtotal)}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-xs font-black text-amber-500 uppercase tracking-widest">Total Líquido</span>
-                <span className="text-3xl font-black italic tracking-tighter text-white tabular-nums">{formatCurrency(total)}</span>
-              </div>
-            </div>
-
-            <button 
-              disabled={isFinishing || cart.length === 0}
-              onClick={finishSale}
-              className="w-full bg-red-800 hover:bg-black disabled:bg-slate-900 disabled:text-slate-700 disabled:shadow-none text-white font-black py-5 rounded-2xl transition-all shadow-xl shadow-red-900/30 flex items-center justify-center gap-3 active:scale-[0.98] uppercase tracking-widest text-xs"
-            >
-              {isFinishing ? 'PROCESSANDO...' : 'FINALIZAR VENDA'}
-              {!isFinishing && <Send size={20} />}
-            </button>
           </div>
         </div>
       </div>
