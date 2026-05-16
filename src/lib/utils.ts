@@ -28,21 +28,23 @@ export function cleanObject(obj: any): any {
   if (obj === null || obj === undefined) return obj;
   if (obj instanceof Date) return obj;
   
-  // Only clean plain objects and arrays
-  const isPlainObject = obj.constructor === Object;
-  const isArray = Array.isArray(obj);
-
-  if (!isPlainObject && !isArray) return obj;
-
-  if (isArray) {
+  if (Array.isArray(obj)) {
     return obj.map(item => cleanObject(item));
   }
-  
+
+  const isPlainObject = obj !== null && typeof obj === 'object' && obj.constructor === Object;
+  if (!isPlainObject) return obj;
+
   const cleaned: any = {};
   Object.keys(obj).forEach(key => {
     const value = obj[key];
     if (value !== undefined) {
-      cleaned[key] = cleanObject(value);
+      const cleanedValue = cleanObject(value);
+      if (typeof cleanedValue === 'number' && isNaN(cleanedValue)) {
+        cleaned[key] = 0;
+      } else {
+        cleaned[key] = cleanedValue;
+      }
     }
   });
   return cleaned;

@@ -41,14 +41,14 @@ service cloud.firestore {
              data.total is number &&
              data.paymentMethod in ['Dinheiro', 'Cartão', 'Pix', 'Fiado'] &&
              data.status in ['Concluída', 'Pendente'] &&
-             (data.get('createdAt', null) == null || data.createdAt == request.time);
+             (data.createdAt is timestamp || data.createdAt == request.time);
     }
 
     function isValidTransaction(data) {
-      return data.customerId is string &&
+      return (data.customerId is string || data.customerId == null) &&
              data.amount is number &&
              data.type in ['payment', 'debt'] &&
-             data.createdAt == request.time;
+             (data.createdAt is timestamp || data.createdAt == request.time);
     }
 
     function isValidShipment(data) {

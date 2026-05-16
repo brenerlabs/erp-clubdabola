@@ -73,11 +73,15 @@ export default function PDV() {
     }).filter(item => item.quantity > 0));
   };
 
+  const safeFloat = (val: string | number) => {
+    const f = parseFloat(val.toString().replace(',', '.'));
+    return isFinite(f) ? f : 0;
+  };
+
   const subtotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
-  const total = Math.max(0, subtotal - (parseFloat(discountVal) || 0));
+  const total = Math.max(0, subtotal - safeFloat(discountVal));
 
   const handleDiscountPercChange = (valStr: string) => {
-    // Replace comma with dot for calculation
     const val = valStr.replace(',', '.');
     setDiscountPerc(valStr);
     const p = parseFloat(val) || 0;
@@ -104,16 +108,26 @@ export default function PDV() {
     try {
       const batch = writeBatch(db);
       
-      const finalDownPayment = parseFloat(downPayment.replace(',', '.')) || 0;
-      const finalDiscount = parseFloat(discountVal.replace(',', '.')) || 0;
-      const debtAmount = total - finalDownPayment;
-      const finalDate = saleDate ? new Date(saleDate + 'T12:00:00') : new Date();
+      const subtotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+      const finalDiscount = safeFloat(discountVal);
+      const finalDownPayment = safeFloat(downPayment);
+      const saleTotal = Math.max(0, subtotal - finalDiscount);
+      const debtAmount = paymentMethod === 'Fiado' ? Math.max(0, saleTotal - finalDownPayment) : 0;
+
+      // Ensure stable date
+      let finalDate: Date;
+      try {
+        finalDate = saleDate ? new Date(saleDate + 'T12:00:00') : new Date();
+        if (isNaN(finalDate.getTime())) finalDate = new Date();
+      } catch (e) {
+        finalDate = new Date();
+      }
 
       // 1. Create Sale Record
       const saleRef = doc(collection(db, 'sales'));
       const finalStatus = paymentMethod === 'Fiado' && debtAmount > 0 ? 'Pendente' : 'Concluída';
       
-      batch.set(saleRef, cleanObject({
+      const saleData = {
         customerId: selectedCustomer?.id || null,
         customerName: selectedCustomer?.name || 'Consumidor Final',
         items: cart.map(item => ({
@@ -123,31 +137,35 @@ export default function PDV() {
           variationName: item.variationName || '',
           quantity: item.quantity || 0,
           price: item.price || 0,
-          isDropshipping: item.isDropshipping || false
+          isDropshipping: !!item.isDropshipping
         })),
         subtotal,
         discount: finalDiscount,
-        total,
+        total: saleTotal,
         downPayment: finalDownPayment,
+        debtAmount,
         paymentMethod,
         status: finalStatus,
-        createdAt: finalDate, // Using custom date for logic
-        systemCreatedAt: serverTimestamp(), // Record when it actually entered the DB
+        createdAt: finalDate,
+        systemCreatedAt: serverTimestamp(),
+        customerContact: selectedCustomer?.contact || null,
         history: [{
           status: finalStatus,
           updatedAt: finalDate,
           notes: 'Venda finalizada no PDV'
         }]
-      }));
+      };
+
+      batch.set(saleRef, cleanObject(saleData));
 
       // 2. Update Stock (Skip for dropshipping)
       cart.forEach(item => {
-        if (item.isDropshipping) return; // Skip stock update for DS products
+        if (item.isDropshipping) return;
         
         const product = products.find(p => p.id === item.productId);
         if (product) {
           const nextVariations = product.variations.map(v => 
-            v.id === item.variationId ? { ...v, stock: v.stock - item.quantity } : v
+            v.id === item.variationId ? { ...v, stock: Math.max(0, v.stock - item.quantity) } : v
           );
           const nextTotalStock = nextVariations.reduce((acc, v) => acc + v.stock, 0);
           batch.update(doc(db, 'products', item.productId), cleanObject({
@@ -161,20 +179,18 @@ export default function PDV() {
       // 3. Update Customer Debt and Transactions
       if (selectedCustomer) {
         if (paymentMethod === 'Fiado') {
-          // If there's an entry payment
           if (finalDownPayment > 0) {
             const entryTransRef = doc(collection(db, 'transactions'));
             batch.set(entryTransRef, cleanObject({
               customerId: selectedCustomer.id || null,
               amount: finalDownPayment,
               type: 'payment',
-              paymentMethod: 'Dinheiro', // Default to Dinheiro for entry
+              paymentMethod: 'Dinheiro',
               saleId: saleRef.id,
               createdAt: finalDate
             }));
           }
 
-          // The remaining debt
           if (debtAmount > 0) {
             batch.update(doc(db, 'customers', selectedCustomer.id!), cleanObject({
               totalDebt: (selectedCustomer.totalDebt || 0) + debtAmount,
@@ -191,25 +207,23 @@ export default function PDV() {
             }));
           }
         } else {
-          // Non-Fiado sale with customer: record payment transaction
           const paymentTransRef = doc(collection(db, 'transactions'));
           batch.set(paymentTransRef, cleanObject({
             customerId: selectedCustomer.id || null,
-            amount: total,
+            amount: saleTotal,
             type: 'payment',
-            paymentMethod: paymentMethod,
+            paymentMethod,
             saleId: saleRef.id,
             createdAt: finalDate
           }));
         }
       } else {
-        // Consumidor Final (No customer record): still log transaction for cash flow
         const paymentTransRef = doc(collection(db, 'transactions'));
         batch.set(paymentTransRef, cleanObject({
           customerId: 'Consumidor Final',
-          amount: total,
+          amount: saleTotal,
           type: 'payment',
-          paymentMethod: paymentMethod,
+          paymentMethod,
           saleId: saleRef.id,
           createdAt: finalDate
         }));
@@ -222,7 +236,7 @@ export default function PDV() {
         customerName: selectedCustomer?.name || 'Consumidor Final',
         customerContact: selectedCustomer?.contact || null,
         items: [...cart],
-        total,
+        total: saleTotal,
         downPayment: finalDownPayment,
         debtAmount: debtAmount,
         paymentMethod,
