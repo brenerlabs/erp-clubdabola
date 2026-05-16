@@ -115,12 +115,15 @@ export default function PDV() {
       const debtAmount = paymentMethod === 'Fiado' ? Math.max(0, saleTotal - finalDownPayment) : 0;
 
       // Ensure stable date
-      let finalDate: Date;
-      try {
-        finalDate = saleDate ? new Date(saleDate + 'T12:00:00') : new Date();
-        if (isNaN(finalDate.getTime())) finalDate = new Date();
-      } catch (e) {
-        finalDate = new Date();
+      let finalDate: Date = new Date();
+      if (saleDate) {
+        try {
+          const [y, m, d] = saleDate.split('-').map(Number);
+          finalDate = new Date(y, m - 1, d, 12, 0, 0);
+          if (isNaN(finalDate.getTime())) finalDate = new Date();
+        } catch (e) {
+          finalDate = new Date();
+        }
       }
 
       // 1. Create Sale Record
@@ -257,10 +260,12 @@ export default function PDV() {
 
       // Handle Auto WhatsApp
       if (sendWhatsAppOnFinish && selectedCustomer?.contact) {
-        // Trigger sharing with a small delay so state settles or button is visible
-        setTimeout(() => {
+        // We still try auto-triggering but catch errors/blocks
+        try {
           shareWhatsApp(finishedSale);
-        }, 800);
+        } catch (e) {
+          console.warn("WhatsApp auto-trigger blocked by browser:", e);
+        }
       }
     } catch (err: any) {
       console.error(err);
@@ -295,14 +300,19 @@ export default function PDV() {
       `Obrigado por comprar no *ERP CLUB DA BOLA*!`;
 
     const encoded = encodeURIComponent(message);
-    let phone = sale.customerContact ? sale.customerContact.replace(/\D/g, '') : '';
+    const phone = sale.customerContact ? sale.customerContact.replace(/\D/g, '') : '';
+    let finalPhone = phone;
     
-    // Add Brazil country code if missing
+    // Add Brazil country code if missing (assumes Brazil)
     if (phone && phone.length <= 11) {
-      phone = '55' + phone;
+      finalPhone = '55' + phone;
     }
 
-    window.open(`https://wa.me/${phone}?text=${encoded}`, '_blank');
+    try {
+      window.open(`https://wa.me/${finalPhone}?text=${encoded}`, '_blank');
+    } catch (err) {
+      alert("Não foi possível abrir o WhatsApp automaticamente. Por favor, clique no botão de WhatsApp manualmente.");
+    }
   };
 
   const [isCartVisible, setIsCartVisible] = useState(false);
@@ -388,7 +398,7 @@ export default function PDV() {
                     <span className="text-[10px] font-black uppercase tracking-widest">Ver Detalhes</span>
                   </button>
                   <button 
-                    onClick={shareWhatsApp}
+                    onClick={() => shareWhatsApp()}
                     className="flex flex-col items-center justify-center gap-2 p-4 bg-amber-50 text-amber-700 rounded-2xl hover:bg-amber-100 transition-all group font-black"
                   >
                     <MessageCircle size={24} className="group-hover:scale-110 transition-transform text-amber-600" />
@@ -502,7 +512,7 @@ export default function PDV() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <button 
-                    onClick={shareWhatsApp}
+                    onClick={() => shareWhatsApp()}
                     className="flex items-center justify-center gap-2 p-4 bg-amber-500 text-slate-950 rounded-2xl hover:bg-amber-600 transition-all font-black uppercase tracking-widest text-[10px] shadow-lg shadow-amber-500/20"
                   >
                     <MessageCircle size={18} />

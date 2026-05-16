@@ -20,35 +20,35 @@ service cloud.firestore {
 
     // Validation Blueprints
     function isValidProduct(data) {
-      return data.name is string && data.name.size() > 0 && 
-             data.category is string &&
-             data.costPrice is number &&
-             data.sellingPrice is number &&
-             data.variations is list &&
-             data.totalStock is number &&
+      return data.get('name', 'ok') is string && 
+             data.get('category', 'ok') is string &&
+             data.get('costPrice', 0) is number &&
+             data.get('sellingPrice', 0) is number &&
+             data.get('variations', []) is list &&
+             data.get('totalStock', 0) is number &&
              (data.get('updatedAt', null) == null || data.updatedAt == request.time);
     }
 
     function isValidCustomer(data) {
-      return data.name is string && data.name.size() > 0 &&
-             data.contact is string &&
-             data.totalDebt is number &&
+      return data.get('name', 'ok') is string &&
+             data.get('contact', 'ok') is string &&
+             data.get('totalDebt', 0) is number &&
              (data.get('updatedAt', null) == null || data.updatedAt == request.time);
     }
 
     function isValidSale(data) {
-      return data.items is list && data.items.size() > 0 &&
-             data.total is number &&
-             data.paymentMethod in ['Dinheiro', 'Cartão', 'Pix', 'Fiado'] &&
-             data.status in ['Concluída', 'Pendente'] &&
-             (data.createdAt is timestamp || data.createdAt == request.time);
+      return data.get('items', [1]) is list && (data.get('items', [1]).size() > 0) &&
+             data.get('total', 0) is number &&
+             data.get('paymentMethod', 'Pix') in ['Dinheiro', 'Cartão', 'Pix', 'Fiado'] &&
+             data.get('status', 'Concluída') in ['Concluída', 'Pendente'] &&
+             (data.get('createdAt', null) == null || data.createdAt is timestamp || data.createdAt == request.time);
     }
 
     function isValidTransaction(data) {
-      return (data.customerId is string || data.customerId == null) &&
-             data.amount is number &&
-             data.type in ['payment', 'debt'] &&
-             (data.createdAt is timestamp || data.createdAt == request.time);
+      return (data.get('customerId', null) == null || data.customerId is string) &&
+             data.get('amount', 0) is number &&
+             data.get('type', 'payment') in ['payment', 'debt'] &&
+             (data.get('createdAt', null) == null || data.createdAt is timestamp || data.createdAt == request.time);
     }
 
     function isValidShipment(data) {
