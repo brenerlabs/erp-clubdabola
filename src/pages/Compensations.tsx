@@ -87,10 +87,10 @@ export default function Compensations() {
     >
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-black italic tracking-tighter shadow-sm">
+          <h2 className="text-3xl font-black italic tracking-tighter text-slate-900 leading-none">
             Auditoria de <span className="text-red-800 underline decoration-red-200 decoration-4 underline-offset-4 tracking-tighter font-black italic">Recebíveis</span>
           </h2>
-          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.3em] mt-2">Relatórios de Compensação e Amortização</p>
+          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.3em] font-sans mt-2">Relatórios de Compensação e Amortização</p>
         </div>
         <div className="flex items-center gap-2">
           <button 
@@ -147,7 +147,7 @@ export default function Compensations() {
         <div className="p-8 border-b border-slate-50 flex items-center justify-between bg-slate-50/30">
           <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
             <Calendar size={16} className="text-red-800" />
-            Extrato de Movimentações
+            Extrato de movimentações
           </h3>
           <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Exibindo {filtered.length} de {transactions.length} registros</div>
         </div>

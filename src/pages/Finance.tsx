@@ -125,23 +125,23 @@ export default function Finance() {
     >
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-black italic tracking-tighter">
+          <h2 className="text-3xl font-black italic tracking-tighter text-slate-900 leading-none">
             Auditoria <span className="text-red-800 underline decoration-red-200 decoration-4 underline-offset-4 tracking-tighter font-black italic">Financeira</span>
           </h2>
-          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.3em] mt-2">Gestão de Ativos e Fluxo de Caixa</p>
+          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.3em] font-sans mt-2">Gestão de Ativos e Fluxo de Caixa</p>
         </div>
         <div className="flex gap-2">
           <button 
             onClick={exportToPDF}
-            className="flex items-center gap-2 px-4 py-2 bg-rose-50 text-rose-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-rose-100 transition-all border border-rose-100"
+            className="flex items-center gap-2 px-6 py-3 bg-rose-50 text-rose-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-rose-100 transition-all border border-rose-100 shadow-sm"
           >
-            <FileText size={14} /> PDF
+            <FileText size={16} /> PDF Report
           </button>
           <button 
             onClick={exportToExcel}
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-100 transition-all border border-emerald-100"
+            className="flex items-center gap-2 px-6 py-3 bg-emerald-50 text-emerald-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-100 transition-all border border-emerald-100 shadow-sm"
           >
-            <TableIcon size={14} /> Excel
+            <TableIcon size={16} /> Excel Database
           </button>
         </div>
       </div>
@@ -155,57 +155,63 @@ export default function Finance() {
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
         {/* Payment Methods Table */}
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm h-fit">
-          <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Recebimentos por Canal</h4>
-          <div className="space-y-3">
+        <div className="bg-white/40 backdrop-blur-md p-8 rounded-[32px] border border-white/60 shadow-xl shadow-slate-200/50 h-fit">
+          <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-8 flex items-center gap-2">
+            <CreditCard size={14} className="text-red-800" />
+            Recebimentos por canal
+          </h4>
+          <div className="space-y-4">
             {methods.map(m => (
-              <div key={m.name} className="flex items-center justify-between p-4 bg-slate-50 border border-slate-100 rounded-2xl transition-all hover:bg-white hover:shadow-md hover:-translate-y-0.5 pointer-events-none">
-                <div className="flex items-center gap-3">
-                  <div className={cn("size-10 rounded-xl flex items-center justify-center shadow-sm", m.name === 'Fiado' ? "bg-rose-500 text-white" : "bg-indigo-500 text-white")}>
-                    <m.icon size={18} />
+              <div key={m.name} className="flex items-center justify-between p-5 bg-white/60 border border-slate-100 rounded-[24px] transition-all hover:bg-white hover:shadow-lg hover:-translate-y-0.5 pointer-events-none shadow-sm">
+                <div className="flex items-center gap-4">
+                  <div className={cn("size-12 rounded-2xl flex items-center justify-center shadow-lg transition-transform", m.name === 'Fiado (Pendente)' ? "bg-rose-500 text-white shadow-rose-200" : "bg-slate-900 text-white shadow-slate-200")}>
+                    <m.icon size={20} />
                   </div>
-                  <span className="text-sm font-bold text-slate-700">{m.name}</span>
+                  <span className="text-[11px] font-black text-slate-700 uppercase tracking-widest">{m.name}</span>
                 </div>
-                <span className="text-md font-black text-slate-900">{formatCurrency(m.value)}</span>
+                <span className="text-lg font-black text-slate-950 font-display tabular-nums tracking-tighter italic">{formatCurrency(m.value)}</span>
               </div>
             ))}
           </div>
         </div>
 
         {/* Transactions List */}
-        <div className="xl:col-span-2 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-[600px]">
-          <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/30">
-            <h4 className="text-sm font-bold text-slate-800">Extrato de Auditoria</h4>
-            <div className="flex bg-slate-100 p-1 rounded-lg">
+        <div className="xl:col-span-2 bg-white rounded-[32px] border border-slate-200 shadow-sm overflow-hidden flex flex-col h-[650px]">
+          <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-50/30">
+            <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+               <Receipt size={16} className="text-red-800" />
+               Extrato de auditoria
+            </h4>
+            <div className="flex bg-slate-100 p-1.5 rounded-xl shadow-inner border border-slate-200">
               <button 
                 onClick={() => setFilter('all')}
-                className={cn("px-4 py-1.5 text-[10px] font-bold rounded-md uppercase tracking-wider transition-all", filter === 'all' ? "bg-white text-slate-900 shadow-sm" : "text-slate-500")}
+                className={cn("px-6 py-2 text-[10px] font-black rounded-lg uppercase tracking-widest transition-all", filter === 'all' ? "bg-slate-950 text-white shadow-md" : "text-slate-400 hover:text-slate-600")}
               >
                 Tudo
               </button>
               <button 
                 onClick={() => setFilter('payment')}
-                className={cn("px-4 py-1.5 text-[10px] font-bold rounded-md uppercase tracking-wider transition-all", filter === 'payment' ? "bg-white text-emerald-600 shadow-sm" : "text-slate-500")}
+                className={cn("px-6 py-2 text-[10px] font-black rounded-lg uppercase tracking-widest transition-all", filter === 'payment' ? "bg-slate-950 text-white shadow-md" : "text-slate-400 hover:text-slate-600")}
               >
                 Liquidação
               </button>
             </div>
           </div>
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto custom-scrollbar">
             <table className="w-full text-left">
-              <thead className="sticky top-0 bg-white border-b border-slate-100 z-10">
+              <thead className="sticky top-0 bg-slate-50/80 backdrop-blur-md border-b border-slate-100 z-10">
                 <tr>
-                  <th className="px-6 py-4 text-[10px] uppercase font-black text-slate-400 tracking-widest">Natureza</th>
-                  <th className="px-6 py-4 text-[10px] uppercase font-black text-slate-400 tracking-widest">Envolvido</th>
-                  <th className="px-6 py-4 text-[10px] uppercase font-black text-slate-400 tracking-widest">Status Logístico</th>
-                  <th className="px-6 py-4 text-[10px] uppercase font-black text-slate-400 tracking-widest">Temporalidade</th>
-                  <th className="px-6 py-4 text-[10px] uppercase font-black text-slate-400 tracking-widest text-right">Montante</th>
+                  <th className="px-8 py-4 text-[10px] uppercase font-black text-slate-400 tracking-widest">Natureza</th>
+                  <th className="px-8 py-4 text-[10px] uppercase font-black text-slate-400 tracking-widest">Envolvido</th>
+                  <th className="px-8 py-4 text-[10px] uppercase font-black text-slate-400 tracking-widest">Status Logístico</th>
+                  <th className="px-8 py-4 text-[10px] uppercase font-black text-slate-400 tracking-widest">Temporalidade</th>
+                  <th className="px-8 py-4 text-[10px] uppercase font-black text-slate-400 tracking-widest text-right">Montante</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {transactions.filter(t => filter === 'all' || t.type === filter).map(t => (
-                  <tr key={t.id} className="hover:bg-slate-50/50 transition-colors group">
-                    <td className="px-6 py-5">
+                  <tr key={t.id} className="hover:bg-slate-50/80 transition-colors group">
+                    <td className="px-8 py-5">
                       <div className="flex items-center gap-4">
                         <div className={cn(
                           "size-10 rounded-xl flex items-center justify-center shadow-inner", 
@@ -214,46 +220,49 @@ export default function Finance() {
                           {t.type === 'payment' ? <ArrowDownCircle size={18} /> : <ArrowUpCircle size={18} />}
                         </div>
                         <div>
-                          <p className="text-sm font-bold text-slate-900">{t.type === 'payment' ? 'Amortização Fiado' : 'Venda a Prazo'}</p>
-                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Sync via Firestore</p>
+                          <p className="text-[11px] font-black text-slate-950 uppercase tracking-tight italic">{t.type === 'payment' ? 'Amortização Fiado' : 'Venda a Prazo'}</p>
+                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-0.5">Sync Intelligence</p>
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-5">
+                    <td className="px-8 py-5">
                       <div className="flex items-center gap-2">
-                        <div className="size-6 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
-                          <User size={12} />
+                        <div className="size-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 border border-white shadow-sm">
+                          <User size={14} />
                         </div>
-                        <span className="text-xs font-bold text-slate-700">{getCustomerName(t.customerId)}</span>
+                        <span className="text-[11px] font-black text-slate-700 uppercase tracking-tight italic underline decoration-red-200 decoration-2 underline-offset-2">{getCustomerName(t.customerId)}</span>
                       </div>
                     </td>
-                    <td className="px-6 py-5">
+                    <td className="px-8 py-5">
                       {getShipmentForSale(t.saleId) ? (
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-1">
-                            <Truck size={12} className="text-indigo-500" />
+                        <div className="space-y-1.5">
+                          <div className="flex items-center gap-2">
+                            <Truck size={14} className="text-indigo-500" />
                             <span className="text-[10px] font-black uppercase text-indigo-600 tracking-tighter">
                               {getShipmentForSale(t.saleId)?.trackingCode || 'Sem Rastreio'}
                             </span>
                           </div>
-                          <div className="px-2 py-0.5 bg-slate-100 rounded-full text-[9px] font-bold text-slate-500 inline-block uppercase italic">
-                            Status: {getShipmentForSale(t.saleId)?.status}
+                          <div className="px-2 py-0.5 bg-indigo-50 rounded-lg text-[8px] font-black text-indigo-600 inline-block uppercase tracking-widest border border-indigo-100">
+                            {getShipmentForSale(t.saleId)?.status}
                           </div>
                         </div>
                       ) : (
-                        <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">Sem Lote Ativo</span>
+                        <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest italic opacity-40">N/A</span>
                       )}
                     </td>
-                    <td className="px-6 py-5">
-                      <div className="text-sm font-medium text-slate-600">
+                    <td className="px-8 py-5">
+                      <div className="text-[11px] font-black text-slate-600 italic font-sans uppercase">
                         {new Date(t.createdAt?.seconds * 1000).toLocaleDateString('pt-BR')} 
-                        <span className="text-[10px] text-slate-400 ml-2 font-black uppercase">
+                        <span className="text-[9px] text-slate-400 ml-2 font-black uppercase block tracking-widest not-italic">
                           {new Date(t.createdAt?.seconds * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                         </span>
                       </div>
                     </td>
-                    <td className="px-6 py-5 text-right font-black text-sm">
-                      <span className={cn(t.type === 'payment' ? "text-emerald-600" : "text-rose-500")}>
+                    <td className="px-8 py-5 text-right">
+                      <span className={cn(
+                        "text-lg font-black italic tracking-tighter font-display tabular-nums",
+                        t.type === 'payment' ? "text-emerald-600" : "text-rose-500"
+                      )}>
                         {t.type === 'payment' ? '+' : '-'}{formatCurrency(t.amount)}
                       </span>
                     </td>
@@ -270,9 +279,9 @@ export default function Finance() {
 
 function FinanceCard({ title, value, icon: Icon, color }: any) {
   const configs: any = {
-    red: 'bg-red-800 text-white shadow-red-900/10',
-    emerald: 'bg-white text-slate-900 border-slate-200 shadow-sm',
-    black: 'bg-slate-950 text-white border-slate-900 shadow-slate-950/20',
+    red: 'bg-red-800 text-white shadow-xl shadow-red-900/20 border-red-700',
+    emerald: 'bg-white/40 backdrop-blur-md text-slate-900 border-white/60 shadow-xl shadow-slate-200/40',
+    black: 'bg-slate-950 text-white border-white/10 shadow-xl shadow-slate-950/20',
     amber: 'bg-white text-slate-900 border-slate-200 shadow-sm',
   };
 
@@ -282,29 +291,29 @@ function FinanceCard({ title, value, icon: Icon, color }: any) {
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
       className={cn(
-        "p-5 rounded-2xl border transition-all relative overflow-hidden group",
+        "p-6 rounded-[32px] border transition-all relative overflow-hidden group",
         configs[color]
       )}
     >
-      <div className="flex justify-between items-start mb-4 relative z-10">
+      <div className="flex justify-between items-start mb-6 relative z-10">
         <div className={cn(
-          "size-9 rounded-xl flex items-center justify-center transition-all group-hover:scale-110 shadow-sm",
-          color === 'red' ? "bg-white/20 text-white" : (color === 'emerald' ? "bg-emerald-100 text-emerald-600" : (color === 'black' ? "bg-white/10 text-white" : "bg-amber-100 text-amber-600"))
+          "size-10 rounded-2xl flex items-center justify-center transition-all group-hover:scale-110 shadow-lg",
+          color === 'red' ? "bg-white/20 text-white" : (color === 'emerald' ? "bg-slate-900 text-white shadow-slate-200" : (color === 'black' ? "bg-white/10 text-white" : "bg-amber-100 text-amber-600"))
         )}>
-          <Icon size={18} />
+          <Icon size={20} />
         </div>
         <div className={cn(
-          "px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest",
-          color === 'red' || color === 'black' ? "bg-white/10 text-white/60" : "bg-slate-100 text-slate-500"
+          "px-3 py-1 bg-white/10 rounded-xl text-[9px] font-black uppercase tracking-widest border border-white/5",
+          color === 'red' || color === 'black' ? "text-white/60" : "bg-slate-100 text-slate-400"
         )}>
-          Sync: {new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+          {new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
         </div>
       </div>
       
       <div className="relative z-10">
         <p className={cn(
-          "text-[9px] font-black uppercase tracking-[0.2em] mb-1.5 leading-none",
-          color === 'red' || color === 'black' ? "text-white/60" : "text-slate-400"
+          "text-[10px] font-black uppercase tracking-[0.3em] mb-2 leading-none",
+          color === 'red' || color === 'black' ? "text-white/40" : "text-slate-400"
         )}>{title}</p>
         <h4 className="text-2xl font-black italic tracking-tighter leading-none font-display tabular-nums uppercase">{value}</h4>
       </div>

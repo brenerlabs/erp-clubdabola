@@ -3,7 +3,7 @@ import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, query, onSnapshot, addDoc, updateDoc, doc, serverTimestamp, writeBatch, orderBy } from 'firebase/firestore';
 import { Product, Customer, SaleItem, Variation } from '../types';
 import { Search, ShoppingCart, User, Plus, Minus, Trash2, CreditCard, Banknote, QrCode, ClipboardList, Send, X, CheckCircle2, MessageCircle, FileImage, Share2, Receipt } from 'lucide-react';
-import { formatCurrency, cn } from '../lib/utils';
+import { formatCurrency, cn, cleanObject } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function PDV() {
@@ -21,6 +21,7 @@ export default function PDV() {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [lastSale, setLastSale] = useState<any>(null);
+  const [sendWhatsAppOnFinish, setSendWhatsAppOnFinish] = useState(true);
 
   useEffect(() => {
     const qProd = query(collection(db, 'products'), orderBy('name', 'asc'));
@@ -112,7 +113,7 @@ export default function PDV() {
       const saleRef = doc(collection(db, 'sales'));
       const finalStatus = paymentMethod === 'Fiado' && debtAmount > 0 ? 'Pendente' : 'Concluída';
       
-      batch.set(saleRef, {
+      batch.set(saleRef, cleanObject({
         customerId: selectedCustomer?.id || null,
         customerName: selectedCustomer?.name || 'Consumidor Final',
         items: cart.map(item => ({
@@ -137,7 +138,7 @@ export default function PDV() {
           updatedAt: finalDate,
           notes: 'Venda finalizada no PDV'
         }]
-      });
+      }));
 
       // 2. Update Stock (Skip for dropshipping)
       cart.forEach(item => {
@@ -149,11 +150,11 @@ export default function PDV() {
             v.id === item.variationId ? { ...v, stock: v.stock - item.quantity } : v
           );
           const nextTotalStock = nextVariations.reduce((acc, v) => acc + v.stock, 0);
-          batch.update(doc(db, 'products', item.productId), {
+          batch.update(doc(db, 'products', item.productId), cleanObject({
             variations: nextVariations,
             totalStock: nextTotalStock,
             updatedAt: serverTimestamp()
-          });
+          }));
         }
       });
 
@@ -163,55 +164,55 @@ export default function PDV() {
           // If there's an entry payment
           if (finalDownPayment > 0) {
             const entryTransRef = doc(collection(db, 'transactions'));
-            batch.set(entryTransRef, {
+            batch.set(entryTransRef, cleanObject({
               customerId: selectedCustomer.id || null,
               amount: finalDownPayment,
               type: 'payment',
               paymentMethod: 'Dinheiro', // Default to Dinheiro for entry
               saleId: saleRef.id,
               createdAt: finalDate
-            });
+            }));
           }
 
           // The remaining debt
           if (debtAmount > 0) {
-            batch.update(doc(db, 'customers', selectedCustomer.id!), {
+            batch.update(doc(db, 'customers', selectedCustomer.id!), cleanObject({
               totalDebt: (selectedCustomer.totalDebt || 0) + debtAmount,
               updatedAt: serverTimestamp()
-            });
+            }));
 
             const debtTransRef = doc(collection(db, 'transactions'));
-            batch.set(debtTransRef, {
+            batch.set(debtTransRef, cleanObject({
               customerId: selectedCustomer.id || null,
               amount: debtAmount,
               type: 'debt',
               saleId: saleRef.id,
               createdAt: finalDate
-            });
+            }));
           }
         } else {
           // Non-Fiado sale with customer: record payment transaction
           const paymentTransRef = doc(collection(db, 'transactions'));
-          batch.set(paymentTransRef, {
+          batch.set(paymentTransRef, cleanObject({
             customerId: selectedCustomer.id || null,
             amount: total,
             type: 'payment',
             paymentMethod: paymentMethod,
             saleId: saleRef.id,
             createdAt: finalDate
-          });
+          }));
         }
       } else {
         // Consumidor Final (No customer record): still log transaction for cash flow
         const paymentTransRef = doc(collection(db, 'transactions'));
-        batch.set(paymentTransRef, {
+        batch.set(paymentTransRef, cleanObject({
           customerId: 'Consumidor Final',
           amount: total,
           type: 'payment',
           paymentMethod: paymentMethod,
           saleId: saleRef.id,
           createdAt: finalDate
-        });
+        }));
       }
 
       await batch.commit();
@@ -231,6 +232,7 @@ export default function PDV() {
       setLastSale(finishedSale);
       setShowSuccessModal(true);
 
+      // Reset Form
       setCart([]);
       setSelectedCustomer(null);
       setPaymentMethod('Dinheiro');
@@ -238,6 +240,14 @@ export default function PDV() {
       setDiscountPerc('0');
       setDiscountVal('0');
       setSaleDate(new Date().toISOString().split('T')[0]);
+
+      // Handle Auto WhatsApp
+      if (sendWhatsAppOnFinish && selectedCustomer?.contact) {
+        // Trigger sharing with a small delay so state settles or button is visible
+        setTimeout(() => {
+          shareWhatsApp(finishedSale);
+        }, 800);
+      }
     } catch (err: any) {
       console.error(err);
       handleFirestoreError(err, OperationType.WRITE, 'PDV_Batch_Commit');
@@ -248,29 +258,36 @@ export default function PDV() {
 
   const filteredProducts = products.filter(p => p.name.toLowerCase().includes(search.toLowerCase()) || p.category.toLowerCase().includes(search.toLowerCase()));
 
-  const shareWhatsApp = () => {
-    if (!lastSale) return;
+  const shareWhatsApp = (saleToShare?: any) => {
+    const sale = saleToShare || lastSale;
+    if (!sale) return;
     
-    const itemsText = lastSale.items.map((i: any) => 
+    const itemsText = sale.items.map((i: any) => 
       `- ${i.name} (${i.variationName}) x ${i.quantity}: ${formatCurrency(i.price * i.quantity)}`
     ).join('\n');
 
     const message = `⚽ *ERP CLUB DA BOLA - Comprovante* ⚽\n` +
       `-------------------------------------------\n` +
-      `👤 *Cliente:* ${lastSale.customerName}\n` +
-      `📅 *Data:* ${lastSale.date.toLocaleString('pt-BR')}\n` +
-      `💳 *Pagamento:* ${lastSale.paymentMethod}\n` +
-      (lastSale.downPayment > 0 ? `💵 *Entrada:* ${formatCurrency(lastSale.downPayment)}\n` : '') +
-      (lastSale.debtAmount > 0 ? `📝 *Pendente:* ${formatCurrency(lastSale.debtAmount)}\n` : '') +
+      `👤 *Cliente:* ${sale.customerName}\n` +
+      `📅 *Data:* ${sale.date.toLocaleString('pt-BR')}\n` +
+      `💳 *Pagamento:* ${sale.paymentMethod}\n` +
+      (sale.downPayment > 0 ? `💵 *Entrada:* ${formatCurrency(sale.downPayment)}\n` : '') +
+      (sale.debtAmount > 0 ? `📝 *Pendente:* ${formatCurrency(sale.debtAmount)}\n` : '') +
       `-------------------------------------------\n` +
       `📦 *Itens:*\n${itemsText}\n` +
       `-------------------------------------------\n` +
-      `💰 *TOTAL: ${formatCurrency(lastSale.total)}*\n` +
+      `💰 *TOTAL: ${formatCurrency(sale.total)}*\n` +
       `-------------------------------------------\n` +
       `Obrigado por comprar no *ERP CLUB DA BOLA*!`;
 
     const encoded = encodeURIComponent(message);
-    const phone = lastSale.customerContact ? lastSale.customerContact.replace(/\D/g, '') : '';
+    let phone = sale.customerContact ? sale.customerContact.replace(/\D/g, '') : '';
+    
+    // Add Brazil country code if missing
+    if (phone && phone.length <= 11) {
+      phone = '55' + phone;
+    }
+
     window.open(`https://wa.me/${phone}?text=${encoded}`, '_blank');
   };
 
@@ -555,9 +572,12 @@ export default function PDV() {
             <div className="size-10 bg-red-800 rounded-xl flex items-center justify-center shadow-lg shadow-red-900/20">
               <ShoppingCart size={20} />
             </div>
-          <h2 className="text-3xl font-black italic tracking-tighter shadow-sm text-white">
-            Venda <span className="text-red-600 underline decoration-red-400 decoration-4 underline-offset-4 tracking-tighter font-black italic">Checkout</span>
-          </h2>
+            <div>
+              <h2 className="text-3xl font-black italic tracking-tighter text-white leading-none">
+                Venda <span className="text-red-600 underline decoration-red-400 decoration-4 underline-offset-4 tracking-tighter font-black italic">Checkout</span>
+              </h2>
+              <p className="text-[9px] font-bold text-white/40 uppercase tracking-[0.2em] font-sans mt-0.5">Finalização de pedido</p>
+            </div>
             <span className="ml-auto bg-white/10 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider text-amber-500">
               {cart.reduce((a, b) => a + b.quantity, 0)} Itens
             </span>
@@ -583,14 +603,14 @@ export default function PDV() {
                 <div className="flex justify-between items-start mb-2">
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                       <p className="font-black text-sm leading-tight text-white uppercase group-hover/item:text-amber-400 transition-colors">{item.name}</p>
+                       <p className="font-black text-xs leading-tight text-white uppercase group-hover/item:text-amber-400 transition-colors">{item.name}</p>
                        {item.isDropshipping && (
                          <span className="text-[7px] font-black bg-amber-500 text-white px-1.5 py-0.5 rounded italic animate-pulse">DS</span>
                        )}
                     </div>
-                    <p className="text-[10px] font-black text-white/50 mt-1 uppercase tracking-widest">{item.variationName}</p>
+                    <p className="text-[8px] font-black text-white/30 mt-1 uppercase tracking-widest">{item.variationName}</p>
                   </div>
-                  <p className="font-black text-base ml-2 text-white tabular-nums tracking-tighter">{formatCurrency(item.price * item.quantity)}</p>
+                  <p className="font-black text-sm ml-2 text-white tabular-nums tracking-tighter">{formatCurrency(item.price * item.quantity)}</p>
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="flex items-center bg-black/40 rounded-xl p-1 border border-white/5 shadow-inner">
@@ -727,6 +747,16 @@ export default function PDV() {
                 value={saleDate}
                 onChange={e => setSaleDate(e.target.value)}
               />
+            </div>
+
+            <div className="flex items-center gap-3 px-4 py-2 bg-white/5 rounded-xl border border-white/10 cursor-pointer group hover:bg-white/10 transition-all" onClick={() => setSendWhatsAppOnFinish(!sendWhatsAppOnFinish)}>
+              <div className={cn(
+                "size-5 rounded flex items-center justify-center border transition-all",
+                sendWhatsAppOnFinish ? "bg-amber-500 border-amber-600 text-slate-950" : "bg-transparent border-white/20"
+              )}>
+                {sendWhatsAppOnFinish && <MessageCircle size={12} />}
+              </div>
+              <span className="text-[10px] font-black uppercase text-white/60 group-hover:text-white transition-colors tracking-widest">Enviar WhatsApp ao Finalizar</span>
             </div>
 
             <div className="flex flex-col gap-1 px-4 py-3 bg-white/5 rounded-2xl border border-white/5 font-display">

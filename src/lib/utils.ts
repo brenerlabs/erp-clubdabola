@@ -23,3 +23,27 @@ export function calculateMargin(cost: number, sell: number) {
   const result = ((sell - cost) / sell) * 100;
   return isFinite(result) ? result : 0;
 }
+
+export function cleanObject(obj: any): any {
+  if (obj === null || obj === undefined) return obj;
+  if (obj instanceof Date) return obj;
+  
+  // Only clean plain objects and arrays
+  const isPlainObject = obj.constructor === Object;
+  const isArray = Array.isArray(obj);
+
+  if (!isPlainObject && !isArray) return obj;
+
+  if (isArray) {
+    return obj.map(item => cleanObject(item));
+  }
+  
+  const cleaned: any = {};
+  Object.keys(obj).forEach(key => {
+    const value = obj[key];
+    if (value !== undefined) {
+      cleaned[key] = cleanObject(value);
+    }
+  });
+  return cleaned;
+}

@@ -263,8 +263,8 @@ export default function Dashboard() {
       {/* Header Summary */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-black italic tracking-tighter">
-            Dashboard <span className="text-red-800 underline decoration-red-200 decoration-4 underline-offset-4 tracking-tighter font-black italic">Analítico</span>
+          <h2 className="text-3xl font-black italic tracking-tighter shadow-sm text-slate-950">
+            Painel de <span className="text-red-800 underline decoration-red-200 decoration-4 underline-offset-4 tracking-tighter font-black italic">Performance</span>
           </h2>
           <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.3em] mt-2">Visão Geral de Performance e Operações</p>
         </div>
@@ -276,27 +276,27 @@ export default function Dashboard() {
               </div>
             ))}
           </div>
-          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest pl-2 border-l border-slate-200">Active Analysts</p>
+          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest pl-2 border-l border-slate-200">Analysts Active</p>
         </div>
       </div>
 
       {/* Filters Section */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="flex flex-wrap items-center gap-3">
         <motion.div 
-          whileHover={{ y: -2 }}
-          className="bg-white/40 backdrop-blur-md p-5 rounded-3xl border border-white/60 shadow-xl shadow-slate-200/50 flex items-center gap-5 hover:bg-white/60 transition-all group"
+          whileHover={{ y: -1 }}
+          className="bg-white/40 backdrop-blur-md px-4 py-3 rounded-2xl border border-white/60 shadow-lg shadow-slate-200/40 flex items-center gap-3 hover:bg-white/60 transition-all group min-w-[200px]"
         >
-          <div className="size-12 bg-slate-900 text-white rounded-2xl flex items-center justify-center shrink-0 shadow-lg group-hover:scale-110 transition-transform">
-             <Users size={22} />
+          <div className="size-8 bg-slate-900 text-white rounded-lg flex items-center justify-center shrink-0 shadow-lg group-hover:scale-110 transition-transform">
+             <Users size={14} />
           </div>
           <div className="flex-1">
-            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Segmentação por Cliente</p>
+            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1 font-sans">Cliente</p>
             <select 
-              className="w-full bg-transparent font-black text-slate-900 outline-none text-sm appearance-none cursor-pointer"
+              className="w-full bg-transparent font-black text-slate-900 outline-none text-[11px] appearance-none cursor-pointer uppercase tracking-tight"
               value={customerFilter}
               onChange={e => setCustomerFilter(e.target.value)}
             >
-              <option value="all">Filtro Global (Todos)</option>
+              <option value="all">TODOS</option>
               {customers.map(c => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
@@ -305,30 +305,35 @@ export default function Dashboard() {
         </motion.div>
 
         <motion.div 
-          whileHover={{ y: -2 }}
-          className="bg-white/40 backdrop-blur-md p-5 rounded-3xl border border-white/60 shadow-xl shadow-slate-200/50 flex items-center gap-5 hover:bg-white/60 transition-all group"
+          whileHover={{ y: -1 }}
+          className="bg-white/40 backdrop-blur-md px-4 py-3 rounded-2xl border border-white/60 shadow-lg shadow-slate-200/40 flex items-center gap-3 hover:bg-white/60 transition-all group min-w-[200px]"
         >
-          <div className="size-12 bg-red-800 text-white rounded-2xl flex items-center justify-center shrink-0 shadow-lg group-hover:scale-110 transition-transform">
-             <Package size={22} />
+          <div className="size-8 bg-red-800 text-white rounded-lg flex items-center justify-center shrink-0 shadow-lg group-hover:scale-110 transition-transform">
+             <Package size={14} />
           </div>
           <div className="flex-1">
-            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Segmentação por SKU</p>
+            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1 font-sans">Produto (SKU)</p>
             <select 
-              className="w-full bg-transparent font-black text-slate-900 outline-none text-sm appearance-none cursor-pointer"
+              className="w-full bg-transparent font-black text-slate-900 outline-none text-[11px] appearance-none cursor-pointer uppercase tracking-tight"
               value={productFilter}
               onChange={e => setProductFilter(e.target.value)}
             >
-              <option value="all">Portfólio Completo</option>
+              <option value="all">TODOS</option>
               {products.map(p => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
             </select>
           </div>
         </motion.div>
+
+        <div className="ml-auto flex items-center gap-2">
+           <span className="size-2 bg-emerald-500 rounded-full animate-pulse"></span>
+           <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest font-sans">Live System Feed</span>
+        </div>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard 
           title="Consumo Médio" 
           value={formatCurrency(stats.avgTicket)} 
@@ -363,59 +368,56 @@ export default function Dashboard() {
         />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white p-6 rounded-[32px] border border-slate-200 shadow-sm flex items-center justify-between">
-           <div className="flex items-center gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="bg-white p-6 rounded-[24px] border border-slate-200 shadow-sm flex items-center justify-between">
+           <div className="flex items-center gap-3">
               <div className={cn(
-                "size-12 rounded-2xl flex items-center justify-center",
+                "size-10 rounded-xl flex items-center justify-center",
                 stats.efficiencyRatio > 80 ? "bg-emerald-100 text-emerald-600" : "bg-amber-100 text-amber-600"
               )}>
-                <TrendingUp size={24} />
+                <TrendingUp size={20} />
               </div>
               <div>
-                <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Eficiência de Recebimento</p>
-                <h4 className="text-xl font-black text-slate-900 leading-tight">{stats.efficiencyRatio.toFixed(1)}%</h4>
+                <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest leading-none mb-1">Eficiência Receita</p>
+                <h4 className="text-xl font-black text-slate-900 leading-tight font-display tabular-nums">{stats.efficiencyRatio.toFixed(1)}%</h4>
               </div>
            </div>
            <div className="text-right">
-              <p className="text-[9px] font-bold text-slate-400 uppercase">Qualidade do Fluxo</p>
-              <div className="w-24 h-1.5 bg-slate-100 rounded-full mt-2 overflow-hidden">
+              <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden shadow-inner">
                 <motion.div 
                   initial={{ width: 0 }}
                   animate={{ width: `${stats.efficiencyRatio}%` }}
-                  className={cn("h-full", stats.efficiencyRatio > 80 ? "bg-emerald-500" : "bg-amber-500")} 
+                  className={cn("h-full", stats.efficiencyRatio > 80 ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.3)]" : "bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.3)]")} 
                 />
               </div>
            </div>
         </div>
-        <div className="bg-white p-6 rounded-[32px] border border-slate-200 shadow-sm flex items-center justify-between">
-           <div className="flex items-center gap-4">
-              <div className="size-12 bg-rose-100 text-rose-600 rounded-2xl flex items-center justify-center">
-                <Receipt size={24} />
+        <div className="bg-white p-6 rounded-[24px] border border-slate-200 shadow-sm flex items-center justify-between">
+           <div className="flex items-center gap-3">
+              <div className="size-10 bg-rose-100 text-rose-800 rounded-xl flex items-center justify-center shadow-lg shadow-rose-900/5">
+                <Receipt size={20} />
               </div>
               <div>
-                <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Taxas de Importação Pagas</p>
-                <h4 className="text-xl font-black text-slate-900 leading-tight">{formatCurrency(stats.paidTaxes)}</h4>
+                <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest leading-none mb-1">Taxas Pagas</p>
+                <h4 className="text-xl font-black text-slate-900 leading-tight font-display tabular-nums">{formatCurrency(stats.paidTaxes)}</h4>
               </div>
            </div>
            <div className="text-right">
-              <p className="text-[10px] font-black uppercase text-rose-400 tracking-widest">Pendente: {formatCurrency(stats.pendingTaxes)}</p>
-              <p className="text-[9px] font-bold text-slate-400 mt-1 uppercase">Dedução direta do lucro operacional</p>
+              <p className="text-[9px] font-black uppercase text-rose-800 tracking-widest">Pend: {formatCurrency(stats.pendingTaxes)}</p>
            </div>
         </div>
-        <div className="bg-white p-6 rounded-[32px] border border-slate-200 shadow-sm flex items-center justify-between">
-           <div className="flex items-center gap-4">
-              <div className="size-12 bg-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center">
-                <Truck size={24} />
+        <div className="bg-white p-6 rounded-[24px] border border-slate-200 shadow-sm flex items-center justify-between md:col-span-2 lg:col-span-1">
+           <div className="flex items-center gap-3">
+              <div className="size-10 bg-slate-950 text-white rounded-xl flex items-center justify-center">
+                <Truck size={20} />
               </div>
               <div>
-                <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Encaminhamentos Ativos</p>
-                <h4 className="text-xl font-black text-slate-900 leading-tight">{shipments.filter(s => s.status !== 'Entregue').length} Lotes</h4>
+                <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest leading-none mb-1">Lotes Ativos</p>
+                <h4 className="text-xl font-black text-slate-900 leading-tight font-display tabular-nums">{shipments.filter(s => s.status !== 'Entregue').length}</h4>
               </div>
            </div>
            <div className="text-right">
-              <p className="text-[10px] font-black uppercase text-amber-500 tracking-widest">Total Itens: {shipments.reduce((acc, s) => acc + s.items.length, 0)}</p>
-              <p className="text-[9px] font-bold text-slate-400 mt-1 uppercase">Monitoramento via rádio/rastreio</p>
+              <p className="text-[9px] font-black uppercase text-amber-500 tracking-widest">Itens: {shipments.reduce((acc, s) => acc + s.items.length, 0)}</p>
            </div>
         </div>
       </div>
@@ -512,39 +514,43 @@ export default function Dashboard() {
         </div>
 
         {/* Global Business Health Index */}
-        <div className="xl:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-slate-950 rounded-[40px] p-8 text-white relative overflow-hidden group border border-slate-800">
-             <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:scale-110 transition-transform">
-                <Activity size={120} />
+        <div className="xl:col-span-3 grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="bg-slate-950 rounded-3xl p-6 text-white relative overflow-hidden group border border-slate-900">
+             <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:scale-110 transition-transform">
+                <Activity size={80} />
              </div>
              <div className="relative z-10">
-                <p className="text-[10px] font-black text-amber-500 uppercase tracking-[0.3em] mb-2">Performance Index</p>
-                <div className="flex items-end gap-3">
-                   <h4 className="text-5xl font-black italic tracking-tighter">94<span className="text-2xl text-amber-500">.2</span></h4>
-                   <p className="text-[10px] font-bold text-amber-400/60 mb-2 uppercase tracking-widest">+2.4% last audit</p>
+                <p className="text-[8px] font-black text-amber-500 uppercase tracking-[0.3em] mb-1">Performance Index</p>
+                <div className="flex items-end gap-2">
+                   <h4 className="text-3xl font-black italic tracking-tighter">94<span className="text-xl text-amber-500">.2</span></h4>
+                   <p className="text-[8px] font-bold text-amber-400/60 mb-1 uppercase tracking-widest">+2.4%</p>
                 </div>
-                <div className="mt-6 flex gap-2">
+                <div className="mt-4 flex gap-1.5 overflow-x-auto">
                    {['Fiscal', 'Logistics', 'Portfolio'].map(tag => (
-                     <span key={tag} className="px-3 py-1 bg-white/5 border border-white/10 rounded-full text-[8px] font-black uppercase tracking-widest">{tag}</span>
+                     <span key={tag} className="px-2 py-0.5 bg-white/5 border border-white/10 rounded-full text-[7px] font-black uppercase tracking-widest whitespace-nowrap">{tag}</span>
                    ))}
                 </div>
              </div>
           </div>
           
-          <div className="md:col-span-2 bg-red-900 rounded-[40px] p-8 text-white flex flex-col justify-center relative overflow-hidden border border-white/5">
-             <div className="absolute top-0 right-0 p-8 opacity-20">
-                <LayoutDashboard size={100} />
+          <div className="md:col-span-3 bg-red-900 rounded-3xl p-6 text-white flex flex-col justify-center relative overflow-hidden border border-white/5">
+             <div className="absolute top-0 right-0 p-6 opacity-10">
+                <LayoutDashboard size={60} />
              </div>
              <div className="relative z-10">
-                <h4 className="text-xl font-black italic tracking-tighter mb-4 uppercase font-serif">Executive Directives</h4>
-                <div className="grid grid-cols-2 gap-4">
-                   <div className="bg-black/20 backdrop-blur-sm p-4 rounded-3xl border border-white/5">
-                      <p className="text-[9px] font-black text-amber-500 uppercase mb-1">Optimizar</p>
-                      <p className="text-xs font-black leading-tight uppercase tracking-tight">Custos Logísticos Operacionais Elevados</p>
+                <h4 className="text-sm font-black italic tracking-tighter mb-4 uppercase font-serif">Executive Directives</h4>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                   <div className="bg-black/20 backdrop-blur-sm p-3 rounded-2xl border border-white/5">
+                      <p className="text-[8px] font-black text-amber-500 uppercase mb-1">Optimizar</p>
+                      <p className="text-[10px] font-black leading-tight uppercase tracking-tight">Custos Logísticos Operacionais</p>
                    </div>
-                   <div className="bg-black/20 backdrop-blur-sm p-4 rounded-3xl border border-white/5">
-                      <p className="text-[9px] font-black text-amber-500 uppercase mb-1">Oportunidade</p>
-                      <p className="text-xs font-black leading-tight uppercase tracking-tight">Expansão de SKUs com Alta Variância</p>
+                   <div className="bg-black/20 backdrop-blur-sm p-3 rounded-2xl border border-white/5">
+                      <p className="text-[8px] font-black text-amber-500 uppercase mb-1">Oportunidade</p>
+                      <p className="text-[10px] font-black leading-tight uppercase tracking-tight">Expansão de SKUs Alta Variância</p>
+                   </div>
+                   <div className="bg-black/20 backdrop-blur-sm p-3 rounded-2xl border border-white/5 hidden md:block">
+                      <p className="text-[8px] font-black text-amber-500 uppercase mb-1">Risco</p>
+                      <p className="text-[10px] font-black leading-tight uppercase tracking-tight">Inadimplência Fiado Acima de 12%</p>
                    </div>
                 </div>
              </div>

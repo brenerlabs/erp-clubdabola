@@ -367,10 +367,10 @@ export default function Shipments() {
     >
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-black italic tracking-tighter">
+          <h2 className="text-3xl font-black italic tracking-tighter text-slate-900 leading-none">
             Rastreio de <span className="text-red-800 underline decoration-red-200 decoration-4 underline-offset-4 tracking-tighter font-black italic">Encomendas</span>
           </h2>
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.3em] mt-2">Gestão de Importação e Rastreamento</p>
+          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.3em] font-sans mt-2">Gestão de Importação e Rastreamento</p>
         </div>
         <div className="flex items-center gap-2">
           {selectedIds.length > 0 && (
@@ -518,7 +518,7 @@ export default function Shipments() {
                     className="space-y-1.5"
                   >
                     <div className="flex justify-between items-center border-b border-slate-50 pb-0.5">
-                      <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest">Consigned Groups</p>
+                      <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest">Consigned groups</p>
                       <span className="text-[8px] font-black text-slate-950 font-display tabular-nums">∑ {shipment.items.reduce((acc, i) => acc + i.quantity, 0)} UNITS</span>
                     </div>
                     <div className="space-y-1 max-h-32 overflow-y-auto custom-scrollbar pr-1">
