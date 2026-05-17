@@ -276,7 +276,7 @@ export default function Dashboard() {
               </div>
             ))}
           </div>
-          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest pl-2 border-l border-slate-200">Analysts Active</p>
+          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest pl-2 border-l border-slate-200">Analistas Ativos</p>
         </div>
       </div>
 
@@ -328,7 +328,7 @@ export default function Dashboard() {
 
         <div className="ml-auto flex items-center gap-2">
            <span className="size-2 bg-emerald-500 rounded-full animate-pulse"></span>
-           <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest font-sans">Live System Feed</span>
+           <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest font-sans">Sistema em Tempo Real</span>
         </div>
       </div>
 
@@ -526,7 +526,7 @@ export default function Dashboard() {
                    <p className="text-[8px] font-bold text-amber-400/60 mb-1 uppercase tracking-widest">+2.4%</p>
                 </div>
                 <div className="mt-4 flex gap-1.5 overflow-x-auto">
-                   {['Fiscal', 'Logistics', 'Portfolio'].map(tag => (
+                   {['Fiscal', 'Logística', 'Portfólio'].map(tag => (
                      <span key={tag} className="px-2 py-0.5 bg-white/5 border border-white/10 rounded-full text-[7px] font-black uppercase tracking-widest whitespace-nowrap">{tag}</span>
                    ))}
                 </div>
@@ -538,10 +538,10 @@ export default function Dashboard() {
                 <LayoutDashboard size={60} />
              </div>
              <div className="relative z-10">
-                <h4 className="text-sm font-bold tracking-tight mb-4 uppercase font-display">Executive Directives</h4>
+                <h4 className="text-sm font-bold tracking-tight mb-4 uppercase font-display">Diretivas Executivas</h4>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                    <div className="bg-black/20 backdrop-blur-sm p-3 rounded-2xl border border-white/5">
-                      <p className="text-[8px] font-black text-amber-500 uppercase mb-1">Optimizar</p>
+                      <p className="text-[8px] font-black text-amber-500 uppercase mb-1">Otimizar</p>
                       <p className="text-[10px] font-black leading-tight uppercase tracking-tight">Custos Logísticos Operacionais</p>
                    </div>
                    <div className="bg-black/20 backdrop-blur-sm p-3 rounded-2xl border border-white/5">
@@ -817,7 +817,7 @@ function StatCard({ title, value, icon: Icon, trend, positive, variant = 'glass'
           "px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest",
           variant === 'glass' ? "bg-red-50 text-red-800" : "bg-white/10 text-white/60"
         )}>
-          {positive ? 'Optimal' : 'Variance'}
+          {positive ? 'Ideal' : 'Variação'}
         </div>
       </div>
 

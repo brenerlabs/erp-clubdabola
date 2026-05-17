@@ -419,7 +419,7 @@ export default function Shipments() {
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 size-5 group-focus-within:text-red-800 transition-colors" />
           <input 
             type="text" 
-            placeholder="Search Rastreio ou Cliente..." 
+            placeholder="Buscar Rastreio ou Cliente..." 
             className="w-full pl-12 pr-4 py-3 bg-white/60 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-red-800 transition-all shadow-sm outline-none text-sm font-bold tracking-tight"
             value={search}
             onChange={e => setSearch(e.target.value)}
@@ -518,8 +518,8 @@ export default function Shipments() {
                     className="space-y-1.5"
                   >
                     <div className="flex justify-between items-center border-b border-slate-50 pb-0.5">
-                      <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest">Consigned groups</p>
-                      <span className="text-[8px] font-black text-slate-950 font-display tabular-nums">∑ {shipment.items.reduce((acc, i) => acc + i.quantity, 0)} UNITS</span>
+                      <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest">Grupos Consignados</p>
+                      <span className="text-[8px] font-black text-slate-950 font-display tabular-nums">∑ {shipment.items.reduce((acc, i) => acc + i.quantity, 0)} UNIDADES</span>
                     </div>
                     <div className="space-y-1 max-h-32 overflow-y-auto custom-scrollbar pr-1">
                       {(Array.from(new Set(shipment.items.map(i => i.customerId))) as string[]).map(customerId => {
@@ -602,7 +602,7 @@ export default function Shipments() {
                       </button>
                       
                       <div className="absolute bottom-full left-0 mb-2 w-48 bg-slate-950 text-white rounded-xl p-2.5 shadow-2xl opacity-0 group-hover/tax:opacity-100 pointer-events-none transition-all z-20 border border-white/10">
-                        <p className="text-[7px] font-black uppercase tracking-[0.2em] text-slate-500 mb-1.5 border-b border-white/5 pb-1">Tax Audit / Pro-Rata</p>
+                        <p className="text-[7px] font-black uppercase tracking-[0.2em] text-slate-500 mb-1.5 border-b border-white/5 pb-1">Auditoria de Taxas / Pro-Rata</p>
                         <div className="space-y-1">
                           {calculateTaxBreakdown(shipment).map(item => (
                             <div key={item.id} className="flex justify-between items-center text-[8px]">
@@ -666,7 +666,7 @@ export default function Shipments() {
                 onClick={() => sendNotification(shipment, shipment.status)}
                 className="flex items-center gap-1 px-2 py-1 bg-slate-900 text-white rounded text-[8px] font-black uppercase tracking-widest hover:bg-red-800 transition-colors"
               >
-                <MessageCircle size={10} /> NOTIFY
+                <MessageCircle size={10} /> NOTIFICAR
               </button>
             </div>
           </motion.div>

@@ -295,7 +295,7 @@ export default function Customers() {
             isImporting && "opacity-50 pointer-events-none"
           )}>
             <ArrowDownCircle size={20} className="text-red-800" />
-            {isImporting ? 'Syncing...' : 'Import Lote'}
+            {isImporting ? 'Sincronizando...' : 'Importar Lote'}
             <input type="file" accept=".csv" className="hidden" onChange={handleCSVImport} disabled={isImporting} />
           </label>
           <button 
@@ -313,7 +313,7 @@ export default function Customers() {
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 size-5 group-focus-within:text-red-800 transition-colors" />
             <input 
               type="text" 
-              placeholder="Search Intelligence..." 
+              placeholder="Buscar Cliente..." 
               className="w-full pl-12 pr-4 py-3 bg-white/60 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-red-800 transition-all shadow-sm outline-none text-[10px] font-black uppercase tracking-widest"
               value={search}
               onChange={e => setSearch(e.target.value)}
@@ -355,7 +355,8 @@ export default function Customers() {
           </h3>
           <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Exibindo {filtered.length} Clientes Ativos</div>
         </div>
-        <table className="w-full text-left border-collapse hidden md:table">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse hidden md:table min-w-[800px] lg:min-w-full">
           <thead>
             <tr className="bg-slate-50/50 border-b border-slate-100">
               <th className="px-8 py-4 text-[10px] uppercase font-black text-slate-400 tracking-widest">Identificação do Cliente</th>
@@ -375,7 +376,7 @@ export default function Customers() {
                        {customer.totalDebt > 0 ? (
                          <span className="px-2 py-0.5 bg-red-800/10 text-red-800 text-[8px] font-black uppercase rounded border border-red-800/20 shadow-sm">Débito Ativo</span>
                        ) : (
-                         <span className="px-2 py-0.5 bg-amber-500/10 text-amber-700 text-[8px] font-black uppercase rounded border border-amber-500/20 shadow-sm">Trusted Account</span>
+                         <span className="px-2 py-0.5 bg-amber-500/10 text-amber-700 text-[8px] font-black uppercase rounded border border-amber-500/20 shadow-sm">Conta Confiável</span>
                        )}
                     </div>
                   </div>
@@ -415,6 +416,7 @@ export default function Customers() {
             ))}
           </tbody>
         </table>
+        </div>
 
         {/* Mobile Card View */}
         <div className="md:hidden divide-y divide-slate-100">
@@ -621,7 +623,7 @@ export default function Customers() {
                     </div>
                     <div>
                       <h3 className="text-2xl font-bold tracking-tight uppercase font-display">Exibição de Status: <span className="text-amber-500">{selectedCustomer.name}</span></h3>
-                      <p className="text-white/40 text-[10px] font-black uppercase tracking-[0.3em] font-sans">{selectedCustomer.contact} • Intelligence Audit</p>
+                      <p className="text-white/40 text-[10px] font-black uppercase tracking-[0.3em] font-sans">{selectedCustomer.contact} • Auditoria de Inteligência</p>
                     </div>
                   </div>
                   <div className="text-right">

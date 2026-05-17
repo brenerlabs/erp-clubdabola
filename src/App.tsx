@@ -88,7 +88,7 @@ export default function App() {
   if (loading) return (
     <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-50 text-slate-900 gap-4">
       <div className="size-16 border-2 border-slate-200 border-t-red-800 rounded-full animate-spin" />
-      <p className="text-[10px] font-bold uppercase tracking-[0.4em] animate-pulse">Intelligence Suite</p>
+      <p className="text-[10px] font-bold uppercase tracking-[0.4em] animate-pulse">Suíte de Inteligência</p>
     </div>
   );
 
@@ -111,7 +111,7 @@ export default function App() {
                 ERP CLUB DA <span className="text-red-800 uppercase">BOLA</span>
               </h1>
               <p className="mt-2 font-bold uppercase tracking-widest text-[9px] text-slate-400">
-                Analytical Management Portfolio
+                Portfólio de Gestão Analítica
               </p>
             </div>
           </div>
@@ -275,7 +275,7 @@ export default function App() {
                       ERP CLUB DA <span className="text-red-800 uppercase">BOLA</span>
                     </span>
                     <span className="text-[10px] font-bold text-slate-400 uppercase hidden sm:block tracking-widest leading-tight">
-                      Intelligence & Logistics
+                      Inteligência e Logística
                     </span>
                   </div>
                 </div>
@@ -291,7 +291,7 @@ export default function App() {
                 <p className="text-xs font-black uppercase tracking-tight text-slate-900">
                   {user.displayName || user.email.split('@')[0]}
                 </p>
-                <p className="text-[9px] text-slate-500 uppercase font-bold tracking-widest">Master Admin</p>
+                <p className="text-[9px] text-slate-500 uppercase font-bold tracking-widest">Administrador Master</p>
               </div>
               <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl overflow-hidden p-0.5 shadow-xl bg-white border border-slate-100">
                 <img className="rounded-[14px] w-full h-full object-cover" src={user.photoURL || `https://ui-avatars.com/api/?name=${user.email}&background=6366f1&color=fff`} alt="User" />

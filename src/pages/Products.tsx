@@ -262,7 +262,7 @@ export default function Products() {
             isImporting && "opacity-50 pointer-events-none"
           )}>
             <Box size={20} className="text-red-800" />
-            {isImporting ? 'Syncing...' : 'Import CSV'}
+            {isImporting ? 'Sincronizando...' : 'Importar CSV'}
             <input type="file" accept=".csv" className="hidden" onChange={handleCSVImport} disabled={isImporting} />
           </label>
           <button 
@@ -303,7 +303,7 @@ export default function Products() {
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 size-5 group-focus-within:text-red-800 transition-colors" />
           <input 
             type="text" 
-            placeholder="Search SKUs..." 
+            placeholder="Buscar SKUs..." 
             className="w-full pl-12 pr-4 py-3 bg-white/60 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-red-800 transition-all shadow-sm outline-none text-[10px] font-black uppercase tracking-widest"
             value={search}
             onChange={e => setSearch(e.target.value)}
@@ -345,7 +345,8 @@ export default function Products() {
           </h3>
           <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Exibindo {filtered.length} SKUs Ativos</div>
         </div>
-        <table className="w-full text-left border-collapse hidden md:table">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse hidden md:table min-w-[900px] lg:min-w-full">
           <thead>
             <tr className="bg-slate-50/50 border-b border-slate-100">
               <th className="px-8 py-4 text-[10px] uppercase font-black text-slate-400 tracking-widest">Produto</th>
@@ -406,7 +407,7 @@ export default function Products() {
                       )}
                     </div>
                     <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mt-1">
-                      STOCK RESERVE
+                      RESERVA DE ESTOQUE
                     </span>
                   </div>
                 </td>
@@ -427,6 +428,7 @@ export default function Products() {
             ))}
           </tbody>
         </table>
+        </div>
 
         {/* Mobile List View */}
         <div className="md:hidden divide-y divide-slate-100 px-2">

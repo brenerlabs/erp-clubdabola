@@ -198,13 +198,13 @@ export default function Finance() {
             onClick={exportToPDF}
             className="flex items-center gap-2 px-6 py-3 bg-rose-50 text-rose-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-rose-100 transition-all border border-rose-100 shadow-sm"
           >
-            <FileText size={16} /> PDF Report
+            <FileText size={16} /> Relatório PDF
           </button>
           <button 
             onClick={exportToExcel}
             className="flex items-center gap-2 px-6 py-3 bg-emerald-50 text-emerald-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-100 transition-all border border-emerald-100 shadow-sm"
           >
-            <TableIcon size={16} /> Excel Database
+            <TableIcon size={16} /> Planilha Excel
           </button>
         </div>
       </div>
@@ -261,7 +261,8 @@ export default function Finance() {
             </div>
           </div>
           <div className="flex-1 overflow-y-auto custom-scrollbar">
-            <table className="w-full text-left">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left min-w-[800px]">
               <thead className="sticky top-0 bg-slate-50/80 backdrop-blur-md border-b border-slate-100 z-10">
                 <tr>
                   <th className="px-8 py-4 text-[10px] uppercase font-black text-slate-400 tracking-widest">Natureza</th>
@@ -284,7 +285,7 @@ export default function Finance() {
                         </div>
                         <div>
                           <p className="text-[11px] font-black text-slate-950 uppercase tracking-tight italic">{t.type === 'payment' ? 'Amortização Fiado' : 'Venda a Prazo'}</p>
-                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-0.5">Sync Intelligence</p>
+                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-0.5">Sincronização Fiscal</p>
                         </div>
                       </div>
                     </td>
@@ -334,6 +335,7 @@ export default function Finance() {
               </tbody>
             </table>
           </div>
+        </div>
         </div>
       </div>
 
