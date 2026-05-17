@@ -304,7 +304,7 @@ export default function Products() {
           <input 
             type="text" 
             placeholder="Buscar SKUs..." 
-            className="w-full pl-12 pr-4 py-3 bg-white/60 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-red-800 transition-all shadow-sm outline-none text-[10px] font-black uppercase tracking-widest"
+            className="w-full pl-12 pr-4 py-3 bg-white/60 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-red-800 transition-all shadow-sm outline-none text-[10px] font-black tracking-widest"
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
@@ -532,7 +532,7 @@ export default function Products() {
                           type="text" 
                           value={name} 
                           onChange={e => setName(e.target.value)}
-                          className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-red-800 font-black text-sm transition-all uppercase placeholder:opacity-30"
+                          className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-red-800 font-black text-sm transition-all placeholder:opacity-30"
                           placeholder="Nome do produto"
                         />
                       </div>
@@ -543,7 +543,7 @@ export default function Products() {
                           type="text" 
                           value={category} 
                           onChange={e => setCategory(e.target.value)}
-                          className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-red-800 font-black text-sm transition-all uppercase"
+                          className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-red-800 font-black text-sm transition-all"
                           placeholder="Ex: Tênis"
                         />
                       </div>
@@ -587,7 +587,7 @@ export default function Products() {
                         <select 
                           value={gender} 
                           onChange={e => setGender(e.target.value as any)}
-                          className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-red-800 font-black text-sm transition-all uppercase"
+                          className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-red-800 font-black text-sm transition-all"
                         >
                           <option value="Masculino">Masculino</option>
                           <option value="Feminino">Feminino</option>
@@ -653,7 +653,7 @@ export default function Products() {
                             <input 
                               autoFocus={v.id === lastAddedId}
                               placeholder="Tamanho"
-                              className="w-full text-[10px] font-black uppercase px-2 py-2 border rounded-lg border-slate-200 bg-white focus:ring-1 focus:ring-red-800 outline-none"
+                              className="w-full text-[10px] font-black px-2 py-2 border rounded-lg border-slate-200 bg-white focus:ring-1 focus:ring-red-800 outline-none"
                               value={v.size}
                               onChange={e => {
                                 const next = [...variations];
@@ -665,7 +665,7 @@ export default function Products() {
                           <div className="w-full sm:col-span-4">
                             <input 
                               placeholder="Cor/Variante"
-                              className="w-full text-[10px] font-black uppercase px-2 py-2 border rounded-lg border-slate-200 bg-white focus:ring-1 focus:ring-red-800 outline-none"
+                              className="w-full text-[10px] font-black px-2 py-2 border rounded-lg border-slate-200 bg-white focus:ring-1 focus:ring-red-800 outline-none"
                               value={v.color}
                               onChange={e => {
                                 const next = [...variations];

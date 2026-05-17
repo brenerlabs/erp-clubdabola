@@ -314,7 +314,7 @@ export default function Customers() {
             <input 
               type="text" 
               placeholder="Buscar Cliente..." 
-              className="w-full pl-12 pr-4 py-3 bg-white/60 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-red-800 transition-all shadow-sm outline-none text-[10px] font-black uppercase tracking-widest"
+              className="w-full pl-12 pr-4 py-3 bg-white/60 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-red-800 transition-all shadow-sm outline-none text-[10px] font-black tracking-widest"
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
@@ -508,7 +508,7 @@ export default function Customers() {
                         <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Nome Completo</label>
                         <input 
                           required type="text" value={name} onChange={e => setName(e.target.value)}
-                          className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-red-800 font-black text-sm transition-all uppercase placeholder:opacity-30"
+                          className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-red-800 font-black text-sm transition-all placeholder:opacity-30"
                           placeholder="Ex: João Silva"
                         />
                       </div>

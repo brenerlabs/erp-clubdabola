@@ -549,7 +549,7 @@ export default function PDV() {
             <input 
               type="text" 
               placeholder="Buscar por nome ou categoria..." 
-              className="w-full pl-14 pr-6 py-4 bg-white border border-gray-100 rounded-2xl shadow-sm outline-none focus:ring-2 focus:ring-red-800/20 focus:border-red-800 font-black text-sm md:text-base uppercase tracking-tight placeholder:text-slate-300 transition-all"
+              className="w-full pl-14 pr-6 py-4 bg-white border border-gray-100 rounded-2xl shadow-sm outline-none focus:ring-2 focus:ring-red-800/20 focus:border-red-800 font-black text-sm md:text-base tracking-tight placeholder:text-slate-300 transition-all"
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
