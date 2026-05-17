@@ -197,13 +197,34 @@ export default function Shipments() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!trackingCode.trim()) {
+    
+    // Tracking code validation: 2 letters + 9 numbers + 2 letters
+    const upperTracking = trackingCode.trim().toUpperCase();
+    const trackingRegex = /^[A-Z]{2}[0-9]{9}[A-Z]{2}$/;
+    
+    if (!upperTracking) {
       alert('O código de rastreio é obrigatório.');
       return;
     }
+
+    if (!trackingRegex.test(upperTracking)) {
+      alert('Formato de rastreio inválido! Use o padrão: 2 letras + 9 números + 2 letras (ex: AA123456789BR).');
+      return;
+    }
+
+    // Uniqueness check
+    const isDuplicate = shipments.some(s => 
+      s.trackingCode.toUpperCase() === upperTracking && s.id !== editingShipment?.id
+    );
+
+    if (isDuplicate) {
+      alert('Este código de rastreio já está cadastrado em outro lote!');
+      return;
+    }
+
     try {
       const data = {
-        trackingCode: trackingCode.toUpperCase(),
+        trackingCode: upperTracking,
         status,
         items,
         hasTax,
@@ -713,9 +734,10 @@ export default function Shipments() {
                       required 
                       type="text" 
                       value={trackingCode} 
-                      onChange={e => setTrackingCode(e.target.value)}
+                      onChange={e => setTrackingCode(e.target.value.toUpperCase())}
                       placeholder="Ex: NL123456789BR"
-                      className="w-full px-4 py-3 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-sm bg-slate-50/50 transition-all"
+                      maxLength={13}
+                      className="w-full px-4 py-3 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-sm bg-slate-50/50 transition-all uppercase"
                     />
                   </div>
                   <div className="space-y-2">
