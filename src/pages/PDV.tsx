@@ -1,12 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, query, onSnapshot, addDoc, updateDoc, doc, serverTimestamp, writeBatch, orderBy } from 'firebase/firestore';
 import { Product, Customer, SaleItem, Variation } from '../types';
 import { Search, ShoppingCart, User, Plus, Minus, Trash2, CreditCard, Banknote, QrCode, ClipboardList, Send, X, CheckCircle2, MessageCircle, FileImage, Share2, Receipt } from 'lucide-react';
 import { formatCurrency, cn, cleanObject } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
+import { SidebarContext } from '../App';
 
 export default function PDV() {
+  const { setIsSidebarOpen } = useContext(SidebarContext);
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [search, setSearch] = useState('');
@@ -22,6 +24,11 @@ export default function PDV() {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [lastSale, setLastSale] = useState<any>(null);
   const [sendWhatsAppOnFinish, setSendWhatsAppOnFinish] = useState(true);
+
+  useEffect(() => {
+    setIsSidebarOpen(false);
+    return () => setIsSidebarOpen(true);
+  }, [setIsSidebarOpen]);
 
   useEffect(() => {
     const qProd = query(collection(db, 'products'), orderBy('name', 'asc'));

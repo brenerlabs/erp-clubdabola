@@ -29,6 +29,16 @@ import Shipments from './pages/Shipments';
 
 type Page = 'dashboard' | 'pdv' | 'products' | 'customers' | 'finance' | 'compensations' | 'shipments';
 
+interface SidebarContextType {
+  isSidebarOpen: boolean;
+  setIsSidebarOpen: (open: boolean) => void;
+}
+
+export const SidebarContext = React.createContext<SidebarContextType>({
+  isSidebarOpen: true,
+  setIsSidebarOpen: () => {},
+});
+
 export default function App() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -129,8 +139,9 @@ export default function App() {
   ];
 
   return (
-    <div className="flex h-screen font-sans overflow-hidden relative bg-slate-50 text-slate-900">
-      {/* Mobile Drawer Overlay */}
+    <SidebarContext.Provider value={{ isSidebarOpen, setIsSidebarOpen }}>
+      <div className="flex h-screen font-sans overflow-hidden relative bg-slate-50 text-slate-900">
+        {/* Mobile Drawer Overlay */}
       <AnimatePresence>
         {isMobileMenuOpen && (
           <motion.div
@@ -314,5 +325,6 @@ export default function App() {
         {/* I'll remove the redundant bottom nav as the sidebar is now the primary navigation as requested */}
       </main>
     </div>
+    </SidebarContext.Provider>
   );
 }

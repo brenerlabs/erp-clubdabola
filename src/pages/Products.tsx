@@ -1,12 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, orderBy, writeBatch } from 'firebase/firestore';
 import { Product, Variation } from '../types';
 import { Plus, Search, Edit2, Trash2, Copy, Package, Box, X } from 'lucide-react';
 import { formatCurrency, calculateMargin, calculateMarkup, cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
+import { SidebarContext } from '../App';
 
 export default function Products() {
+  const { setIsSidebarOpen } = useContext(SidebarContext);
   const [products, setProducts] = useState<Product[]>([]);
   const [search, setSearch] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -25,6 +27,14 @@ export default function Products() {
   const [isDropshipping, setIsDropshipping] = useState(false);
   const [variations, setVariations] = useState<Variation[]>([]);
   const [lastAddedId, setLastAddedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isModalOpen) {
+      setIsSidebarOpen(false);
+    } else {
+      setIsSidebarOpen(true);
+    }
+  }, [isModalOpen, setIsSidebarOpen]);
 
   useEffect(() => {
     const q = query(collection(db, 'products'), orderBy('name', 'asc'));
@@ -401,7 +411,7 @@ export default function Products() {
                   </div>
                 </td>
                 <td className="px-8 py-5">
-                  <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex items-center justify-end gap-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
                     <button onClick={() => openModal(product, true)} className="p-2.5 hover:bg-red-800 hover:text-white text-slate-900 rounded-xl transition-all bg-white shadow-sm border border-slate-100" title="Duplicar">
                       <Copy size={16} />
                     </button>
@@ -487,8 +497,8 @@ export default function Products() {
                   <button type="button" onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-2 hover:bg-slate-200 rounded-lg transition-colors"><X size={20} /></button>
                 </div>
                 
-                <div className="p-8 overflow-y-auto max-h-[70vh] grid grid-cols-5 gap-8">
-                  <div className="col-span-3 space-y-6">
+                <div className="p-8 overflow-y-auto max-h-[85vh] md:max-h-[70vh] grid grid-cols-1 lg:grid-cols-5 gap-8">
+                  <div className="lg:col-span-3 space-y-6">
                     <div className="flex items-center gap-4 p-4 bg-amber-50 border border-amber-200 rounded-2xl">
                       <div className={cn(
                         "size-10 rounded-xl flex items-center justify-center transition-all",
@@ -617,7 +627,7 @@ export default function Products() {
                     </div>
                   </div>
 
-                  <div className="col-span-2 space-y-4">
+                  <div className="lg:col-span-2 space-y-4">
                     <div className="flex items-center justify-between">
                       <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Grade Dimensional / Cores</label>
                       <button 
@@ -628,7 +638,7 @@ export default function Products() {
                         <Plus size={14} className="text-amber-500" /> Adicionar
                       </button>
                     </div>
-                    <div className="space-y-3 p-4 bg-slate-50 border border-slate-200 rounded-2xl overflow-y-auto max-h-[350px]">
+                    <div className="space-y-3 p-4 bg-slate-50 border border-slate-200 rounded-2xl overflow-y-auto max-h-[400px]">
                       {variations.length === 0 && (
                         <div className="text-center py-10 opacity-30">
                           <Plus className="mx-auto text-slate-800 mb-2" size={32} strokeWidth={1} />
@@ -636,8 +646,8 @@ export default function Products() {
                         </div>
                       )}
                       {variations.map((v, i) => (
-                        <div key={v.id} className="grid grid-cols-11 gap-2 items-center group/row">
-                          <div className="col-span-3">
+                        <div key={v.id} className="flex flex-col sm:grid sm:grid-cols-11 gap-2 items-center group/row p-2 sm:p-0 border-b sm:border-0 border-slate-100 last:border-0">
+                          <div className="w-full sm:col-span-3">
                             <input 
                               autoFocus={v.id === lastAddedId}
                               placeholder="Tamanho"
@@ -650,7 +660,7 @@ export default function Products() {
                               }}
                             />
                           </div>
-                          <div className="col-span-4">
+                          <div className="w-full sm:col-span-4">
                             <input 
                               placeholder="Cor/Variante"
                               className="w-full text-[10px] font-black uppercase px-2 py-2 border rounded-lg border-slate-200 bg-white focus:ring-1 focus:ring-red-800 outline-none"
@@ -662,7 +672,7 @@ export default function Products() {
                               }}
                             />
                           </div>
-                          <div className="col-span-3">
+                          <div className="w-full sm:col-span-3 flex gap-2 items-center">
                             <input 
                               type="text"
                               inputMode="numeric"
@@ -695,11 +705,18 @@ export default function Products() {
                                 }
                               }}
                             />
+                             <button 
+                               type="button"
+                               onClick={() => setVariations(variations.filter((_, idx) => idx !== i))}
+                               className="sm:hidden text-slate-300 hover:text-red-800 transition-colors p-2"
+                             >
+                               <Trash2 size={16} />
+                             </button>
                           </div>
                           <button 
                             type="button"
                             onClick={() => setVariations(variations.filter((_, idx) => idx !== i))}
-                            className="col-span-1 text-slate-300 hover:text-red-800 transition-colors flex justify-center"
+                            className="hidden sm:flex sm:col-span-1 text-slate-300 hover:text-red-800 transition-colors justify-center"
                           >
                             <Trash2 size={14} />
                           </button>
