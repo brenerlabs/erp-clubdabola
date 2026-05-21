@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, where, orderBy, writeBatch } from 'firebase/firestore';
-import { Customer, Transaction } from '../types';
-import { Plus, Search, Edit2, Trash2, Copy, User, Phone, Wallet, History, ArrowDownCircle, ArrowUpCircle, X } from 'lucide-react';
+import { Customer, Transaction, Sale } from '../types';
+import { Plus, Search, Edit2, Trash2, Copy, User, Phone, Wallet, History, ArrowDownCircle, ArrowUpCircle, X, ShoppingBag, Star } from 'lucide-react';
 import { formatCurrency, cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { SidebarContext } from '../App';
@@ -19,7 +19,9 @@ export default function Customers() {
   // Transactions modal
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [sales, setSales] = useState<Sale[]>([]);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [filterDebt, setFilterDebt] = useState<'all' | 'has-debt' | 'no-debt'>('all');
   const [paymentAmount, setPaymentAmount] = useState<string>('');
   const [historyTypeFilter, setHistoryTypeFilter] = useState<'all' | 'payment' | 'debt'>('all');
   const [historyStartDate, setHistoryStartDate] = useState('');
@@ -30,6 +32,7 @@ export default function Customers() {
   const [contact, setContact] = useState('');
   const [isImporting, setIsImporting] = useState(false);
   const [activeTab, setActiveTab] = useState<'perfil' | 'history'>('perfil');
+  const [historyTab, setHistoryTab] = useState<'transacoes' | 'pedidos' | 'favoritos'>('transacoes');
 
   useEffect(() => {
     if (isModalOpen || isHistoryOpen) {
@@ -55,7 +58,12 @@ export default function Customers() {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setCustomers(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Customer)));
     });
-    return unsubscribe;
+
+    const unsubSales = onSnapshot(collection(db, 'sales'), (snapshot) => {
+      setSales(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Sale)));
+    });
+
+    return () => { unsubscribe(); unsubSales(); };
   }, []);
 
   const openModal = (customer?: Customer, isDuplicate = false) => {
@@ -259,9 +267,10 @@ export default function Customers() {
   };
 
   const filtered = customers.filter(c => {
-    const matchesSearch = (c.name || '').toLowerCase().includes(debouncedSearch.toLowerCase()) || (c.contact || '').includes(debouncedSearch);
-    const matchesPending = filterPending ? c.totalDebt > 0 : true;
-    return matchesSearch && matchesPending;
+    const term = debouncedSearch.toLowerCase();
+    const matchesSearch = (c.name || '').toLowerCase().includes(term) || (c.contact || '').includes(term);
+    const matchesDebt = filterDebt === 'has-debt' ? c.totalDebt > 0 : filterDebt === 'no-debt' ? c.totalDebt <= 0 : true;
+    return matchesSearch && matchesDebt;
   });
 
   const filteredTransactions = transactions.filter(t => {
@@ -275,6 +284,30 @@ export default function Customers() {
     
     return matchesType && matchesStart && matchesEnd;
   });
+
+  const getFavoriteProducts = () => {
+    if (!selectedCustomer) return [];
+    
+    const productCounts: Record<string, { name: string, count: number }> = {};
+    
+    sales
+      .filter(s => s.customerId === selectedCustomer.id)
+      .flatMap(s => s.items)
+      .forEach(item => {
+        const key = item.productId + (item.variationName || '');
+        if (!productCounts[key]) {
+          productCounts[key] = { name: item.name + (item.variationName ? ` (${item.variationName})` : ''), count: 0 };
+        }
+        productCounts[key].count += item.quantity;
+      });
+
+    return Object.values(productCounts)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 3);
+  };
+
+  const customerSales = selectedCustomer ? sales.filter(s => s.customerId === selectedCustomer.id).sort((a,b) => b.createdAt?.seconds - a.createdAt?.seconds) : [];
+
 
   return (
     <motion.div 
@@ -308,8 +341,8 @@ export default function Customers() {
       </div>
 
       <div className="flex flex-col lg:flex-row items-center justify-between gap-4 p-6 bg-white/40 backdrop-blur-md rounded-[32px] border border-white/60 shadow-xl shadow-slate-200/50">
-        <div className="flex flex-1 items-center gap-4 w-full">
-          <div className="relative flex-1 max-w-md group font-sans">
+        <div className="flex flex-col sm:flex-row items-center gap-4 flex-1 w-full max-w-2xl">
+          <div className="flex-1 relative group w-full">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 size-5 group-focus-within:text-red-800 transition-colors" />
             <input 
               type="text" 
@@ -319,19 +352,17 @@ export default function Customers() {
               onChange={e => setSearch(e.target.value)}
             />
           </div>
-          
-          <button 
-            onClick={() => setFilterPending(!filterPending)}
-            className={cn(
-              "flex items-center gap-3 px-6 py-3 rounded-2xl text-[9px] font-black uppercase tracking-widest transition-all border font-sans",
-              filterPending 
-                ? "bg-red-50 border-red-200 text-red-800 shadow-inner" 
-                : "bg-white border-slate-100 text-slate-400 hover:bg-slate-50 shadow-sm"
-            )}
-          >
-            <Wallet size={16} />
-            Risco Ativo {filterPending && `(${filtered.length})`}
-          </button>
+          <div className="flex gap-2 w-full sm:w-auto">
+            <select
+              value={filterDebt}
+              onChange={e => setFilterDebt(e.target.value as any)}
+              className="bg-white/60 border border-slate-200 rounded-2xl px-4 py-3 text-[9px] font-black uppercase tracking-widest outline-none focus:ring-2 focus:ring-red-800 transition-all shadow-sm flex-1 sm:flex-initial"
+            >
+              <option value="all">Todos os Clientes</option>
+              <option value="has-debt">Com Dívida Ativa</option>
+              <option value="no-debt">Sem Dívida</option>
+            </select>
+          </div>
         </div>
         
         <div className="flex items-center gap-8 px-6 border-l border-slate-200 hidden lg:flex font-sans">
@@ -665,95 +696,198 @@ export default function Customers() {
                 </div>
               </div>
               
-              <div className="flex-1 overflow-y-auto p-8 bg-slate-50">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-                  <div className="flex items-center gap-2">
-                    <History size={16} className="text-slate-400" />
-                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Extrato de Movimentações</h4>
-                  </div>
-                  
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-4 px-4 py-2 bg-white border border-slate-200 rounded-xl shadow-sm">
-                      <div className="text-right">
-                        <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest">Compensado</p>
-                        <p className="text-xs font-black text-emerald-600">
-                          {formatCurrency(filteredTransactions.filter(t => t.type === 'payment').reduce((acc, t) => acc + t.amount, 0))}
-                        </p>
-                      </div>
-                      <div className="w-px h-6 bg-slate-100" />
-                      <div className="text-right">
-                        <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest">Devido</p>
-                        <p className="text-xs font-black text-rose-500">
-                          {formatCurrency(filteredTransactions.filter(t => t.type === 'debt').reduce((acc, t) => acc + t.amount, 0))}
-                        </p>
-                      </div>
+              <div className="flex-1 overflow-y-auto bg-slate-50">
+                <div className="flex bg-white border-b border-slate-200">
+                  <button 
+                    onClick={() => setHistoryTab('transacoes')}
+                    className={cn(
+                      "flex-1 py-4 text-[10px] font-black uppercase tracking-widest transition-all border-b-2",
+                      historyTab === 'transacoes' ? "border-red-800 text-red-800 bg-red-50/30" : "border-transparent text-slate-400 hover:text-slate-600"
+                    )}
+                  >
+                    <div className="flex items-center justify-center gap-2">
+                       <History size={14} /> Transações
                     </div>
-
-                    <div className="flex bg-white border border-slate-200 rounded-xl p-1 shadow-sm">
-                      {(['all', 'payment', 'debt'] as const).map((type) => (
-                        <button
-                          key={type}
-                          onClick={() => setHistoryTypeFilter(type)}
-                          className={cn(
-                            "px-3 py-1.5 text-[8px] font-black uppercase tracking-wider rounded-lg transition-all",
-                            historyTypeFilter === type 
-                              ? "bg-slate-900 text-white shadow-md" 
-                              : "text-slate-400 hover:text-slate-600"
-                          )}
-                        >
-                          {type === 'all' ? 'Tudo' : type === 'payment' ? 'Pagos' : 'Débitos'}
-                        </button>
-                      ))}
+                  </button>
+                  <button 
+                    onClick={() => setHistoryTab('pedidos')}
+                    className={cn(
+                      "flex-1 py-4 text-[10px] font-black uppercase tracking-widest transition-all border-b-2",
+                      historyTab === 'pedidos' ? "border-red-800 text-red-800 bg-red-50/30" : "border-transparent text-slate-400 hover:text-slate-600"
+                    )}
+                  >
+                    <div className="flex items-center justify-center gap-2">
+                       <ShoppingBag size={14} /> Pedidos
                     </div>
-
-                    <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-1.5 shadow-sm">
-                       <input 
-                         type="date" 
-                         value={historyStartDate}
-                         onChange={e => setHistoryStartDate(e.target.value)}
-                         className="text-[9px] font-bold text-slate-600 outline-none w-24 bg-transparent"
-                       />
-                       <span className="text-slate-300">|</span>
-                       <input 
-                         type="date" 
-                         value={historyEndDate}
-                         onChange={e => setHistoryEndDate(e.target.value)}
-                         className="text-[9px] font-bold text-slate-600 outline-none w-24 bg-transparent"
-                       />
+                  </button>
+                  <button 
+                    onClick={() => setHistoryTab('favoritos')}
+                    className={cn(
+                      "flex-1 py-4 text-[10px] font-black uppercase tracking-widest transition-all border-b-2",
+                      historyTab === 'favoritos' ? "border-red-800 text-red-800 bg-red-50/30" : "border-transparent text-slate-400 hover:text-slate-600"
+                    )}
+                  >
+                    <div className="flex items-center justify-center gap-2">
+                       <Star size={14} /> Favoritos
                     </div>
-                  </div>
+                  </button>
                 </div>
 
-                <div className="space-y-3">
-                  {filteredTransactions.length === 0 && (
-                    <div className="text-center py-12 bg-white rounded-2xl border border-slate-200 border-dashed">
-                      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Nenhuma transação filtrada</p>
-                    </div>
-                  )}
-                  {filteredTransactions.map(t => (
-                    <div key={t.id} className="flex items-center justify-between p-5 bg-white rounded-2xl border border-slate-200 shadow-sm transition-all hover:shadow-md">
-                      <div className="flex items-center gap-4">
-                        {t.type === 'payment' ? (
-                          <div className="size-10 bg-amber-50 text-amber-700 rounded-xl flex items-center justify-center"><ArrowDownCircle size={20} /></div>
-                        ) : (
-                          <div className="size-10 bg-red-50 text-red-800 rounded-xl flex items-center justify-center"><ArrowUpCircle size={20} /></div>
-                        )}
-                        <div>
-                          <p className="font-black text-slate-900 text-sm uppercase tracking-tight">{t.type === 'payment' ? 'Pagamento Efetivado' : 'Investimento em Produto'}</p>
-                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                             {new Date(t.createdAt?.seconds * 1000).toLocaleDateString('pt-BR')} 
-                             - {new Date(t.createdAt?.seconds * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                          </p>
+                <div className="p-8">
+                {historyTab === 'transacoes' && (
+                  <div className="animate-in fade-in slide-in-from-bottom-4">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+                      <div className="flex items-center gap-2">
+                        <History size={16} className="text-slate-400" />
+                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Extrato de Movimentações</h4>
+                      </div>
+                      
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-4 px-4 py-2 bg-white border border-slate-200 rounded-xl shadow-sm">
+                          <div className="text-right">
+                            <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest">Compensado</p>
+                            <p className="text-xs font-black text-emerald-600">
+                              {formatCurrency(filteredTransactions.filter(t => t.type === 'payment').reduce((acc, t) => acc + t.amount, 0))}
+                            </p>
+                          </div>
+                          <div className="w-px h-6 bg-slate-100" />
+                          <div className="text-right">
+                            <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest">Devido</p>
+                            <p className="text-xs font-black text-rose-500">
+                              {formatCurrency(filteredTransactions.filter(t => t.type === 'debt').reduce((acc, t) => acc + t.amount, 0))}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex bg-white border border-slate-200 rounded-xl p-1 shadow-sm">
+                          {(['all', 'payment', 'debt'] as const).map((type) => (
+                            <button
+                              key={type}
+                              onClick={() => setHistoryTypeFilter(type)}
+                              className={cn(
+                                "px-3 py-1.5 text-[8px] font-black uppercase tracking-wider rounded-lg transition-all",
+                                historyTypeFilter === type 
+                                  ? "bg-slate-900 text-white shadow-md" 
+                                  : "text-slate-400 hover:text-slate-600"
+                              )}
+                            >
+                              {type === 'all' ? 'Tudo' : type === 'payment' ? 'Pagos' : 'Débitos'}
+                            </button>
+                          ))}
+                        </div>
+
+                        <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-1.5 shadow-sm">
+                          <input 
+                            type="date" 
+                            value={historyStartDate}
+                            onChange={e => setHistoryStartDate(e.target.value)}
+                            className="text-[9px] font-bold text-slate-600 outline-none w-24 bg-transparent"
+                          />
+                          <span className="text-slate-300">|</span>
+                          <input 
+                            type="date" 
+                            value={historyEndDate}
+                            onChange={e => setHistoryEndDate(e.target.value)}
+                            className="text-[9px] font-bold text-slate-600 outline-none w-24 bg-transparent"
+                          />
                         </div>
                       </div>
-                      <div className={cn(
-                        "text-lg font-bold tracking-tight",
-                        t.type === 'payment' ? 'text-amber-600' : 'text-red-800'
-                      )}>
-                        {t.type === 'payment' ? '-' : '+'}{formatCurrency(t.amount)}
-                      </div>
                     </div>
-                  ))}
+
+                    <div className="space-y-3">
+                      {filteredTransactions.length === 0 && (
+                        <div className="text-center py-12 bg-white rounded-2xl border border-slate-200 border-dashed">
+                          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Nenhuma transação filtrada</p>
+                        </div>
+                      )}
+                      {filteredTransactions.map(t => (
+                        <div key={t.id} className="flex items-center justify-between p-5 bg-white rounded-2xl border border-slate-200 shadow-sm transition-all hover:shadow-md">
+                          <div className="flex items-center gap-4">
+                            {t.type === 'payment' ? (
+                              <div className="size-10 bg-amber-50 text-amber-700 rounded-xl flex items-center justify-center"><ArrowDownCircle size={20} /></div>
+                            ) : (
+                              <div className="size-10 bg-red-50 text-red-800 rounded-xl flex items-center justify-center"><ArrowUpCircle size={20} /></div>
+                            )}
+                            <div>
+                              <p className="font-black text-slate-900 text-sm uppercase tracking-tight">{t.type === 'payment' ? 'Pagamento Efetivado' : 'Investimento em Produto'}</p>
+                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                {new Date(t.createdAt?.seconds * 1000).toLocaleDateString('pt-BR')} 
+                                - {new Date(t.createdAt?.seconds * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                              </p>
+                            </div>
+                          </div>
+                          <div className={cn(
+                            "text-lg font-bold tracking-tight",
+                            t.type === 'payment' ? 'text-amber-600' : 'text-red-800'
+                          )}>
+                            {t.type === 'payment' ? '-' : '+'}{formatCurrency(t.amount)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {historyTab === 'pedidos' && (
+                  <div className="animate-in fade-in slide-in-from-bottom-4 space-y-4">
+                    {customerSales.length === 0 && (
+                      <div className="text-center py-12 bg-white rounded-2xl border border-slate-200 border-dashed">
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Nenhum pedido realizado</p>
+                      </div>
+                    )}
+                    {customerSales.map(sale => (
+                      <div key={sale.id} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                        <div className="flex justify-between items-start mb-4">
+                          <div>
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Pedido #{sale.id?.slice(-6).toUpperCase()}</p>
+                            <p className="text-xs font-bold text-slate-600">{new Date(sale.createdAt?.seconds * 1000).toLocaleDateString()}</p>
+                          </div>
+                          <div className="text-right">
+                             <p className="text-lg font-black text-slate-900 italic tracking-tighter">{formatCurrency(sale.total)}</p>
+                             <p className="text-[9px] font-black uppercase text-amber-500 tracking-widest">{sale.paymentMethod}</p>
+                          </div>
+                        </div>
+                        <div className="space-y-2 border-t border-slate-50 pt-4">
+                          {sale.items.map((item, idx) => (
+                            <div key={idx} className="flex justify-between text-[10px] font-bold uppercase text-slate-500">
+                              <span>{item.quantity}x {item.name} {item.variationName && `(${item.variationName})`}</span>
+                              <span>{formatCurrency(item.price * item.quantity)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {historyTab === 'favoritos' && (
+                  <div className="animate-in fade-in slide-in-from-bottom-4">
+                    {getFavoriteProducts().length === 0 ? (
+                      <div className="text-center py-12 bg-white rounded-2xl border border-slate-200 border-dashed">
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Nenhuma preferência mapeada</p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 gap-4">
+                        {getFavoriteProducts().map((fav, idx) => (
+                          <div key={idx} className="flex items-center justify-between p-6 bg-white rounded-[24px] border border-slate-100 shadow-sm group hover:border-red-100 transition-all">
+                             <div className="flex items-center gap-4">
+                               <div className="size-12 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center shadow-md">
+                                 <Star size={20} fill="currentColor" />
+                               </div>
+                               <div>
+                                 <p className="text-[11px] font-black uppercase text-slate-900 tracking-tight">{fav.name}</p>
+                                 <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Comprado {fav.count} {fav.count === 1 ? 'vez' : 'vezes'}</p>
+                               </div>
+                             </div>
+                             <div className="px-4 py-2 bg-red-50 text-red-800 rounded-xl text-[10px] font-black uppercase tracking-widest">
+                                FAVORITO #{idx + 1}
+                             </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
                 </div>
               </div>
               <div className="p-6 bg-white border-t border-slate-100 flex justify-end">

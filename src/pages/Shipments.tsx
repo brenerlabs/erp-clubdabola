@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, orderBy, writeBatch } from 'firebase/firestore';
-import { Shipment, ShipmentItem, Customer, Product, Sale } from '../types';
+import { Shipment, ShipmentItem, Customer, Product, Sale, SaleItem } from '../types';
 import { 
   Package, Search, Plus, Trash2, Edit2, Truck, 
   CheckCircle2, Clock, AlertCircle, MapPin, 
@@ -113,13 +113,31 @@ export default function Shipments() {
     }));
   };
 
-  const shippedItemKeys = new Set(
-    shipments.flatMap(s => s.items.map(i => `${i.saleId}-${i.productId}-${i.variationId}`))
-  );
+  const shippedItemKeys = new Set([
+    ...shipments
+      .filter(s => s.id !== editingShipment?.id)
+      .flatMap(s => s.items.map(i => `${i.saleId}-${i.productId}-${i.variationId}`)),
+    ...items.map(i => `${i.saleId}-${i.productId}-${i.variationId}`)
+  ]);
 
-  const availableSales = sales.filter(sale => 
-    sale.items.some(item => !shippedItemKeys.has(`${sale.id}-${item.productId}-${item.variationId}`))
-  );
+  const addSingleSaleItem = (sale: Sale, item: SaleItem) => {
+    const pName = `${item.name} ${item.variationName ? `(${item.variationName})` : ''}`;
+    const cId = sale.customerId || 'final-consumer';
+    const cName = sale.customerName || 'Consumidor Final';
+    
+    setItems(prev => [...prev, {
+      id: Math.random().toString(36).substr(2, 9),
+      saleId: sale.id,
+      variationId: item.variationId,
+      customerId: cId,
+      customerName: cName,
+      productId: item.productId,
+      productName: pName,
+      quantity: item.quantity,
+      price: item.price,
+      isDropshipping: item.isDropshipping || false
+    }]);
+  };
 
   const addSaleItems = (saleId: string) => {
     const sale = sales.find(s => s.id === saleId);
@@ -127,47 +145,34 @@ export default function Shipments() {
 
     const currentItems = [...items];
     
-    // Check for items already in other shipments (global check)
-    const otherShipmentsItems = shipments
-      .filter(s => s.id !== editingShipment?.id)
-      .flatMap(s => s.items.map(i => `${i.saleId}-${i.productId}-${i.variationId}`));
-    const globalShippedKeys = new Set(otherShipmentsItems);
-
     sale.items.forEach(item => {
       const itemKey = `${sale.id}-${item.productId}-${item.variationId}`;
-      if (globalShippedKeys.has(itemKey)) return; // Skip items in other shipments
+      if (shippedItemKeys.has(itemKey)) return; 
 
       const pName = `${item.name} ${item.variationName ? `(${item.variationName})` : ''}`;
       const cId = sale.customerId || 'final-consumer';
       const cName = sale.customerName || 'Consumidor Final';
       
-      const existing = currentItems.find(i => 
-        i.customerId === cId && 
-        i.productId === item.productId && 
-        i.variationId === item.variationId
-      );
-
-      if (existing) {
-        existing.quantity += item.quantity;
-      } else {
-        currentItems.push({
-          id: Math.random().toString(36).substr(2, 9),
-          saleId: sale.id,
-          variationId: item.variationId,
-          customerId: cId,
-          customerName: cName,
-          productId: item.productId,
-          productName: pName,
-          quantity: item.quantity,
-          price: item.price,
-          isDropshipping: item.isDropshipping || false
-        });
-      }
+      currentItems.push({
+        id: Math.random().toString(36).substr(2, 9),
+        saleId: sale.id,
+        variationId: item.variationId,
+        customerId: cId,
+        customerName: cName,
+        productId: item.productId,
+        productName: pName,
+        quantity: item.quantity,
+        price: item.price,
+        isDropshipping: item.isDropshipping || false
+      });
     });
 
     setItems(currentItems);
-    setSelectedSaleId('');
   };
+
+  const availableSales = sales.filter(sale => 
+    sale.items.some(item => !shippedItemKeys.has(`${sale.id}-${item.productId}-${item.variationId}`))
+  );
 
   const removeItem = (id: string) => {
     setItems(items.filter(i => i.id !== id));
@@ -780,8 +785,8 @@ export default function Shipments() {
                   </div>
 
                   <div className="flex flex-col gap-3">
-                    <div className="flex gap-2">
-                      <div className="relative flex-1">
+                    <div className="flex flex-col gap-4">
+                      <div className="relative">
                         <ShoppingBag size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                         <select 
                           value={selectedSaleId}
@@ -796,14 +801,45 @@ export default function Shipments() {
                           ))}
                         </select>
                       </div>
-                      <button 
-                        type="button"
-                        onClick={() => addSaleItems(selectedSaleId)}
-                        disabled={!selectedSaleId}
-                        className="px-6 bg-red-800 text-white font-black text-[10px] uppercase tracking-widest rounded-2xl hover:bg-black transition-all disabled:opacity-50 shadow-lg shadow-red-100"
-                      >
-                        Vincular Venda
-                      </button>
+
+                      {selectedSaleId && (
+                        <div className="space-y-2 animate-in fade-in slide-in-from-top-2 border-l-2 border-red-800 pl-4 py-1">
+                          <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2">Produtos Disponíveis desta Venda</p>
+                          {sales.find(s => s.id === selectedSaleId)?.items
+                            .filter(item => !shippedItemKeys.has(`${selectedSaleId}-${item.productId}-${item.variationId}`))
+                            .map((item, idx) => (
+                              <div key={idx} className="flex items-center justify-between bg-white border border-slate-100 p-2.5 rounded-xl shadow-sm">
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-[10px] font-black text-slate-900 truncate uppercase">{item.name}</p>
+                                  <p className="text-[9px] text-slate-400 font-bold uppercase">{item.variationName || 'Sem variação'}</p>
+                                </div>
+                                <div className="flex items-center gap-3 ml-4">
+                                  <span className="text-[10px] font-black text-slate-900">x{item.quantity}</span>
+                                  <button 
+                                    type="button"
+                                    onClick={() => {
+                                      const sale = sales.find(s => s.id === selectedSaleId);
+                                      if (sale) addSingleSaleItem(sale, item);
+                                    }}
+                                    className="p-1 px-3 bg-red-800 text-white text-[9px] font-black uppercase rounded-lg hover:bg-black transition-all"
+                                  >
+                                    Add
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          <button 
+                            type="button"
+                            onClick={() => {
+                              addSaleItems(selectedSaleId);
+                              setSelectedSaleId('');
+                            }}
+                            className="w-full py-2 bg-slate-900 text-white text-[9px] font-black uppercase tracking-widest rounded-xl hover:bg-red-800 transition-all mt-2"
+                          >
+                            Vincular Todos os Itens
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
 

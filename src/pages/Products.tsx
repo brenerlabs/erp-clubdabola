@@ -11,6 +11,8 @@ export default function Products() {
   const { setIsSidebarOpen } = useContext(SidebarContext);
   const [products, setProducts] = useState<Product[]>([]);
   const [search, setSearch] = useState('');
+  const [filterCategory, setFilterCategory] = useState('Todas');
+  const [filterGender, setFilterGender] = useState('Todos');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isImporting, setIsImporting] = useState(false);
@@ -234,14 +236,25 @@ export default function Products() {
 
   const filtered = products.filter(p => {
     const searchTerm = search.toLowerCase();
-    if (searchTerm === 'estoque baixo') {
-      return (p.totalStock || 0) <= (p.minStock || 0) && !p.isDropshipping;
-    }
-    if (searchTerm === 'dropshipping') {
-      return p.isDropshipping;
-    }
-    return p.name.toLowerCase().includes(searchTerm) || p.category.toLowerCase().includes(searchTerm);
+    
+    // Text search
+    const matchesSearch = searchTerm === 'estoque baixo' 
+      ? (p.totalStock || 0) <= (p.minStock || 0) && !p.isDropshipping
+      : searchTerm === 'dropshipping'
+        ? p.isDropshipping
+        : p.name.toLowerCase().includes(searchTerm) || p.category.toLowerCase().includes(searchTerm);
+
+    // Category filter
+    const matchesCategory = filterCategory === 'Todas' || p.category === filterCategory;
+
+    // Gender filter
+    const matchesGender = filterGender === 'Todos' || p.gender === filterGender;
+
+    return matchesSearch && matchesCategory && matchesGender;
   });
+
+  const categories = ['Todas', ...Array.from(new Set(products.map(p => p.category))).sort()];
+  const genders = ['Todos', 'Masculino', 'Feminino', 'Ambos'];
 
   return (
     <motion.div 
@@ -299,24 +312,47 @@ export default function Products() {
       )}
 
       <div className="flex flex-col lg:flex-row items-center justify-between gap-4 p-6 bg-white/40 backdrop-blur-md rounded-[32px] border border-white/60 shadow-xl shadow-slate-200/50">
-        <div className="flex-1 max-w-md relative group">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 size-5 group-focus-within:text-red-800 transition-colors" />
-          <input 
-            type="text" 
-            placeholder="Buscar SKUs..." 
-            className="w-full pl-12 pr-4 py-3 bg-white/60 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-red-800 transition-all shadow-sm outline-none text-[10px] font-black tracking-widest"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
-          {search.toLowerCase() === 'estoque baixo' && (
-            <button 
-              onClick={() => setSearch('')}
-              className="absolute right-4 top-1/2 -translate-y-1/2 p-1 bg-red-100 text-red-800 rounded-lg hover:bg-red-200 transition-colors"
-              title="Limpar filtro de estoque"
+        <div className="flex flex-col sm:flex-row items-center gap-4 flex-1 w-full max-w-2xl">
+          <div className="flex-1 relative group w-full">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 size-5 group-focus-within:text-red-800 transition-colors" />
+            <input 
+              type="text" 
+              placeholder="Buscar SKUs..." 
+              className="w-full pl-12 pr-4 py-3 bg-white/60 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-red-800 transition-all shadow-sm outline-none text-[10px] font-black tracking-widest"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+            {search.toLowerCase() === 'estoque baixo' && (
+              <button 
+                onClick={() => setSearch('')}
+                className="absolute right-4 top-1/2 -translate-y-1/2 p-1 bg-red-100 text-red-800 rounded-lg hover:bg-red-200 transition-colors"
+                title="Limpar filtro de estoque"
+              >
+                <X size={16} />
+              </button>
+            )}
+          </div>
+
+          <div className="flex gap-2 w-full sm:w-auto">
+            <select
+              value={filterCategory}
+              onChange={e => setFilterCategory(e.target.value)}
+              className="bg-white/60 border border-slate-200 rounded-2xl px-4 py-3 text-[9px] font-black uppercase tracking-widest outline-none focus:ring-2 focus:ring-red-800 transition-all shadow-sm flex-1 sm:flex-initial"
             >
-              <X size={16} />
-            </button>
-          )}
+              {categories.map(cat => (
+                <option key={cat} value={cat}>{cat === 'Todas' ? 'Todas Categorias' : cat}</option>
+              ))}
+            </select>
+            <select
+              value={filterGender}
+              onChange={e => setFilterGender(e.target.value)}
+              className="bg-white/60 border border-slate-200 rounded-2xl px-4 py-3 text-[9px] font-black uppercase tracking-widest outline-none focus:ring-2 focus:ring-red-800 transition-all shadow-sm flex-1 sm:flex-initial"
+            >
+              {genders.map(g => (
+                <option key={g} value={g}>{g === 'Todos' ? 'Todos Gêneros' : g}</option>
+              ))}
+            </select>
+          </div>
         </div>
         <div className="flex items-center gap-8 px-6 border-l border-slate-200 hidden lg:flex font-sans">
            <div className="text-right">

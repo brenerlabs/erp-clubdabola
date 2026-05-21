@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../lib/firebase';
 import { collection, query, onSnapshot, orderBy, writeBatch, doc, getDocs, serverTimestamp } from 'firebase/firestore';
-import { Transaction, Sale, Shipment, Customer } from '../types';
+import { Transaction, Sale, Shipment, Customer, Product } from '../types';
 import { 
   ArrowDownCircle, 
   ArrowUpCircle, 
@@ -30,6 +30,7 @@ export default function Finance() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [filter, setFilter] = useState<'all' | 'payment' | 'debt'>('all');
 
   useEffect(() => {
@@ -49,7 +50,11 @@ export default function Finance() {
       setCustomers(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Customer)));
     });
 
-    return () => { unsubSales(); unsubTrans(); unsubShip(); unsubCust(); };
+    const unsubProd = onSnapshot(collection(db, 'products'), (snapshot) => {
+      setProducts(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Product)));
+    });
+
+    return () => { unsubSales(); unsubTrans(); unsubShip(); unsubCust(); unsubProd(); };
   }, []);
 
   const getCustomerName = (id: string) => customers.find(c => c.id === id)?.name || 'Anônimo';
@@ -75,6 +80,16 @@ export default function Finance() {
   const accountsReceivable = sales.reduce((acc, s) => acc + getSaleBalance(s), 0);
   
   const cashFlow = totalReceived - totalPaidTaxes;
+
+  const totalCostOfGoods = sales.reduce((acc, s) => {
+    return acc + s.items.reduce((itemAcc, item) => {
+      const product = products.find(p => p.id === item.productId);
+      return itemAcc + ((product?.costPrice || 0) * item.quantity);
+    }, 0);
+  }, 0);
+
+  const realProfit = totalInvoiced - totalCostOfGoods;
+  const profitMargin = totalInvoiced > 0 ? (realProfit / totalInvoiced) * 100 : 0;
 
   const methods = [
     { name: 'Dinheiro', icon: Banknote, value: transactions.filter(t => t.paymentMethod === 'Dinheiro').reduce((a, b) => a + b.amount, 0), color: 'bg-emerald-50 text-emerald-600' },
@@ -211,9 +226,9 @@ export default function Finance() {
 
     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
       <FinanceCard title="Faturamento Bruto" value={formatCurrency(totalInvoiced)} icon={ArrowUpCircle} color="red" />
-      <FinanceCard title="Fluxo de Caixa (Líquido)" value={formatCurrency(cashFlow)} icon={ArrowDownCircle} color="emerald" />
+      <FinanceCard title="Lucro Real" value={formatCurrency(realProfit)} icon={ArrowDownCircle} color="emerald" subtitle={`Margem: ${profitMargin.toFixed(1)}%`} />
       <FinanceCard title="Contas a Receber" value={formatCurrency(accountsReceivable)} icon={Wallet} color="black" />
-      <FinanceCard title="Taxas Pagas" value={formatCurrency(totalPaidTaxes)} icon={Receipt} color="amber" />
+      <FinanceCard title="Custos Operacionais" value={formatCurrency(totalCostOfGoods + totalPaidTaxes)} icon={Receipt} color="amber" />
     </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
