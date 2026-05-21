@@ -171,6 +171,7 @@ export default function Shipments() {
   };
 
   const availableSales = sales.filter(sale => 
+    sale.status !== 'Pré-venda' &&
     sale.items.some(item => !shippedItemKeys.has(`${sale.id}-${item.productId}-${item.variationId}`))
   );
 

@@ -49,7 +49,7 @@ export interface Sale {
   total: number;
   downPayment?: number;
   paymentMethod: 'Dinheiro' | 'Cartão' | 'Pix' | 'Fiado';
-  status: 'Concluída' | 'Pendente';
+  status: 'Concluída' | 'Pendente' | 'Pré-venda';
   createdAt: any;
 }
 

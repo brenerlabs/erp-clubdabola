@@ -81,6 +81,7 @@ export default function Dashboard() {
   // Dynamic Filtering
   const filteredSales = React.useMemo(() => {
     return sales.filter(sale => {
+      if (sale.status === 'Pré-venda') return false;
       const matchesCustomer = customerFilter === 'all' || sale.customerId === customerFilter;
       const matchesProduct = productFilter === 'all' || sale.items.some(item => item.productId === productFilter);
       return matchesCustomer && matchesProduct;
@@ -220,7 +221,7 @@ export default function Dashboard() {
   const customerRanking = React.useMemo(() => {
     const ranking: Record<string, { name: string, total: number, count: number }> = {};
     
-    sales.forEach(sale => {
+    sales.filter(s => s.status !== 'Pré-venda').forEach(sale => {
       if (!sale.customerId) return;
       if (!ranking[sale.customerId]) {
         ranking[sale.customerId] = { name: sale.customerName || 'Cliente sem nome', total: 0, count: 0 };

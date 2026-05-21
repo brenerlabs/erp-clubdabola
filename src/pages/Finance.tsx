@@ -67,7 +67,7 @@ export default function Finance() {
     return Math.max(0, sale.total - paymentsForSale);
   };
 
-  const totalInvoiced = sales.reduce((acc, s) => acc + s.total, 0);
+  const totalInvoiced = sales.filter(s => s.status !== 'Pré-venda').reduce((acc, s) => acc + s.total, 0);
   const totalReceived = transactions.filter(t => t.type === 'payment').reduce((acc, t) => acc + t.amount, 0);
   const totalPaidTaxes = shipments.filter(s => s.taxPaid).reduce((acc, s) => acc + (s.taxAmount || 0), 0);
 
@@ -77,11 +77,11 @@ export default function Finance() {
   };
   
   // Accounts Receivable is the sum of balances of all Fiado sales
-  const accountsReceivable = sales.reduce((acc, s) => acc + getSaleBalance(s), 0);
+  const accountsReceivable = sales.filter(s => s.status !== 'Pré-venda').reduce((acc, s) => acc + getSaleBalance(s), 0);
   
   const cashFlow = totalReceived - totalPaidTaxes;
 
-  const totalCostOfGoods = sales.reduce((acc, s) => {
+  const totalCostOfGoods = sales.filter(s => s.status !== 'Pré-venda').reduce((acc, s) => {
     return acc + s.items.reduce((itemAcc, item) => {
       const product = products.find(p => p.id === item.productId);
       return itemAcc + ((product?.costPrice || 0) * item.quantity);
