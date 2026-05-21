@@ -61,10 +61,31 @@ export default function Finance() {
 
   const getSaleBalance = (sale: Sale) => {
     if (sale.paymentMethod !== 'Fiado') return 0;
-    const paymentsForSale = transactions
-      .filter(t => t.saleId === sale.id && t.type === 'payment')
-      .reduce((acc, t) => acc + t.amount, 0);
-    return Math.max(0, sale.total - paymentsForSale);
+    const customer = customers.find(c => c.id === sale.customerId);
+    if (!customer) {
+      const paymentsForSale = transactions
+        .filter(t => t.saleId === sale.id && t.type === 'payment')
+        .reduce((acc, t) => acc + t.amount, 0);
+      return Math.max(0, sale.total - paymentsForSale);
+    }
+
+    const custSales = sales
+      .filter(s => s.customerId === sale.customerId && s.paymentMethod === 'Fiado' && s.status !== 'Pré-venda')
+      .sort((a, b) => {
+        const tA = a.createdAt?.seconds || (typeof a.createdAt === 'object' && a.createdAt?.getTime ? a.createdAt.getTime() / 1000 : 0);
+        const tB = b.createdAt?.seconds || (typeof b.createdAt === 'object' && b.createdAt?.getTime ? b.createdAt.getTime() / 1000 : 0);
+        return tA - tB;
+      });
+
+    let remainingDebt = customer.totalDebt || 0;
+    for (const s of custSales) {
+      const sBalance = Math.min(remainingDebt, s.total);
+      remainingDebt -= sBalance;
+      if (s.id === sale.id) {
+        return sBalance;
+      }
+    }
+    return 0;
   };
 
   const totalInvoiced = sales.filter(s => s.status !== 'Pré-venda').reduce((acc, s) => acc + s.total, 0);
@@ -76,8 +97,8 @@ export default function Finance() {
     return shipments.find(s => s.items.some(i => i.saleId === saleId));
   };
   
-  // Accounts Receivable is the sum of balances of all Fiado sales
-  const accountsReceivable = sales.filter(s => s.status !== 'Pré-venda').reduce((acc, s) => acc + getSaleBalance(s), 0);
+  // Accounts Receivable is the sum of balances of all customer debts
+  const accountsReceivable = customers.reduce((acc, c) => acc + (c.totalDebt || 0), 0);
   
   const cashFlow = totalReceived - totalPaidTaxes;
 

@@ -183,34 +183,82 @@ export default function Customers() {
     if (!selectedCustomer || isNaN(amount) || amount <= 0) return;
     
     try {
-      // 1. Create Transaction
-      try {
-        await addDoc(collection(db, 'transactions'), {
+      const batch = writeBatch(db);
+      
+      // Get all non-Pre-venda Fiado sales for this customer
+      const pSales = sales
+        .filter(s => s.customerId === selectedCustomer.id && s.paymentMethod === 'Fiado' && s.status !== 'Pré-venda')
+        .sort((a, b) => {
+          const tA = a.createdAt?.seconds || (typeof a.createdAt === 'object' && a.createdAt?.getTime ? a.createdAt.getTime() / 1000 : 0);
+          const tB = b.createdAt?.seconds || (typeof b.createdAt === 'object' && b.createdAt?.getTime ? b.createdAt.getTime() / 1000 : 0);
+          return tA - tB;
+        });
+
+      let remainingAmount = amount;
+
+      for (const sale of pSales) {
+        if (remainingAmount <= 0) break;
+
+        // Calculate direct payments already made on this sale
+        const paymentsForSale = transactions
+          .filter(t => t.saleId === sale.id && t.type === 'payment')
+          .reduce((acc, t) => acc + t.amount, 0);
+
+        const saleBalance = Math.max(0, sale.total - paymentsForSale);
+
+        if (saleBalance > 0) {
+          const amountToApply = Math.min(remainingAmount, saleBalance);
+          remainingAmount -= amountToApply;
+
+          // Create a payment transaction linked to this specific sale
+          const transRef = doc(collection(db, 'transactions'));
+          batch.set(transRef, {
+            customerId: selectedCustomer.id,
+            amount: amountToApply,
+            type: 'payment',
+            paymentMethod: 'Dinheiro',
+            saleId: sale.id,
+            createdAt: new Date()
+          });
+
+          // Mark as Concluída if fully paid off
+          if (paymentsForSale + amountToApply >= sale.total) {
+            batch.update(doc(db, 'sales', sale.id!), {
+              status: 'Concluída',
+              updatedAt: serverTimestamp()
+            });
+          }
+        }
+      }
+
+      // If there is still a remaining payment amount (or if they had no pending sales at all),
+      // we log it as a general payment transaction with no specific saleId.
+      if (remainingAmount > 0) {
+        const transRef = doc(collection(db, 'transactions'));
+        batch.set(transRef, {
           customerId: selectedCustomer.id,
-          amount: amount,
+          amount: remainingAmount,
           type: 'payment',
-          paymentMethod: 'Dinheiro', // Default or add selector
-          createdAt: serverTimestamp()
+          paymentMethod: 'Dinheiro',
+          saleId: null,
+          createdAt: new Date()
         });
-      } catch (err) {
-        handleFirestoreError(err, OperationType.CREATE, 'transactions');
       }
-  
-      // 2. Update Customer Debt
-      try {
-        await updateDoc(doc(db, 'customers', selectedCustomer.id!), {
-          totalDebt: Math.max(0, (selectedCustomer.totalDebt || 0) - amount),
-          updatedAt: serverTimestamp()
-        });
-      } catch (err) {
-        handleFirestoreError(err, OperationType.UPDATE, `customers/${selectedCustomer.id}`);
-      }
-  
+
+      // Update Customer Debt
+      const custRef = doc(db, 'customers', selectedCustomer.id!);
+      batch.update(custRef, {
+        totalDebt: Math.max(0, (selectedCustomer.totalDebt || 0) - amount),
+        updatedAt: serverTimestamp()
+      });
+
+      await batch.commit();
+
       setPaymentAmount('');
-      alert('Pagamento processado com sucesso!');
+      alert('Amortização processada com sucesso!');
     } catch (err: any) {
       console.error(err);
-      alert('Erro ao processar pagamento. Verifique as permissões.');
+      alert('Erro ao processar pagamento: ' + err.message);
     }
   };
 

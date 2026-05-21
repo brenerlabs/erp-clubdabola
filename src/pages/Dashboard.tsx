@@ -53,6 +53,8 @@ export default function Dashboard() {
   // Filters
   const [customerFilter, setCustomerFilter] = useState('all');
   const [productFilter, setProductFilter] = useState('all');
+  const [salesTableFilter, setSalesTableFilter] = useState<'all' | 'pending-fiado' | 'completed'>('all');
+  const [salesLimit, setSalesLimit] = useState(10);
 
   useEffect(() => {
     const unsubSales = onSnapshot(query(collection(db, 'sales'), orderBy('createdAt', 'desc')), (snapshot) => {
@@ -130,18 +132,60 @@ export default function Dashboard() {
     };
   }, [filteredSales, products, customers, customerFilter, shipments]);
 
-  const getSaleBalance = (sale: Sale) => {
+  const getSaleBalance = React.useCallback((sale: Sale) => {
     if (sale.paymentMethod !== 'Fiado') return 0;
-    // We sum all payment transactions related to this sale.
-    // This includes down payments (recorded as transactions in PDV) and later amortizations.
-    const paymentsForSale = transactions
-      .filter(t => t.saleId === sale.id && t.type === 'payment')
-      .reduce((acc, t) => acc + t.amount, 0);
-    
-    // Note: In older logic, downPayment was subtracted manually. 
-    // Now we ensure every payment (including entry) is a transaction.
-    return Math.max(0, sale.total - paymentsForSale);
-  };
+    const customer = customers.find(c => c.id === sale.customerId);
+    if (!customer) {
+      const paymentsForSale = transactions
+        .filter(t => t.saleId === sale.id && t.type === 'payment')
+        .reduce((acc, t) => acc + t.amount, 0);
+      return Math.max(0, sale.total - paymentsForSale);
+    }
+
+    const custSales = sales
+      .filter(s => s.customerId === sale.customerId && s.paymentMethod === 'Fiado' && s.status !== 'Pré-venda')
+      .sort((a, b) => {
+        const tA = a.createdAt?.seconds || (typeof a.createdAt === 'object' && a.createdAt?.getTime ? a.createdAt.getTime() / 1000 : 0);
+        const tB = b.createdAt?.seconds || (typeof b.createdAt === 'object' && b.createdAt?.getTime ? b.createdAt.getTime() / 1000 : 0);
+        return tA - tB;
+      });
+
+    let remainingDebt = customer.totalDebt || 0;
+    for (const s of custSales) {
+      const sBalance = Math.min(remainingDebt, s.total);
+      remainingDebt -= sBalance;
+      if (s.id === sale.id) {
+        return sBalance;
+      }
+    }
+    return 0;
+  }, [customers, transactions, sales]);
+
+  const filterStats = React.useMemo(() => {
+    const results = filteredSales.filter(sale => {
+      if (salesTableFilter === 'all') return true;
+      const balance = getSaleBalance(sale);
+      if (salesTableFilter === 'pending-fiado') {
+        return sale.paymentMethod === 'Fiado' && balance > 0;
+      }
+      if (salesTableFilter === 'completed') {
+        return sale.paymentMethod !== 'Fiado' || balance === 0;
+      }
+      return true;
+    });
+
+    const totalValue = results.reduce((acc, sale) => {
+      if (salesTableFilter === 'pending-fiado') {
+        return acc + getSaleBalance(sale);
+      }
+      return acc + sale.total;
+    }, 0);
+
+    return {
+      count: results.length,
+      totalValue
+    };
+  }, [filteredSales, salesTableFilter, getSaleBalance]);
 
   const handleCompensate = async () => {
     if (!selectedSale || !compAmount) return;
@@ -152,20 +196,67 @@ export default function Dashboard() {
     try {
       const batch = writeBatch(db);
       
-      // 1. Log payment transaction
-      const transRef = doc(collection(db, 'transactions'));
-      batch.set(transRef, {
-        customerId: selectedSale.customerId,
-        amount: amount,
-        type: 'payment',
-        paymentMethod: compMethod,
-        saleId: selectedSale.id.startsWith('debt-') ? null : selectedSale.id,
-        createdAt: serverTimestamp()
-      });
+      if (selectedSale.id.startsWith('debt-')) {
+        // CASE 1: General customer-level payment
+        const customerId = selectedSale.customerId;
+        const pSales = sales
+          .filter(s => s.customerId === customerId && s.paymentMethod === 'Fiado' && s.status !== 'Pré-venda')
+          .sort((a, b) => {
+            const tA = a.createdAt?.seconds || (typeof a.createdAt === 'object' && a.createdAt?.getTime ? a.createdAt.getTime() / 1000 : 0);
+            const tB = b.createdAt?.seconds || (typeof b.createdAt === 'object' && b.createdAt?.getTime ? b.createdAt.getTime() / 1000 : 0);
+            return tA - tB;
+          });
 
-      // 2. Update Customer Debt
-      if (selectedSale.customerId) {
-        const custRef = doc(db, 'customers', selectedSale.customerId);
+        let remainingAmount = amount;
+
+        for (const sale of pSales) {
+          if (remainingAmount <= 0) break;
+
+          // Calculate direct payments already made on this sale
+          const paymentsForSale = transactions
+            .filter(t => t.saleId === sale.id && t.type === 'payment')
+            .reduce((acc, t) => acc + t.amount, 0);
+
+          const saleBalance = Math.max(0, sale.total - paymentsForSale);
+
+          if (saleBalance > 0) {
+            const amountToApply = Math.min(remainingAmount, saleBalance);
+            remainingAmount -= amountToApply;
+
+            const transRef = doc(collection(db, 'transactions'));
+            batch.set(transRef, {
+              customerId: customerId,
+              amount: amountToApply,
+              type: 'payment',
+              paymentMethod: compMethod,
+              saleId: sale.id,
+              createdAt: serverTimestamp()
+            });
+
+            if (paymentsForSale + amountToApply >= sale.total) {
+              batch.update(doc(db, 'sales', sale.id!), {
+                status: 'Concluída',
+                updatedAt: serverTimestamp()
+              });
+            }
+          }
+        }
+
+        // Leftover gets logged as a general transaction
+        if (remainingAmount > 0) {
+          const transRef = doc(collection(db, 'transactions'));
+          batch.set(transRef, {
+            customerId: customerId,
+            amount: remainingAmount,
+            type: 'payment',
+            paymentMethod: compMethod,
+            saleId: null,
+            createdAt: serverTimestamp()
+          });
+        }
+
+        // Update Customer Debt
+        const custRef = doc(db, 'customers', customerId);
         const custSnap = await getDoc(custRef);
         if (custSnap.exists()) {
           const currentDebt = custSnap.data().totalDebt || 0;
@@ -173,13 +264,40 @@ export default function Dashboard() {
             totalDebt: Math.max(0, currentDebt - amount),
             updatedAt: serverTimestamp()
           });
+        }
+      } else {
+        // CASE 2: Payment on a specific sale
+        const transRef = doc(collection(db, 'transactions'));
+        batch.set(transRef, {
+          customerId: selectedSale.customerId,
+          amount: amount,
+          type: 'payment',
+          paymentMethod: compMethod,
+          saleId: selectedSale.id,
+          createdAt: serverTimestamp()
+        });
 
-          // 3. Mark Sale as Concluída if it's a real sale and paid off
-          if (!selectedSale.id.startsWith('debt-') && amount >= selectedSale.total) {
-             batch.update(doc(db, 'sales', selectedSale.id!), {
+        // Update Customer Debt
+        if (selectedSale.customerId) {
+          const custRef = doc(db, 'customers', selectedSale.customerId);
+          const custSnap = await getDoc(custRef);
+          if (custSnap.exists()) {
+            const currentDebt = custSnap.data().totalDebt || 0;
+            batch.update(custRef, {
+              totalDebt: Math.max(0, currentDebt - amount),
+              updatedAt: serverTimestamp()
+            });
+
+            const paymentsForSale = transactions
+              .filter(t => t.saleId === selectedSale.id && t.type === 'payment')
+              .reduce((acc, t) => acc + t.amount, 0);
+            
+            if ((paymentsForSale + amount) >= selectedSale.total) {
+              batch.update(doc(db, 'sales', selectedSale.id!), {
                 status: 'Concluída',
                 updatedAt: serverTimestamp()
-             });
+              });
+            }
           }
         }
       }
@@ -633,14 +751,70 @@ export default function Dashboard() {
       </div>
 
       <div className="bg-white rounded-[32px] border border-slate-200 shadow-sm overflow-hidden mt-6">
-        <div className="px-8 py-6 border-b border-slate-50 flex items-center justify-between">
-          <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest">Últimas Vendas</h3>
-          <div className="flex gap-4">
-            <div className="flex items-center gap-2 text-[10px] font-bold text-emerald-600 uppercase">
-              <span className="size-2 bg-emerald-500 rounded-full" /> Pago
+        <div className="px-8 py-6 border-b border-slate-50 flex flex-col lg:flex-row gap-4 lg:items-center justify-between">
+          <div>
+            <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest">Controle de Vendas</h3>
+            <div className="flex flex-wrap gap-4 mt-2">
+              <div className="flex items-center gap-2 text-[10px] font-bold text-slate-800 uppercase">
+                <span className="size-2 bg-slate-900 rounded-full" /> Pago (Geral)
+              </div>
+              <div className="flex items-center gap-2 text-[10px] font-bold text-amber-600 uppercase">
+                <span className="size-2 bg-amber-500 rounded-full" /> Fiado Ativo
+              </div>
+              <div className="flex items-center gap-2 text-[10px] font-bold text-emerald-600 uppercase">
+                <span className="size-2 bg-emerald-500 rounded-full" /> Fiado Quitado
+              </div>
             </div>
-            <div className="flex items-center gap-2 text-[10px] font-bold text-amber-600 uppercase">
-              <span className="size-2 bg-amber-500 rounded-full" /> Fiado
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
+            {/* Filter Summary Metrics Panel */}
+            <div className="flex items-center justify-between sm:justify-start gap-4 bg-slate-50 border border-slate-100 rounded-2xl px-4 py-2">
+              <div className="text-left">
+                <p className="text-[8px] font-black uppercase text-slate-400 tracking-wider">Filtrado</p>
+                <p className="text-xs font-mono font-black text-slate-850">
+                  {filterStats.count} {filterStats.count === 1 ? 'Venda' : 'Vendas'}
+                </p>
+              </div>
+              <div className="h-6 w-[1px] bg-slate-200" />
+              <div className="text-left">
+                <p className="text-[8px] font-black uppercase text-slate-400 tracking-wider">
+                  {salesTableFilter === 'pending-fiado' ? 'Saldo Pendente' : 'Valor Total'}
+                </p>
+                <p className="text-xs font-mono font-black text-red-800">
+                  {formatCurrency(filterStats.totalValue)}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex bg-slate-100 p-1 rounded-xl select-none justify-between sm:justify-start">
+              <button
+                onClick={() => { setSalesTableFilter('all'); setSalesLimit(10); }}
+                className={cn(
+                  "px-3 py-1.5 text-[9px] rounded-lg font-black uppercase tracking-wider transition-all",
+                  salesTableFilter === 'all' ? "bg-white text-slate-900 shadow-sm animate-fade-in" : "text-slate-500 hover:text-slate-900"
+                )}
+              >
+                Todas
+              </button>
+              <button
+                onClick={() => { setSalesTableFilter('pending-fiado'); setSalesLimit(10); }}
+                className={cn(
+                  "px-3 py-1.5 text-[9px] rounded-lg font-black uppercase tracking-wider transition-all",
+                  salesTableFilter === 'pending-fiado' ? "bg-white text-slate-900 shadow-sm animate-fade-in" : "text-slate-500 hover:text-slate-900"
+                )}
+              >
+                Fiado em aberto
+              </button>
+              <button
+                onClick={() => { setSalesTableFilter('completed'); setSalesLimit(10); }}
+                className={cn(
+                  "px-3 py-1.5 text-[9px] rounded-lg font-black uppercase tracking-wider transition-all",
+                  salesTableFilter === 'completed' ? "bg-white text-slate-900 shadow-sm animate-fade-in" : "text-slate-500 hover:text-slate-900"
+                )}
+              >
+                Completas / Pagas
+              </button>
             </div>
           </div>
         </div>
@@ -656,50 +830,114 @@ export default function Dashboard() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {filteredSales.slice(0, 10).map(sale => {
-                const balance = getSaleBalance(sale);
-                return (
-                <tr key={sale.id} className="hover:bg-slate-50/80 transition-colors">
-                  <td className="px-6 py-4 text-xs font-mono text-slate-500">#{sale.id?.slice(-5).toUpperCase()}</td>
-                  <td className="px-6 py-4">
-                    <div className="text-xs font-black text-slate-900 uppercase tracking-tight">{sale.customerName}</div>
-                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">Venda #{sale.id?.slice(-3)}</div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-xs font-bold text-slate-900">{formatCurrency(sale.total)}</div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={cn(
-                      "px-2 py-0.5 text-[9px] rounded font-bold uppercase",
-                      sale.paymentMethod === 'Fiado' 
-                        ? (balance === 0 ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-800") 
-                        : "bg-slate-900 text-white"
-                    )}>
-                      {sale.paymentMethod} {balance === 0 && sale.paymentMethod === 'Fiado' && '• Liquidada'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-right flex justify-end gap-2">
-                    {sale.paymentMethod === 'Fiado' && balance > 0 && (
-                      <button 
-                        onClick={() => {
-                          setSelectedSale(sale);
-                          setCompAmount(balance.toString());
-                        }}
-                        className="flex items-center gap-1.5 px-3 py-1 bg-red-800 text-white text-[9px] font-black uppercase rounded-lg hover:bg-black transition-all shadow-md shadow-red-900/20"
-                      >
-                        <Wallet size={12} />
-                        Amortizar
-                      </button>
-                    )}
-                    <button className="p-1 text-red-800 hover:bg-red-50 rounded border border-transparent hover:border-red-100 transition-all">
-                      <ArrowUpRight size={14} />
-                    </button>
-                  </td>
-                </tr>
-              )})}
+              {(() => {
+                const results = filteredSales.filter(sale => {
+                  if (salesTableFilter === 'all') return true;
+                  const balance = getSaleBalance(sale);
+                  if (salesTableFilter === 'pending-fiado') {
+                    return sale.paymentMethod === 'Fiado' && balance > 0;
+                  }
+                  if (salesTableFilter === 'completed') {
+                    return sale.paymentMethod !== 'Fiado' || balance === 0;
+                  }
+                  return true;
+                });
+
+                if (results.length === 0) {
+                  return (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-12 text-center text-xs font-black text-slate-400 uppercase tracking-widest">
+                        Nenhuma venda encontrada para o filtro selecionado
+                      </td>
+                    </tr>
+                  );
+                }
+
+                return results.slice(0, salesLimit).map(sale => {
+                  const balance = getSaleBalance(sale);
+                  return (
+                    <tr key={sale.id} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="px-6 py-4 text-xs font-mono text-slate-500">#{sale.id?.slice(-5).toUpperCase()}</td>
+                      <td className="px-6 py-4">
+                        <div className="text-xs font-black text-slate-900 uppercase tracking-tight">{sale.customerName}</div>
+                        <div className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">Venda #{sale.id?.slice(-3)}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-xs font-bold text-slate-900">{formatCurrency(sale.total)}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={cn(
+                          "px-2 py-0.5 text-[9px] rounded font-bold uppercase",
+                          sale.paymentMethod === 'Fiado' 
+                            ? (balance === 0 ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800") 
+                            : "bg-slate-900 text-white"
+                        )}>
+                          {sale.paymentMethod} {balance === 0 && sale.paymentMethod === 'Fiado' && '• Liquidado'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-right flex justify-end gap-2">
+                        {sale.paymentMethod === 'Fiado' && balance > 0 && (
+                          <button 
+                            onClick={() => {
+                              setSelectedSale(sale);
+                              setCompAmount(balance.toString());
+                            }}
+                            className="flex items-center gap-1.5 px-3 py-1 bg-red-800 text-white text-[9px] font-black uppercase rounded-lg hover:bg-black transition-all shadow-md shadow-red-900/20"
+                          >
+                            <Wallet size={12} />
+                            Amortizar
+                          </button>
+                        )}
+                        <button className="p-1 text-red-800 hover:bg-red-50 rounded border border-transparent hover:border-red-100 transition-all">
+                          <ArrowUpRight size={14} />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                });
+              })()}
             </tbody>
           </table>
         </div>
+
+        {(() => {
+          const results = filteredSales.filter(sale => {
+            if (salesTableFilter === 'all') return true;
+            const balance = getSaleBalance(sale);
+            if (salesTableFilter === 'pending-fiado') {
+              return sale.paymentMethod === 'Fiado' && balance > 0;
+            }
+            if (salesTableFilter === 'completed') {
+              return sale.paymentMethod !== 'Fiado' || balance === 0;
+            }
+            return true;
+          });
+
+          if (results.length > salesLimit) {
+            return (
+              <div className="px-8 py-4 bg-slate-50 border-t border-slate-100 flex justify-center">
+                <button
+                  onClick={() => setSalesLimit(prev => prev + 15)}
+                  className="text-[10px] font-black uppercase text-slate-600 hover:text-slate-900 transition-colors flex items-center gap-1"
+                >
+                  Ver mais vendas nesta lista ({results.length - salesLimit} restantes)
+                </button>
+              </div>
+            );
+          } else if (salesLimit > 10) {
+            return (
+              <div className="px-8 py-4 bg-slate-50 border-t border-slate-100 flex justify-center">
+                <button
+                  onClick={() => setSalesLimit(10)}
+                  className="text-[10px] font-black uppercase text-slate-600 hover:text-slate-900 transition-colors flex items-center gap-1"
+                >
+                  Minimizar lista
+                </button>
+              </div>
+            );
+          }
+          return null;
+        })()}
       </div>
 
       {/* Compensation Modal */}
