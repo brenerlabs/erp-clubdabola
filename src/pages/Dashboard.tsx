@@ -639,13 +639,18 @@ export default function Dashboard() {
                 <Activity size={80} />
              </div>
              <div className="relative z-10">
-                <p className="text-[8px] font-black text-amber-500 uppercase tracking-[0.3em] mb-1">Performance Index</p>
+                <p className="text-[8px] font-black text-amber-500 uppercase tracking-[0.3em] mb-1">Taxa de Liquidez</p>
                 <div className="flex items-end gap-2">
-                   <h4 className="text-3xl font-bold tracking-tight">94<span className="text-xl text-amber-500">.2</span></h4>
-                   <p className="text-[8px] font-bold text-amber-400/60 mb-1 uppercase tracking-widest">+2.4%</p>
+                   <h4 className="text-3xl font-bold tracking-tight">
+                     {Math.floor(stats.efficiencyRatio)}
+                     <span className="text-xl text-amber-500">.{(stats.efficiencyRatio % 1).toFixed(1).substring(2) || '0'}</span>
+                   </h4>
+                   <p className="text-[8px] font-bold text-amber-400/60 mb-1 uppercase tracking-widest">
+                     {stats.efficiencyRatio === 100 ? 'Máxima' : `${(100 - stats.efficiencyRatio).toFixed(1)}% Risco`}
+                   </p>
                 </div>
                 <div className="mt-4 flex gap-1.5 overflow-x-auto">
-                   {['Fiscal', 'Logística', 'Portfólio'].map(tag => (
+                   {['Liquidez', 'Estores', 'Tributos'].map(tag => (
                      <span key={tag} className="px-2 py-0.5 bg-white/5 border border-white/10 rounded-full text-[7px] font-black uppercase tracking-widest whitespace-nowrap">{tag}</span>
                    ))}
                 </div>
@@ -661,15 +666,21 @@ export default function Dashboard() {
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                    <div className="bg-black/20 backdrop-blur-sm p-3 rounded-2xl border border-white/5">
                       <p className="text-[8px] font-black text-amber-500 uppercase mb-1">Otimizar</p>
-                      <p className="text-[10px] font-black leading-tight uppercase tracking-tight">Custos Logísticos Operacionais</p>
+                      <p className="text-[10px] font-black leading-tight uppercase tracking-tight">
+                        {stats.pendingTaxes > 0 ? `Taxas Fiscais: R$ ${stats.pendingTaxes.toFixed(0)} pendentes` : "Logística de Importação e Dropshipping"}
+                      </p>
                    </div>
                    <div className="bg-black/20 backdrop-blur-sm p-3 rounded-2xl border border-white/5">
                       <p className="text-[8px] font-black text-amber-500 uppercase mb-1">Oportunidade</p>
-                      <p className="text-[10px] font-black leading-tight uppercase tracking-tight">Expansão de SKUs Alta Variância</p>
+                      <p className="text-[10px] font-black leading-tight uppercase tracking-tight">
+                        {stats.lowStockItems > 0 ? `Abastecer ${stats.lowStockItems} SKUs com estoque mínimo` : "Expandir Mix do Clube da Bola"}
+                      </p>
                    </div>
                    <div className="bg-black/20 backdrop-blur-sm p-3 rounded-2xl border border-white/5 hidden md:block">
                       <p className="text-[8px] font-black text-amber-500 uppercase mb-1">Risco</p>
-                      <p className="text-[10px] font-black leading-tight uppercase tracking-tight">Inadimplência Fiado Acima de 12%</p>
+                      <p className="text-[10px] font-black leading-tight uppercase tracking-tight">
+                        {stats.totalDebt > 0 ? `Fiado Ativo em R$ ${stats.totalDebt.toFixed(0)} (${(100 - stats.efficiencyRatio).toFixed(1)}% receita)` : "Inadimplência Fiado com Risco Zero"}
+                      </p>
                    </div>
                 </div>
              </div>

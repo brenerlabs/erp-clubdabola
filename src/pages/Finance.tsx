@@ -216,6 +216,183 @@ export default function Finance() {
     XLSX.writeFile(wb, "financeiro-erp-club-da-bola.xlsx");
   };
 
+  const exportMonthlyReportPDF = () => {
+    const doc = new jsPDF();
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+
+    const getElementDate = (el: any) => {
+      if (!el?.createdAt) return null;
+      if (typeof el.createdAt.seconds === 'number') return new Date(el.createdAt.seconds * 1000);
+      if (el.createdAt instanceof Date) return el.createdAt;
+      if (typeof el.createdAt.toDate === 'function') return el.createdAt.toDate();
+      return null;
+    };
+
+    // Filter transactions of the current month
+    const monthlyTransactions = transactions.filter(t => {
+      const d = getElementDate(t);
+      return d && d.getFullYear() === currentYear && d.getMonth() === currentMonth;
+    });
+
+    // Filter sales of the current month
+    const monthlySales = sales.filter(s => {
+      const d = getElementDate(s);
+      return s.status !== 'Pré-venda' && d && d.getFullYear() === currentYear && d.getMonth() === currentMonth;
+    });
+
+    // Filter shipments of the current month
+    const monthlyShipments = shipments.filter(s => {
+      const d = getElementDate(s);
+      return d && d.getFullYear() === currentYear && d.getMonth() === currentMonth;
+    });
+
+    // Calculations for the current month
+    const monthlyInvoiced = monthlySales.reduce((acc, s) => acc + s.total, 0);
+    const monthlyReceived = monthlyTransactions.filter(t => t.type === 'payment').reduce((acc, t) => acc + t.amount, 0);
+    const monthlyTaxes = monthlyShipments.filter(s => s.taxPaid).reduce((acc, s) => acc + (s.taxAmount || 0), 0);
+    
+    // Cost of goods for monthly sales
+    const monthlyCostOfGoods = monthlySales.reduce((acc, s) => {
+      return acc + s.items.reduce((itemAcc, item) => {
+        const product = products.find(p => p.id === item.productId);
+        return itemAcc + ((product?.costPrice || 0) * item.quantity);
+      }, 0);
+    }, 0);
+
+    const monthlyRealProfit = monthlyInvoiced - (monthlyCostOfGoods + monthlyTaxes);
+    const monthlyProfitMargin = monthlyInvoiced > 0 ? (monthlyRealProfit / monthlyInvoiced) * 100 : 0;
+
+    const monthName = now.toLocaleString('pt-BR', { month: 'long' });
+    const formattedPeriod = `${monthName.charAt(0).toUpperCase() + monthName.slice(1)} de ${currentYear}`;
+
+    // PDF Page Design & Header
+    doc.setFillColor(15, 23, 42); // Dark slate background header
+    doc.rect(0, 0, 210, 42, 'F');
+
+    // Header Title
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(22);
+    doc.setTextColor(255, 255, 255);
+    doc.text('CLUB DA BOLA', 14, 18);
+
+    doc.setFontSize(9);
+    doc.setTextColor(239, 68, 68); // Soft Red text
+    doc.text('ERP SYSTEM • AUDITORIA FINANCEIRA INTEGRADA', 14, 25);
+
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(203, 213, 225); // slate-300
+    doc.text(`RELATÓRIO DE FECHAMENTO MENSAL - ${formattedPeriod.toUpperCase()}`, 14, 32);
+    doc.text(`Gerado em: ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR')}`, 140, 32);
+
+    // Summary Box
+    doc.setDrawColor(226, 232, 240); // slate-200
+    doc.setFillColor(248, 250, 252); // slate-50
+    doc.roundedRect(14, 50, 182, 52, 4, 4, 'FD');
+
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(15, 23, 42);
+    doc.text('RESULTADO OPERACIONAL DO MÊS', 20, 58);
+
+    doc.setDrawColor(226, 232, 240);
+    doc.line(20, 62, 190, 62);
+
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(71, 85, 105);
+
+    doc.text(`Faturamento de Vendas (Mês):`, 20, 69);
+    doc.setFont('Helvetica', 'bold');
+    doc.setTextColor(15, 23, 42);
+    doc.text(formatCurrency(monthlyInvoiced), 85, 69);
+
+    doc.setFont('Helvetica', 'normal');
+    doc.setTextColor(71, 85, 105);
+    doc.text(`Custo das Mercadorias Vendidas (CMV):`, 20, 75);
+    doc.setFont('Helvetica', 'bold');
+    doc.setTextColor(15, 23, 42);
+    doc.text(formatCurrency(monthlyCostOfGoods), 85, 75);
+
+    doc.setFont('Helvetica', 'normal');
+    doc.setTextColor(71, 85, 105);
+    doc.text(`Tributação Corrente (Pagos):`, 20, 81);
+    doc.setFont('Helvetica', 'bold');
+    doc.setTextColor(15, 23, 42);
+    doc.text(formatCurrency(monthlyTaxes), 85, 81);
+
+    doc.setFont('Helvetica', 'normal');
+    doc.setTextColor(71, 85, 105);
+    doc.text(`Amortizações/Caixa Coletado:`, 20, 87);
+    doc.setFont('Helvetica', 'bold');
+    doc.setTextColor(5, 150, 105); // emerald-600
+    doc.text(formatCurrency(monthlyReceived), 85, 87);
+
+    // Profit nested card on the right-hand side
+    doc.setFillColor(254, 242, 242); // red-50
+    doc.setDrawColor(248, 113, 113); // red-400
+    doc.roundedRect(118, 65, 72, 32, 3, 3, 'FD');
+
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(153, 27, 27); // red-800
+    doc.text('LUCRO LÍQUIDO EXTRAÍDO', 123, 71);
+
+    doc.setFontSize(13);
+    doc.setTextColor(153, 27, 27);
+    doc.text(formatCurrency(monthlyRealProfit), 123, 79);
+
+    doc.setFontSize(8);
+    doc.setFont('Helvetica', 'normal');
+    doc.setTextColor(185, 28, 28);
+    doc.text(`Margem Percentual: ${monthlyProfitMargin.toFixed(1)}%`, 123, 85);
+
+    // Section 2: Detailed transactions list
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(15, 23, 42);
+    doc.text(`CONSOLIDADO HISTÓRICO - LANÇAMENTOS DO MÊS`, 14, 114);
+
+    const tblData = monthlyTransactions.map(t => {
+      const dateObj = getElementDate(t);
+      const dateStr = dateObj 
+        ? `${dateObj.toLocaleDateString('pt-BR')} ${dateObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
+        : 'S/D';
+      
+      const natureStr = t.type === 'payment' ? 'Amortização de Fiado' : 'Venda a Prazo';
+      const involved = getCustomerName(t.customerId);
+      const methodStr = t.paymentMethod || 'Aberto';
+      const amountStr = t.type === 'payment' ? `+ ${formatCurrency(t.amount)}` : `- ${formatCurrency(t.amount)}`;
+
+      return [natureStr, involved, dateStr, methodStr, amountStr];
+    });
+
+    autoTable(doc, {
+      startY: 119,
+      head: [['Natureza', 'Parceiro / Cliente', 'Data e Horário', 'Método', 'Montante']],
+      body: tblData.length > 0 ? tblData : [['Nenhuma movimentação registrada neste período mensal.', '', '', '', '']],
+      theme: 'grid',
+      headStyles: {
+        fillColor: [153, 27, 27], // brand red-800
+        textColor: [255, 255, 255],
+        fontSize: 9,
+        fontStyle: 'bold'
+      },
+      styles: {
+        fontSize: 8,
+        font: 'Helvetica'
+      },
+      columnStyles: {
+        4: { halign: 'right', fontStyle: 'bold' }
+      }
+    });
+
+    const filePeriodSlug = formattedPeriod.toLowerCase().replace(/ /g, '-');
+    doc.save(`fechamento-mensal-${filePeriodSlug}.pdf`);
+  };
+
   return (
     <motion.div 
       initial={{ opacity: 0 }}
@@ -229,12 +406,18 @@ export default function Finance() {
           </h2>
           <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.3em] font-sans mt-2">Gestão de Ativos e Fluxo de Caixa</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <button 
+            onClick={exportMonthlyReportPDF}
+            className="flex items-center gap-2 px-6 py-3 bg-red-800 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-900 transition-all border border-red-900 shadow-lg shadow-red-900/10"
+          >
+            <FileText size={16} /> Fechamento do Mês
+          </button>
           <button 
             onClick={exportToPDF}
             className="flex items-center gap-2 px-6 py-3 bg-rose-50 text-rose-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-rose-100 transition-all border border-rose-100 shadow-sm"
           >
-            <FileText size={16} /> Relatório PDF
+            <FileText size={16} /> Geral PDF
           </button>
           <button 
             onClick={exportToExcel}
