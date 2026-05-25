@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../lib/firebase';
-import { collection, query, onSnapshot, orderBy, writeBatch, doc, getDocs, serverTimestamp } from 'firebase/firestore';
-import { Transaction, Sale, Shipment, Customer, Product } from '../types';
+import { collection, query, onSnapshot, orderBy, writeBatch, doc, getDocs, serverTimestamp, addDoc, deleteDoc } from 'firebase/firestore';
+import { Transaction, Sale, Shipment, Customer, Product, Expense } from '../types';
 import { 
   ArrowDownCircle, 
   ArrowUpCircle, 
@@ -17,7 +17,10 @@ import {
   User,
   LayoutDashboard,
   Trash2,
-  AlertTriangle
+  AlertTriangle,
+  Plus,
+  Tag,
+  AlertCircle
 } from 'lucide-react';
 import { formatCurrency, cn } from '../lib/utils';
 import { motion } from 'motion/react';
@@ -31,6 +34,7 @@ export default function Finance() {
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
   const [filter, setFilter] = useState<'all' | 'payment' | 'debt'>('all');
 
   useEffect(() => {
@@ -54,7 +58,18 @@ export default function Finance() {
       setProducts(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Product)));
     });
 
-    return () => { unsubSales(); unsubTrans(); unsubShip(); unsubCust(); unsubProd(); };
+    const unsubExp = onSnapshot(query(collection(db, 'expenses'), orderBy('createdAt', 'desc')), (snapshot) => {
+      setExpenses(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Expense)));
+    });
+
+    return () => { 
+      unsubSales(); 
+      unsubTrans(); 
+      unsubShip(); 
+      unsubCust(); 
+      unsubProd(); 
+      unsubExp(); 
+    };
   }, []);
 
   const getCustomerName = (id: string) => customers.find(c => c.id === id)?.name || 'Anônimo';
@@ -91,6 +106,7 @@ export default function Finance() {
   const totalInvoiced = sales.filter(s => s.status !== 'Pré-venda').reduce((acc, s) => acc + s.total, 0);
   const totalReceived = transactions.filter(t => t.type === 'payment').reduce((acc, t) => acc + t.amount, 0);
   const totalPaidTaxes = shipments.filter(s => s.taxPaid).reduce((acc, s) => acc + (s.taxAmount || 0), 0);
+  const totalExpenses = expenses.reduce((acc, e) => acc + e.amount, 0);
 
   const getShipmentForSale = (saleId?: string) => {
     if (!saleId) return null;
@@ -100,7 +116,7 @@ export default function Finance() {
   // Accounts Receivable is the sum of balances of all customer debts
   const accountsReceivable = customers.reduce((acc, c) => acc + (c.totalDebt || 0), 0);
   
-  const cashFlow = totalReceived - totalPaidTaxes;
+  const cashFlow = totalReceived - totalPaidTaxes - totalExpenses;
 
   const totalCostOfGoods = sales.filter(s => s.status !== 'Pré-venda').reduce((acc, s) => {
     return acc + s.items.reduce((itemAcc, item) => {
@@ -109,7 +125,7 @@ export default function Finance() {
     }, 0);
   }, 0);
 
-  const realProfit = totalInvoiced - totalCostOfGoods;
+  const realProfit = totalInvoiced - totalCostOfGoods - totalPaidTaxes - totalExpenses;
   const profitMargin = totalInvoiced > 0 ? (realProfit / totalInvoiced) * 100 : 0;
 
   const methods = [
@@ -121,6 +137,55 @@ export default function Finance() {
 
   const [isResetIconLoading, setIsResetIconLoading] = useState(false);
   const [showConfirmReset, setShowConfirmReset] = useState(false);
+
+  // Expense management inputs and states
+  const [expDescription, setExpDescription] = useState('');
+  const [expAmount, setExpAmount] = useState('');
+  const [expCategory, setExpCategory] = useState<'Marketing/Ads' | 'Plataforma/Sistemas' | 'Embalagens' | 'Aluguel/Estrutura' | 'Logística Extra' | 'Outros'>('Marketing/Ads');
+  const [isSavingExpense, setIsSavingExpense] = useState(false);
+
+  const handleAddExpense = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!expDescription.trim() || !expAmount) {
+      alert("Por favor, preencha todos os campos obrigatórios.");
+      return;
+    }
+    const val = parseFloat(expAmount);
+    if (isNaN(val) || val <= 0) {
+      alert("Insira um valor numérico válido maior que zero.");
+      return;
+    }
+    try {
+      setIsSavingExpense(true);
+      await addDoc(collection(db, 'expenses'), {
+        description: expDescription.trim(),
+        amount: val,
+        category: expCategory,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+      setExpDescription('');
+      setExpAmount('');
+      setExpCategory('Marketing/Ads');
+    } catch (err) {
+      console.error("Erro ao salvar despesa:", err);
+      alert("Não foi possível salvar a despesa no Firestore.");
+    } finally {
+      setIsSavingExpense(false);
+    }
+  };
+
+  const handleDeleteExpense = async (id?: string) => {
+    if (!id) return;
+    if (confirm("Confirmar exclusão desta despesa operadora?")) {
+      try {
+        await deleteDoc(doc(db, 'expenses', id));
+      } catch (err) {
+        console.error("Erro ao deletar despesa:", err);
+        alert("Não foi possível excluir a despesa.");
+      }
+    }
+  };
 
   const exportToPDF = () => {
     const doc = new jsPDF();
@@ -150,7 +215,7 @@ export default function Finance() {
       setShowConfirmReset(false); // Hide confirmation UI immediately
       console.log("Iniciando limpeza profunda de dados financeiros...");
       
-      const collectionsToClear = ['sales', 'transactions', 'shipments', 'compensations'];
+      const collectionsToClear = ['sales', 'transactions', 'shipments', 'compensations', 'expenses'];
       let totalDeleted = 0;
       
       // 1. Clear operational collections
@@ -248,6 +313,13 @@ export default function Finance() {
       return d && d.getFullYear() === currentYear && d.getMonth() === currentMonth;
     });
 
+    // Filter expenses of the current month
+    const monthlyExpensesDetailed = expenses.filter(e => {
+      const d = getElementDate(e);
+      return d && d.getFullYear() === currentYear && d.getMonth() === currentMonth;
+    });
+    const monthlyExpenses = monthlyExpensesDetailed.reduce((acc, e) => acc + e.amount, 0);
+
     // Calculations for the current month
     const monthlyInvoiced = monthlySales.reduce((acc, s) => acc + s.total, 0);
     const monthlyReceived = monthlyTransactions.filter(t => t.type === 'payment').reduce((acc, t) => acc + t.amount, 0);
@@ -261,7 +333,7 @@ export default function Finance() {
       }, 0);
     }, 0);
 
-    const monthlyRealProfit = monthlyInvoiced - (monthlyCostOfGoods + monthlyTaxes);
+    const monthlyRealProfit = monthlyInvoiced - (monthlyCostOfGoods + monthlyTaxes + monthlyExpenses);
     const monthlyProfitMargin = monthlyInvoiced > 0 ? (monthlyRealProfit / monthlyInvoiced) * 100 : 0;
 
     const monthName = now.toLocaleString('pt-BR', { month: 'long' });
@@ -290,7 +362,7 @@ export default function Finance() {
     // Summary Box
     doc.setDrawColor(226, 232, 240); // slate-200
     doc.setFillColor(248, 250, 252); // slate-50
-    doc.roundedRect(14, 50, 182, 52, 4, 4, 'FD');
+    doc.roundedRect(14, 50, 182, 58, 4, 4, 'FD');
 
     doc.setFont('Helvetica', 'bold');
     doc.setFontSize(11);
@@ -325,10 +397,17 @@ export default function Finance() {
 
     doc.setFont('Helvetica', 'normal');
     doc.setTextColor(71, 85, 105);
-    doc.text(`Amortizações/Caixa Coletado:`, 20, 87);
+    doc.text(`Despesas Operacionais (Mês):`, 20, 87);
+    doc.setFont('Helvetica', 'bold');
+    doc.setTextColor(220, 38, 38); // red-600 despesas
+    doc.text(formatCurrency(monthlyExpenses), 85, 87);
+
+    doc.setFont('Helvetica', 'normal');
+    doc.setTextColor(71, 85, 105);
+    doc.text(`Amortizações/Caixa Coletado:`, 20, 93);
     doc.setFont('Helvetica', 'bold');
     doc.setTextColor(5, 150, 105); // emerald-600
-    doc.text(formatCurrency(monthlyReceived), 85, 87);
+    doc.text(formatCurrency(monthlyReceived), 85, 93);
 
     // Profit nested card on the right-hand side
     doc.setFillColor(254, 242, 242); // red-50
@@ -338,7 +417,7 @@ export default function Finance() {
     doc.setFont('Helvetica', 'bold');
     doc.setFontSize(8);
     doc.setTextColor(153, 27, 27); // red-800
-    doc.text('LUCRO LÍQUIDO EXTRAÍDO', 123, 71);
+    doc.text('LUCRO LÍQUIDO OPERACIONAL', 123, 71);
 
     doc.setFontSize(13);
     doc.setTextColor(153, 27, 27);
@@ -353,7 +432,7 @@ export default function Finance() {
     doc.setFont('Helvetica', 'bold');
     doc.setFontSize(11);
     doc.setTextColor(15, 23, 42);
-    doc.text(`CONSOLIDADO HISTÓRICO - LANÇAMENTOS DO MÊS`, 14, 114);
+    doc.text(`CONSOLIDADO HISTÓRICO - LANÇAMENTOS DO MÊS`, 14, 120);
 
     const tblData = monthlyTransactions.map(t => {
       const dateObj = getElementDate(t);
@@ -370,7 +449,7 @@ export default function Finance() {
     });
 
     autoTable(doc, {
-      startY: 119,
+      startY: 125,
       head: [['Natureza', 'Parceiro / Cliente', 'Data e Horário', 'Método', 'Montante']],
       body: tblData.length > 0 ? tblData : [['Nenhuma movimentação registrada neste período mensal.', '', '', '', '']],
       theme: 'grid',
@@ -430,9 +509,9 @@ export default function Finance() {
 
     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
       <FinanceCard title="Faturamento Bruto" value={formatCurrency(totalInvoiced)} icon={ArrowUpCircle} color="red" />
-      <FinanceCard title="Lucro Real" value={formatCurrency(realProfit)} icon={ArrowDownCircle} color="emerald" subtitle={`Margem: ${profitMargin.toFixed(1)}%`} />
+      <FinanceCard title="Lucro Real (Líquido)" value={formatCurrency(realProfit)} icon={ArrowDownCircle} color="emerald" subtitle={`Margem Líquida: ${profitMargin.toFixed(1)}%`} />
       <FinanceCard title="Contas a Receber" value={formatCurrency(accountsReceivable)} icon={Wallet} color="black" />
-      <FinanceCard title="Custos Operacionais" value={formatCurrency(totalCostOfGoods + totalPaidTaxes)} icon={Receipt} color="amber" />
+      <FinanceCard title="Custos e Despesas" value={formatCurrency(totalCostOfGoods + totalPaidTaxes + totalExpenses)} icon={Receipt} color="amber" subtitle={`CMV: ${formatCurrency(totalCostOfGoods)} • Despesas: ${formatCurrency(totalExpenses)}`} />
     </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
@@ -558,6 +637,120 @@ export default function Finance() {
         </div>
       </div>
 
+      {/* Gestão de Despesas e Custos Fixos */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 mt-8">
+        {/* Form para Lançar Despesa */}
+        <div className="bg-white/60 backdrop-blur-md p-8 rounded-[32px] border border-slate-250 shadow-sm flex flex-col h-fit">
+          <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest mb-6 flex items-center gap-2">
+            <Plus size={16} className="text-red-800" />
+            Lançar Despesa Operacional
+          </h4>
+          
+          <form onSubmit={handleAddExpense} className="space-y-5">
+            <div>
+              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Categoria</label>
+              <select 
+                value={expCategory}
+                onChange={(e: any) => setExpCategory(e.target.value)}
+                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-red-850 shadow-sm"
+              >
+                <option value="Marketing/Ads">Marketing / Anúncios</option>
+                <option value="Plataforma/Sistemas">Plataforma / Sistemas</option>
+                <option value="Embalagens">Embalagens / Brindes</option>
+                <option value="Aluguel/Estrutura">Aluguel / Estrutura</option>
+                <option value="Logística Extra">Logística Extra</option>
+                <option value="Outros">Outras Despesas</option>
+              </select>
+            </div>
+            
+            <div>
+              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Descrição</label>
+              <input 
+                type="text" 
+                placeholder="Ex: Anúncios Meta Ads, Aluguel..."
+                value={expDescription}
+                onChange={e => setExpDescription(e.target.value)}
+                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-800 shadow-sm"
+              />
+            </div>
+            
+            <div>
+              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">Valor (R$)</label>
+              <input 
+                type="number" 
+                step="0.01"
+                placeholder="0,00"
+                value={expAmount}
+                onChange={e => setExpAmount(e.target.value)}
+                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-red-800 shadow-sm"
+              />
+            </div>
+            
+            <button 
+              type="submit"
+              disabled={isSavingExpense}
+              className="w-full flex items-center justify-center gap-2 py-4 bg-slate-950 text-white rounded-xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-red-800 transition-all border border-slate-900 shadow-lg disabled:opacity-50"
+            >
+              {isSavingExpense ? "Lançando..." : "Lançar Despesa"}
+            </button>
+          </form>
+        </div>
+
+        {/* Histórico de Despesas */}
+        <div className="xl:col-span-2 bg-white rounded-[32px] border border-slate-200 shadow-sm overflow-hidden flex flex-col h-[400px]">
+          <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-50/30">
+            <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+               <Tag size={16} className="text-red-800" />
+               Histórico de Despesas Operacionais (Mês)
+            </h4>
+            <span className="px-3 py-1 bg-red-50 rounded-xl border border-red-100 text-[9px] font-black text-rose-700 uppercase tracking-widest">
+              Total: {formatCurrency(totalExpenses)}
+            </span>
+          </div>
+          
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
+            {expenses.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-3">
+                <AlertCircle size={32} className="text-slate-300 animate-pulse" />
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Nenhuma despesa ou custo fixo lançado</p>
+                <p className="text-[9px] text-slate-300 font-bold uppercase tracking-widest text-center">Utilize o formulário para registrar anúncios, aluguel, etc.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {expenses.map(exp => (
+                  <div key={exp.id} className="flex items-center justify-between p-4 bg-slate-50 border border-slate-150 rounded-2xl hover:bg-slate-100/50 transition-colors">
+                    <div className="flex items-center gap-4">
+                      <div className="px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-[8px] font-black uppercase text-slate-500 tracking-wider shadow-sm">
+                        {exp.category}
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-black text-slate-800 uppercase tracking-tight italic">{exp.description}</p>
+                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-0.5">
+                          {exp.createdAt?.seconds ? new Date(exp.createdAt.seconds * 1000).toLocaleDateString('pt-BR') : 'Sem data'}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-4">
+                      <span className="text-[13px] font-black text-red-650 font-display tabular-nums tracking-tight">
+                        - {formatCurrency(exp.amount)}
+                      </span>
+                      <button 
+                        onClick={() => handleDeleteExpense(exp.id)}
+                        className="p-2 text-slate-400 hover:text-red-600 hover:bg-rose-50 rounded-lg transition-all"
+                        title="Excluir Lançamento"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* Danger Zone */}
       <div className="mt-12 p-8 bg-rose-50/50 border border-rose-100 rounded-[32px] group hover:border-rose-200 transition-all">
         <div className="flex flex-col md:flex-row items-center justify-between gap-6">
@@ -608,7 +801,7 @@ export default function Finance() {
   );
 }
 
-function FinanceCard({ title, value, icon: Icon, color }: any) {
+function FinanceCard({ title, value, icon: Icon, color, subtitle }: any) {
   const configs: any = {
     red: 'bg-red-800 text-white shadow-xl shadow-red-900/20 border-red-700',
     emerald: 'bg-white/40 backdrop-blur-md text-slate-900 border-white/60 shadow-xl shadow-slate-200/40',
@@ -647,6 +840,12 @@ function FinanceCard({ title, value, icon: Icon, color }: any) {
           color === 'red' || color === 'black' ? "text-white/40" : "text-slate-400"
         )}>{title}</p>
         <h4 className="text-2xl font-bold tracking-tight leading-none font-display tabular-nums uppercase">{value}</h4>
+        {subtitle && (
+          <p className={cn(
+            "text-[9px] font-extrabold uppercase tracking-[0.1em] mt-2.5 leading-none block",
+            color === 'red' || color === 'black' ? "text-white/70" : "text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-1 rounded inline-block"
+          )}>{subtitle}</p>
+        )}
       </div>
     </motion.div>
   );

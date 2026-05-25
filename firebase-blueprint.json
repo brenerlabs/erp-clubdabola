@@ -79,6 +79,19 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["trackingCode", "status", "items"]
+    },
+    "Expense": {
+      "title": "Despesa Operacional",
+      "description": "Despesas fixas ou variáveis do ecossistema Club da Bola.",
+      "type": "object",
+      "properties": {
+        "description": { "type": "string", "description": "Descrição da despesa" },
+        "amount": { "type": "number", "description": "Valor monetário da despesa" },
+        "category": { "type": "string", "enum": ["Marketing/Ads", "Plataforma/Sistemas", "Embalagens", "Aluguel/Estrutura", "Logística Extra", "Outros"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["description", "amount", "category"]
     }
   },
   "firestore": {
@@ -101,6 +114,10 @@
     "/shipments/{shipmentId}": {
       "schema": "Shipment",
       "description": "Lotes de importação"
+    },
+    "/expenses/{expenseId}": {
+      "schema": "Expense",
+      "description": "Despesas operacionais e custos fixos"
     }
   }
 }

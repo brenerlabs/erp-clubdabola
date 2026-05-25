@@ -61,6 +61,13 @@ service cloud.firestore {
              (data.get('updatedAt', null) == null || data.updatedAt == request.time);
     }
 
+    function isValidExpense(data) {
+      return data.description is string && data.description.size() <= 200 &&
+             data.amount is number &&
+             data.category in ["Marketing/Ads", "Plataforma/Sistemas", "Embalagens", "Aluguel/Estrutura", "Logística Extra", "Outros"] &&
+             (data.get('createdAt', null) == null || data.createdAt is timestamp || data.createdAt == request.time);
+    }
+
     // Collections
     match /products/{productId} {
       allow read: if isSignedIn();
@@ -88,6 +95,10 @@ service cloud.firestore {
     match /shipments/{shipmentId} {
       allow read: if isSignedIn();
       allow write: if isAdmin();
+    }
+
+    match /expenses/{expenseId} {
+      allow read, write: if isAdmin();
     }
   }
 }

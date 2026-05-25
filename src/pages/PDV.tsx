@@ -638,7 +638,7 @@ export default function PDV() {
               </div>
               <div className="mt-auto space-y-2">
                 <div className="text-xs md:text-sm font-black text-red-800 font-display tabular-nums leading-none">{formatCurrency(product.sellingPrice)}</div>
-                <div className="grid grid-cols-2 gap-1.5">
+                <div className="flex flex-wrap gap-1 items-stretch justify-start">
                   {product.variations.map(v => (
                     <button 
                       key={v.id}
@@ -647,7 +647,7 @@ export default function PDV() {
                         addToCart(product, v);
                       }}
                       className={cn(
-                        "text-[10px] py-2 md:py-1 border rounded font-black transition-all truncate uppercase relative",
+                        "text-[9px] px-2 py-1.5 border rounded font-black transition-all truncate uppercase relative flex-1 min-w-[45%] text-center",
                         (!product.isDropshipping && v.stock <= 0) 
                           ? "bg-gray-50 border-gray-100 text-gray-200 cursor-not-allowed opacity-40 shadow-none scale-100" 
                           : "bg-white border-slate-200 text-slate-600 hover:border-red-800 hover:bg-red-50 hover:text-red-800 active:scale-95 shadow-sm",

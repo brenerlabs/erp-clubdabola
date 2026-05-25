@@ -96,3 +96,12 @@ export interface Transaction {
   saleId?: string;
   createdAt: any;
 }
+
+export interface Expense {
+  id?: string;
+  description: string;
+  amount: number;
+  category: 'Marketing/Ads' | 'Plataforma/Sistemas' | 'Embalagens' | 'Aluguel/Estrutura' | 'Logística Extra' | 'Outros';
+  createdAt: any;
+  updatedAt: any;
+}

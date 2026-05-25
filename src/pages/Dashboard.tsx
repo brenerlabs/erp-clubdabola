@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../lib/firebase';
 import { collection, query, onSnapshot, orderBy, limit, doc, updateDoc, writeBatch, serverTimestamp, getDoc } from 'firebase/firestore';
-import { Transaction, Sale, Product, Customer, Shipment } from '../types';
+import { Transaction, Sale, Product, Customer, Shipment, Expense } from '../types';
 import { formatCurrency, cn } from '../lib/utils';
 import { 
   TrendingUp, 
@@ -49,6 +49,7 @@ export default function Dashboard() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [shipments, setShipments] = useState<Shipment[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
   
   // Filters
   const [customerFilter, setCustomerFilter] = useState('all');
@@ -77,7 +78,18 @@ export default function Dashboard() {
       setShipments(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Shipment)));
     });
 
-    return () => { unsubSales(); unsubProd(); unsubCust(); unsubTrans(); unsubShip(); };
+    const unsubExp = onSnapshot(collection(db, 'expenses'), (snapshot) => {
+      setExpenses(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Expense)));
+    });
+
+    return () => { 
+      unsubSales(); 
+      unsubProd(); 
+      unsubCust(); 
+      unsubTrans(); 
+      unsubShip(); 
+      unsubExp(); 
+    };
   }, []);
 
   // Dynamic Filtering
@@ -116,11 +128,13 @@ export default function Dashboard() {
       .filter(s => s.hasTax && !s.taxPaid)
       .reduce((acc, s) => acc + (s.taxAmount || 0), 0);
 
+    const totalExp = expenses.reduce((acc, e) => acc + e.amount, 0);
+
     const efficiencyRatio = revenue > 0 ? ((revenue - debt) / revenue) * 100 : 0;
 
     return {
       totalRevenue: revenue,
-      totalProfit: profit - paidTaxes,
+      totalProfit: profit - paidTaxes - totalExp,
       avgTicket: filteredSales.length > 0 ? revenue / filteredSales.length : 0,
       lowStockItems: products.filter(p => !p.isDropshipping && p.totalStock <= p.minStock).length,
       dropshippingOrders: filteredSales.filter(s => s.items.some(i => i.isDropshipping)).length,
@@ -128,9 +142,10 @@ export default function Dashboard() {
       totalOrders: filteredSales.length,
       paidTaxes,
       pendingTaxes,
+      totalExpenses: totalExp,
       efficiencyRatio
     };
-  }, [filteredSales, products, customers, customerFilter, shipments]);
+  }, [filteredSales, products, customers, customerFilter, shipments, expenses]);
 
   const getSaleBalance = React.useCallback((sale: Sale) => {
     if (sale.paymentMethod !== 'Fiado') return 0;
@@ -452,37 +467,53 @@ export default function Dashboard() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+        <StatCard 
+          title="Faturamento Bruto" 
+          value={formatCurrency(stats.totalRevenue)} 
+          icon={ShoppingCart} 
+          trend="Invoicing bruto" 
+          positive 
+          variant="glass"
+        />
+        <StatCard 
+          title="Lucro Real Líquido" 
+          value={formatCurrency(stats.totalProfit)} 
+          icon={TrendingUp} 
+          trend="Resultado final" 
+          positive={stats.totalProfit >= 0} 
+          variant="gradient"
+        />
         <StatCard 
           title="Consumo Médio" 
           value={formatCurrency(stats.avgTicket)} 
-          icon={TrendingUp} 
-          trend="Ticket Executivo" 
+          icon={Activity} 
+          trend="Ticket por pedido" 
           positive 
           variant="glass"
         />
         <StatCard 
-          title="Performance Logística" 
-          value={`${((stats.dropshippingOrders / (stats.totalOrders || 1)) * 100).toFixed(1)}%`} 
-          icon={Truck} 
-          trend={`${stats.dropshippingOrders} Lotes em Trânsito`} 
-          positive 
+          title="Despesas Operacionais" 
+          value={formatCurrency(stats.totalExpenses)} 
+          icon={Receipt} 
+          trend="Custos administrativos" 
+          positive={stats.totalExpenses === 0} 
           variant="glass"
         />
         <StatCard 
-          title="Receita Operacional" 
-          value={formatCurrency(stats.totalRevenue)} 
-          icon={ShoppingCart} 
-          trend="Faturamento Bruto" 
-          positive 
-          variant="glass"
-        />
-        <StatCard 
-          title="Risco de Crédito" 
+          title="Contas a Receber" 
           value={formatCurrency(stats.totalDebt)} 
           icon={Wallet} 
-          trend={`${debtors.length} Contas em Aberto`}
+          trend={`${debtors.length} Contas em aberto`}
           positive={stats.totalDebt === 0} 
+          variant="glass"
+        />
+        <StatCard 
+          title="Dropship Logístico" 
+          value={`${((stats.dropshippingOrders / (stats.totalOrders || 1)) * 100).toFixed(1)}%`} 
+          icon={Truck} 
+          trend={`${stats.dropshippingOrders} Lotes ativos`} 
+          positive 
           variant="glass"
         />
       </div>

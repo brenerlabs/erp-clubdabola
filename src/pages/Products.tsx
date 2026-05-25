@@ -537,22 +537,24 @@ export default function Products() {
                 
                 <div className="p-8 overflow-y-auto max-h-[85vh] md:max-h-[70vh] grid grid-cols-1 lg:grid-cols-5 gap-8">
                   <div className="lg:col-span-3 space-y-6">
-                    <div className="flex items-center gap-4 p-4 bg-amber-50 border border-amber-200 rounded-2xl">
-                      <div className={cn(
-                        "size-10 rounded-xl flex items-center justify-center transition-all",
-                        isDropshipping ? "bg-amber-500 text-white shadow-lg shadow-amber-200" : "bg-white text-slate-400 border border-slate-100"
-                      )}>
-                        <Package size={20} />
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-[10px] font-black uppercase text-amber-600 tracking-widest">Modalidade Dropshipping</p>
-                        <p className="text-[9px] font-bold text-amber-800/60 uppercase">O envio é feito diretamente pelo fornecedor</p>
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 p-4 bg-amber-50 border border-amber-200 rounded-2xl">
+                      <div className="flex items-center gap-3 flex-1">
+                        <div className={cn(
+                          "size-10 rounded-xl flex items-center justify-center transition-all shrink-0",
+                          isDropshipping ? "bg-amber-500 text-white shadow-lg shadow-amber-200" : "bg-white text-slate-400 border border-slate-100"
+                        )}>
+                          <Package size={20} />
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-black uppercase text-amber-600 tracking-widest leading-none">Modalidade Dropshipping</p>
+                          <p className="text-[9px] font-bold text-amber-800/60 uppercase mt-1">Envio feito diretamente pelo fornecedor</p>
+                        </div>
                       </div>
                       <button
                         type="button"
                         onClick={() => setIsDropshipping(!isDropshipping)}
                         className={cn(
-                          "px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+                          "px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all text-center",
                           isDropshipping ? "bg-amber-500 text-white" : "bg-white text-slate-400 border border-slate-200"
                         )}
                       >
@@ -560,7 +562,7 @@ export default function Products() {
                       </button>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                       <div className="space-y-1.5">
                         <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Identificação</label>
                         <input 
@@ -585,8 +587,8 @@ export default function Products() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-6">
-                      <div className="space-y-1.5">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6">
+                      <div className="space-y-1.5 col-span-1">
                         <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Preço Custo</label>
                         <input 
                           required 
@@ -602,7 +604,7 @@ export default function Products() {
                           className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-red-800 font-black text-sm transition-all"
                         />
                       </div>
-                      <div className="space-y-1.5">
+                      <div className="space-y-1.5 col-span-1">
                         <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Preço Venda</label>
                         <input 
                           required 
@@ -618,19 +620,19 @@ export default function Products() {
                           className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-red-800 font-black text-sm transition-all"
                         />
                       </div>
-                      <div className="space-y-1.5">
+                      <div className="space-y-1.5 col-span-1">
                         <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Perfis/Público</label>
                         <select 
                           value={gender} 
                           onChange={e => setGender(e.target.value as any)}
-                          className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-red-800 font-black text-sm transition-all"
+                          className="w-full px-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-red-800 font-black text-xs sm:text-sm transition-all bg-white"
                         >
                           <option value="Masculino">Masculino</option>
                           <option value="Feminino">Feminino</option>
                           <option value="Ambos">Ambos</option>
                         </select>
                       </div>
-                      <div className="space-y-1.5">
+                      <div className="space-y-1.5 col-span-1">
                         <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Estoque Mínimo</label>
                         <input 
                           type="text" 
@@ -647,20 +649,20 @@ export default function Products() {
                       </div>
                     </div>
 
-                    <div className="p-5 bg-slate-950 border border-amber-500/30 rounded-2xl shadow-xl flex items-center justify-between text-white font-serif italic">
-                      <div className="flex gap-8">
+                    <div className="p-5 bg-slate-950 border border-amber-500/30 rounded-2xl shadow-xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 text-white font-serif italic">
+                      <div className="grid grid-cols-2 sm:flex sm:gap-8 gap-4 w-full sm:w-auto">
                         <div>
                           <p className="text-[10px] font-black uppercase opacity-60 tracking-widest mb-1 font-sans not-italic">Margem Lucro</p>
-                          <div className="text-2xl font-black text-amber-500">{calculateMargin(parseFloat(costPrice) || 0, parseFloat(sellingPrice) || 0).toFixed(1)}%</div>
+                          <div className="text-xl sm:text-2xl font-black text-amber-500">{calculateMargin(parseFloat(costPrice) || 0, parseFloat(sellingPrice) || 0).toFixed(1)}%</div>
                         </div>
                         <div>
                           <p className="text-[10px] font-black uppercase opacity-60 tracking-widest mb-1 font-sans not-italic">Markup (Mark-on)</p>
-                          <div className="text-2xl font-black text-amber-500">{calculateMarkup(parseFloat(costPrice) || 0, parseFloat(sellingPrice) || 0).toFixed(1)}%</div>
+                          <div className="text-xl sm:text-2xl font-black text-amber-500">{calculateMarkup(parseFloat(costPrice) || 0, parseFloat(sellingPrice) || 0).toFixed(1)}%</div>
                         </div>
                       </div>
-                      <div className="text-right">
+                      <div className="text-left sm:text-right border-t border-slate-800 pt-3 sm:pt-0 sm:border-t-0">
                         <p className="text-[10px] font-black uppercase opacity-60 tracking-widest mb-1 font-sans not-italic">Lucro un.</p>
-                        <p className="text-xl font-black text-red-500">{formatCurrency((parseFloat(sellingPrice) || 0) - (parseFloat(costPrice) || 0))}</p>
+                        <p className="text-lg sm:text-xl font-black text-red-500">{formatCurrency((parseFloat(sellingPrice) || 0) - (parseFloat(costPrice) || 0))}</p>
                       </div>
                     </div>
                   </div>
@@ -684,8 +686,8 @@ export default function Products() {
                         </div>
                       )}
                       {variations.map((v, i) => (
-                        <div key={v.id} className="flex flex-col sm:grid sm:grid-cols-11 gap-2 items-center group/row p-2 sm:p-0 border-b sm:border-0 border-slate-100 last:border-0">
-                          <div className="w-full sm:col-span-3">
+                        <div key={v.id} className="grid grid-cols-12 gap-2 items-center p-2 sm:p-0 border-b sm:border-0 border-slate-100 last:border-0">
+                          <div className="col-span-3">
                             <input 
                               autoFocus={v.id === lastAddedId}
                               placeholder="Tamanho"
@@ -698,9 +700,9 @@ export default function Products() {
                               }}
                             />
                           </div>
-                          <div className="w-full sm:col-span-4">
+                          <div className="col-span-4">
                             <input 
-                              placeholder="Cor/Variante"
+                              placeholder="Cor"
                               className="w-full text-[10px] font-black px-2 py-2 border rounded-lg border-slate-200 bg-white focus:ring-1 focus:ring-red-800 outline-none"
                               value={v.color}
                               onChange={e => {
@@ -710,7 +712,7 @@ export default function Products() {
                               }}
                             />
                           </div>
-                          <div className="w-full sm:col-span-3 flex gap-2 items-center">
+                          <div className="col-span-3">
                             <input 
                               type="text"
                               inputMode="numeric"
@@ -743,21 +745,17 @@ export default function Products() {
                                 }
                               }}
                             />
-                             <button 
-                               type="button"
-                               onClick={() => setVariations(variations.filter((_, idx) => idx !== i))}
-                               className="sm:hidden text-slate-300 hover:text-red-800 transition-colors p-2"
-                             >
-                               <Trash2 size={16} />
-                             </button>
                           </div>
-                          <button 
-                            type="button"
-                            onClick={() => setVariations(variations.filter((_, idx) => idx !== i))}
-                            className="hidden sm:flex sm:col-span-1 text-slate-300 hover:text-red-800 transition-colors justify-center"
-                          >
-                            <Trash2 size={14} />
-                          </button>
+                          <div className="col-span-2 flex justify-center">
+                            <button 
+                              type="button"
+                              onClick={() => setVariations(variations.filter((_, idx) => idx !== i))}
+                              className="text-slate-300 hover:text-red-800 transition-colors p-2"
+                              title="Remover variação"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>

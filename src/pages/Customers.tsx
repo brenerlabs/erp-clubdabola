@@ -2,10 +2,12 @@ import React, { useState, useEffect, useContext } from 'react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, where, orderBy, writeBatch } from 'firebase/firestore';
 import { Customer, Transaction, Sale } from '../types';
-import { Plus, Search, Edit2, Trash2, Copy, User, Phone, Wallet, History, ArrowDownCircle, ArrowUpCircle, X, ShoppingBag, Star } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Copy, User, Phone, Wallet, History, ArrowDownCircle, ArrowUpCircle, X, ShoppingBag, Star, FileText } from 'lucide-react';
 import { formatCurrency, cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { SidebarContext } from '../App';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 export default function Customers() {
   const { setIsSidebarOpen } = useContext(SidebarContext);
@@ -260,6 +262,219 @@ export default function Customers() {
       console.error(err);
       alert('Erro ao processar pagamento: ' + err.message);
     }
+  };
+
+  const exportCustomerPDF = () => {
+    if (!selectedCustomer) return;
+
+    const doc = new jsPDF();
+    const now = new Date();
+
+    // PDF Page Design & Header
+    doc.setFillColor(15, 23, 42); // slate-900 (Dark Slate Background for Header)
+    doc.rect(0, 0, 210, 42, 'F');
+
+    // Header Title
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(22);
+    doc.setTextColor(255, 255, 255);
+    doc.text('CLUB DA BOLA', 14, 18);
+
+    doc.setFontSize(9);
+    doc.setTextColor(239, 68, 68); // Soft Red text
+    doc.text('ERP SYSTEM • HISTÓRICO FINANCEIRO CONSOLIDADO', 14, 25);
+
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(203, 213, 225); // slate-300
+    doc.text(`EXTRATO DE AUDITORIA E COMPRAS`, 14, 32);
+    doc.text(`Gerado em: ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR')}`, 140, 32);
+
+    // Customer Identity Section
+    doc.setDrawColor(226, 232, 240); // slate-200
+    doc.setFillColor(248, 250, 252); // slate-50
+    doc.roundedRect(14, 50, 182, 38, 4, 4, 'FD');
+
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(15, 23, 42);
+    doc.text('CADASTRO DO CLIENTE', 20, 58);
+
+    doc.setDrawColor(226, 232, 240);
+    doc.line(20, 62, 190, 62);
+
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(71, 85, 105);
+
+    doc.text(`Nome do Cliente:`, 20, 68);
+    doc.setFont('Helvetica', 'bold');
+    doc.setTextColor(15, 23, 42);
+    doc.text(selectedCustomer.name, 60, 68);
+
+    doc.setFont('Helvetica', 'normal');
+    doc.setTextColor(71, 85, 105);
+    doc.text(`Contato / Telefone:`, 20, 74);
+    doc.setFont('Helvetica', 'bold');
+    doc.setTextColor(15, 23, 42);
+    doc.text(selectedCustomer.contact || 'S/D', 60, 74);
+
+    doc.setFont('Helvetica', 'normal');
+    doc.setTextColor(71, 85, 105);
+    doc.text(`ERP Identificador (ID):`, 20, 80);
+    doc.setFont('Helvetica', 'bold');
+    doc.setTextColor(15, 23, 42);
+    doc.text(selectedCustomer.id || 'N/A', 60, 80);
+
+    // Financial Status nested box on the right of Identity
+    doc.setFillColor(254, 242, 242); // red-50
+    doc.setDrawColor(248, 113, 113); // red-450
+    doc.roundedRect(125, 65, 65, 20, 3, 3, 'FD');
+
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(153, 27, 27); // red-800
+    doc.text('SALDO DEVEDOR ATUAL', 129, 71);
+
+    doc.setFontSize(11);
+    doc.setTextColor(153, 27, 27);
+    doc.text(formatCurrency(selectedCustomer.totalDebt || 0), 129, 79);
+
+    // Secondary KPI Row under basic info
+    doc.setDrawColor(226, 232, 240); // slate-200
+    doc.setFillColor(255, 255, 255);
+    doc.roundedRect(14, 94, 182, 32, 4, 4, 'FD');
+
+    // Calculate customer metrics
+    const totalPurchased = customerSales.reduce((acc, s) => acc + s.total, 0);
+    const totalPayments = transactions.filter(t => t.type === 'payment').reduce((acc, t) => acc + t.amount, 0);
+    const totalOrdersCount = customerSales.length;
+
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(100, 116, 139); // slate-500
+    doc.text('TOTAL DE PEDIDOS', 20, 103);
+    doc.setFontSize(13);
+    doc.setTextColor(15, 23, 42);
+    doc.text(`${totalOrdersCount}`, 20, 113);
+
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(100, 116, 139);
+    doc.text('MONTANTE COMPRADO', 70, 103);
+    doc.setFontSize(13);
+    doc.setTextColor(15, 23, 42);
+    doc.text(formatCurrency(totalPurchased), 70, 113);
+
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(100, 116, 139);
+    doc.text('MONTANTE LIQUIDADO', 135, 103);
+    doc.setFontSize(13);
+    doc.setTextColor(5, 150, 105); // emerald-600
+    doc.text(formatCurrency(totalPayments), 135, 113);
+
+    // List of Orders Table Header
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(15, 23, 42);
+    doc.text('HISTÓRICO CRONOLÓGICO DE PEDIDOS', 14, 138);
+
+    const formatItemsColumn = (items: any[]) => {
+      return items.map(i => `${i.quantity}x ${i.name} ${i.variationName ? `(${i.variationName})` : ''}`).join(', ');
+    };
+
+    const ordersTableData = customerSales.map(s => {
+      const sDateObj = s.createdAt?.seconds 
+        ? new Date(s.createdAt.seconds * 1000) 
+        : (s.createdAt instanceof Date ? s.createdAt : new Date());
+      
+      const dateStr = sDateObj.toLocaleDateString('pt-BR');
+      const orderRef = `#${s.id?.slice(-6).toUpperCase()}`;
+      const itemsList = formatItemsColumn(s.items);
+      const method = s.paymentMethod || 'Outro';
+      const statusStr = s.status || 'Concluída';
+      const totalStr = formatCurrency(s.total);
+
+      return [dateStr, orderRef, itemsList, method, statusStr, totalStr];
+    });
+
+    autoTable(doc, {
+      startY: 143,
+      head: [['Data', 'Ref Pedido', 'Produtos Adquiridos', 'Método', 'Status', 'Valor Total']],
+      body: ordersTableData.length > 0 ? ordersTableData : [['S/D', '-', 'Nenhum pedido cadastrado no histórico.', '-', '-', 'R$ 0,00']],
+      theme: 'grid',
+      headStyles: {
+        fillColor: [15, 23, 42], // slate-900 (executive theme)
+        textColor: [255, 255, 255],
+        fontSize: 8,
+        fontStyle: 'bold'
+      },
+      styles: {
+        fontSize: 7.5,
+        font: 'Helvetica'
+      },
+      columnStyles: {
+        2: { cellWidth: 70 }, // Wide cell for products list
+        5: { halign: 'right', fontStyle: 'bold' }
+      }
+    });
+
+    // Let's add Payments Table lower down or on next page if we need
+    const finalY = (doc as any).lastAutoTable.finalY + 10;
+    
+    // Check if we need to render transactions/payments
+    const customerPayments = transactions.filter(t => t.type === 'payment');
+    
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(15, 23, 42);
+    
+    // If it goes off page bounds, let's render appropriately
+    let startYPayments = finalY;
+    if (startYPayments > 230) {
+      doc.addPage();
+      startYPayments = 20;
+    }
+    
+    doc.text('HISTÓRICO DE COMPENSAÇÕES E PAGAMENTOS (AMORTIZAÇÕES)', 14, startYPayments);
+
+    const paymentsTableData = customerPayments.map(t => {
+      const pDateObj = t.createdAt?.seconds 
+        ? new Date(t.createdAt.seconds * 1000) 
+        : (t.createdAt instanceof Date ? t.createdAt : new Date());
+      const dateStr = `${pDateObj.toLocaleDateString('pt-BR')} ${pDateObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+      const typeStr = 'Compensação de Saldo';
+      const detailStr = t.saleId ? `Abatimento do Pedido #${t.saleId.slice(-6).toUpperCase()}` : 'Crédito Avulso / Amortização Geral';
+      const methodStr = t.paymentMethod || 'Dinheiro';
+      const amountStr = `- ${formatCurrency(t.amount)}`;
+
+      return [dateStr, typeStr, detailStr, methodStr, amountStr];
+    });
+
+    autoTable(doc, {
+      startY: startYPayments + 5,
+      head: [['Data e Horário', 'Tipo de Operação', 'Destinação de Recursos', 'Método', 'Valor Pago']],
+      body: paymentsTableData.length > 0 ? paymentsTableData : [['S/D', '-', 'Nenhum pagamento registrado ainda.', '-', 'R$ 0,00']],
+      theme: 'grid',
+      headStyles: {
+        fillColor: [153, 27, 27], // brand red-800
+        textColor: [255, 255, 255],
+        fontSize: 8,
+        fontStyle: 'bold'
+      },
+      styles: {
+        fontSize: 7.5,
+        font: 'Helvetica'
+      },
+      columnStyles: {
+        2: { cellWidth: 70 },
+        4: { halign: 'right', fontStyle: 'bold', textColor: [5, 150, 105] } // Green text for payouts
+      }
+    });
+
+    const fileSlug = selectedCustomer.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    doc.save(`historico-vendas-${fileSlug}.pdf`);
   };
 
   const formatPhoneNumber = (value: string) => {
@@ -705,9 +920,19 @@ export default function Customers() {
                       <p className="text-white/40 text-[10px] font-black uppercase tracking-[0.3em] font-sans">{selectedCustomer.contact} • Auditoria de Inteligência</p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-[10px] font-black uppercase opacity-60 tracking-widest mb-1">Dívida Acumulada</p>
-                    <p className="text-3xl font-black text-red-600 italic tracking-tighter">{formatCurrency(selectedCustomer.totalDebt)}</p>
+                  <div className="flex items-center gap-4">
+                    <button 
+                      onClick={exportCustomerPDF}
+                      className="px-4 py-2.5 bg-white/10 hover:bg-white/20 border border-white/10 text-white rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 active:scale-95"
+                      title="Exportar Extrato Consolidado PDF"
+                    >
+                      <FileText size={14} className="text-amber-500" />
+                      PDF
+                    </button>
+                    <div className="text-right">
+                      <p className="text-[10px] font-black uppercase opacity-60 tracking-widest mb-1">Dívida Acumulada</p>
+                      <p className="text-3xl font-black text-red-600 italic tracking-tighter">{formatCurrency(selectedCustomer.totalDebt)}</p>
+                    </div>
                   </div>
                 </div>
                 
@@ -938,7 +1163,14 @@ export default function Customers() {
                 )}
                 </div>
               </div>
-              <div className="p-6 bg-white border-t border-slate-100 flex justify-end">
+              <div className="p-6 bg-white border-t border-slate-100 flex justify-end gap-3">
+                <button 
+                  onClick={exportCustomerPDF}
+                  className="px-6 py-2.5 bg-slate-900 hover:bg-red-800 text-white rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all shadow-md flex items-center gap-2 active:scale-95"
+                >
+                  <FileText size={14} className="text-amber-500" />
+                  Exportar Extrato PDF
+                </button>
                 <button onClick={() => setIsHistoryOpen(false)} className="px-8 py-2.5 text-[11px] font-black uppercase text-slate-400 hover:text-slate-600 transition-all tracking-widest">Fechar Janela</button>
               </div>
             </motion.div>
