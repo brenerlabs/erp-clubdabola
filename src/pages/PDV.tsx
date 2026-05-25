@@ -353,6 +353,8 @@ export default function PDV() {
     const heading = isPre ? '⚽ *ERP CLUB DA BOLA - Orçamento / Pré-venda* ⚽' : '⚽ *ERP CLUB DA BOLA - Comprovante* ⚽';
     const footer = isPre ? 'Aprovação de orçamento sujeita à disponibilidade de estoque.' : 'Obrigado por comprar no *ERP CLUB DA BOLA*!';
 
+    const hasDiscount = sale.discount && sale.discount > 0;
+
     const message = `${heading}\n` +
       `-------------------------------------------\n` +
       `👤 *Cliente:* ${sale.customerName}\n` +
@@ -363,6 +365,8 @@ export default function PDV() {
       `-------------------------------------------\n` +
       `📦 *Itens:*\n${itemsText}\n` +
       `-------------------------------------------\n` +
+      (hasDiscount ? `💵 *Subtotal:* ${formatCurrency(sale.subtotal || (sale.total + sale.discount))}\n` : '') +
+      (hasDiscount ? `💸 *Desconto:* -${formatCurrency(sale.discount)}\n` : '') +
       `💰 *TOTAL: ${formatCurrency(sale.total)}*\n` +
       `-------------------------------------------\n` +
       `${footer}`;

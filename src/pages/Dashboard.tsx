@@ -208,6 +208,10 @@ export default function Dashboard() {
     if (isNaN(amount) || amount <= 0) return alert('Valor inválido');
 
     setIsCompensating(true);
+    let clientName = '';
+    let clientContact = '';
+    let clientRemainingDebt = 0;
+
     try {
       const batch = writeBatch(db);
       
@@ -275,8 +279,11 @@ export default function Dashboard() {
         const custSnap = await getDoc(custRef);
         if (custSnap.exists()) {
           const currentDebt = custSnap.data().totalDebt || 0;
+          clientName = custSnap.data().name || '';
+          clientContact = custSnap.data().contact || '';
+          clientRemainingDebt = Math.max(0, currentDebt - amount);
           batch.update(custRef, {
-            totalDebt: Math.max(0, currentDebt - amount),
+            totalDebt: clientRemainingDebt,
             updatedAt: serverTimestamp()
           });
         }
@@ -298,8 +305,11 @@ export default function Dashboard() {
           const custSnap = await getDoc(custRef);
           if (custSnap.exists()) {
             const currentDebt = custSnap.data().totalDebt || 0;
+            clientName = custSnap.data().name || '';
+            clientContact = custSnap.data().contact || '';
+            clientRemainingDebt = Math.max(0, currentDebt - amount);
             batch.update(custRef, {
-              totalDebt: Math.max(0, currentDebt - amount),
+              totalDebt: clientRemainingDebt,
               updatedAt: serverTimestamp()
             });
 
@@ -321,6 +331,31 @@ export default function Dashboard() {
       alert('Compensação realizada com sucesso!');
       setSelectedSale(null);
       setCompAmount('');
+
+      // Auto-trigger WhatsApp if client data was fetched
+      if (clientName && clientContact) {
+        const heading = '⚽ *ERP CLUB DA BOLA - Comprovante de Pagamento* ⚽';
+        const message = `${heading}\n` +
+          `-------------------------------------------\n` +
+          `👤 *Cliente:* ${clientName}\n` +
+          `💵 *Valor Compensado:* ${formatCurrency(amount)}\n` +
+          `📝 *Saldo Devedor Restante:* ${formatCurrency(clientRemainingDebt)}\n` +
+          `-------------------------------------------\n` +
+          `Obrigado! Seu pagamento foi registrado e seu saldo foi atualizado.`;
+
+        const encoded = encodeURIComponent(message);
+        const phone = clientContact.replace(/\D/g, '');
+        let finalPhone = phone;
+        if (phone && phone.length <= 11) {
+          finalPhone = '55' + phone;
+        }
+
+        try {
+          window.open(`https://wa.me/${finalPhone}?text=${encoded}`, '_blank');
+        } catch (err) {
+          console.warn("WhatsApp blocked or auto-trigger failed:", err);
+        }
+      }
     } catch (err) {
       console.error(err);
       alert('Erro ao compensar.');
@@ -350,6 +385,69 @@ export default function Dashboard() {
       };
     });
   }, [filteredSales]);
+
+  const monthlyComparisonData = React.useMemo(() => {
+    const getElementDate = (el: any) => {
+      if (!el?.createdAt) return null;
+      if (typeof el.createdAt.seconds === 'number') return new Date(el.createdAt.seconds * 1000);
+      if (el.createdAt instanceof Date) return el.createdAt;
+      if (typeof el.createdAt.toDate === 'function') return el.createdAt.toDate();
+      const sec = el.createdAt.seconds || el.createdAt._seconds;
+      if (typeof sec === 'number') return new Date(sec * 1000);
+      return null;
+    };
+
+    // Prepare last 6 months including the current one
+    const monthsData: { monthYearStr: string; monthLabel: string; salesTotal: number; amortizedTotal: number }[] = [];
+    
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(1); // avoid month transition overflow
+      d.setMonth(d.getMonth() - i);
+      const year = d.getFullYear();
+      const month = d.getMonth();
+      const monthYearStr = `${year}-${String(month + 1).padStart(2, '0')}`;
+      const monthLabel = d.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '');
+      monthsData.push({
+        monthYearStr,
+        monthLabel: monthLabel.toUpperCase(),
+        salesTotal: 0,
+        amortizedTotal: 0
+      });
+    }
+
+    // Accumulate Sales
+    sales.forEach(sale => {
+      if (sale.status === 'Pré-venda') return;
+      const d = getElementDate(sale);
+      if (!d) return;
+      const year = d.getFullYear();
+      const month = d.getMonth();
+      const monthYearStr = `${year}-${String(month + 1).padStart(2, '0')}`;
+      
+      const found = monthsData.find(m => m.monthYearStr === monthYearStr);
+      if (found) {
+        found.salesTotal += sale.total || 0;
+      }
+    });
+
+    // Accumulate Amortizations (transactions with type === 'payment')
+    transactions.forEach(tx => {
+      if (tx.type !== 'payment') return;
+      const d = getElementDate(tx);
+      if (!d) return;
+      const year = d.getFullYear();
+      const month = d.getMonth();
+      const monthYearStr = `${year}-${String(month + 1).padStart(2, '0')}`;
+      
+      const found = monthsData.find(m => m.monthYearStr === monthYearStr);
+      if (found) {
+        found.amortizedTotal += tx.amount || 0;
+      }
+    });
+
+    return monthsData;
+  }, [sales, transactions]);
 
   const customerRanking = React.useMemo(() => {
     const ranking: Record<string, { name: string, total: number, count: number }> = {};
@@ -786,6 +884,55 @@ export default function Dashboard() {
                 />
                 <Bar yAxisId="left" dataKey="total" fill="#991b1b" radius={[6, 6, 0, 0]} />
                 <Bar yAxisId="right" dataKey="quantity" fill="#d4af37" radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Monthly Sales vs Amortizations Comparison Chart */}
+        <div className="xl:col-span-1 bg-white p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+          <div className="flex flex-col mb-6">
+            <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+              <TrendingUp size={18} className="text-emerald-600" />
+              Sales vs. Amortização
+            </h3>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Comparativo Mensal (6 Meses)</p>
+          </div>
+
+          <div className="flex items-center gap-4 text-[9px] font-black uppercase tracking-widest mb-6">
+            <div className="flex items-center gap-1.5">
+              <span className="size-2 bg-red-850 rounded-full" style={{ backgroundColor: '#991b1b' }}></span> Vendas
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="size-2 bg-emerald-500 rounded-full" style={{ backgroundColor: '#10b981' }}></span> Amortizado (Fiado)
+            </div>
+          </div>
+
+          <div className="flex-1 min-h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={monthlyComparisonData}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis 
+                  dataKey="monthLabel" 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fontSize: 9, fontWeight: 700, fill: '#64748b' }} 
+                />
+                <YAxis 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fontSize: 9, fontWeight: 700, fill: '#64748b' }} 
+                  tickFormatter={(val) => `R$ ${val >= 1000 ? (val / 1000).toFixed(0) + 'k' : val}`}
+                />
+                <Tooltip 
+                  cursor={{ fill: 'rgba(16, 185, 129, 0.05)' }}
+                  contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', padding: '16px' }}
+                  itemStyle={{ fontSize: '11px', fontWeight: 'bold' }}
+                  labelStyle={{ fontWeight: 'black', marginBottom: '8px', color: '#0f172a' }}
+                  formatter={(value: any) => [formatCurrency(Number(value)), '']}
+                />
+                <Bar dataKey="salesTotal" name="Vendas" fill="#991b1b" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="amortizedTotal" name="Amortizado" fill="#10b981" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

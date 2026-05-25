@@ -321,8 +321,31 @@ export default function App() {
           </AnimatePresence>
         </div>
 
-        {/* Bottom Navigation - Only small devices, strictly essential only or remove */}
-        {/* I'll remove the redundant bottom nav as the sidebar is now the primary navigation as requested */}
+        {/* Bottom Navigation for Native Mobile Feel */}
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-slate-950 border-t border-slate-800/60 z-50 flex items-center select-none shadow-[0_-8px_24px_rgba(0,0,0,0.3)]">
+          <div className="flex-1 flex items-center gap-2 overflow-x-auto no-scrollbar scroll-smooth px-4 h-full items-center">
+            {menuItems.map((item) => {
+              const IsActive = activePage === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => {
+                    setActivePage(item.id as Page);
+                    if (isMobileMenuOpen) setIsMobileMenuOpen(false);
+                  }}
+                  className="flex items-center gap-2 h-10 px-4.5 rounded-[14px] transition-all whitespace-nowrap text-[10px] font-black uppercase tracking-[0.08em] shrink-0 duration-200"
+                  style={{
+                    backgroundColor: IsActive ? '#991b1b' : 'transparent',
+                    color: IsActive ? '#ffffff' : '#94a3b8'
+                  }}
+                >
+                  <item.icon size={15} className={IsActive ? 'text-white' : 'text-slate-500'} />
+                  <span>{item.label.split(' ')[0]}</span>
+                </button>
+              );
+            })}
+          </div>
+        </nav>
       </main>
     </div>
     </SidebarContext.Provider>

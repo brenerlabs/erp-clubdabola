@@ -248,16 +248,41 @@ export default function Customers() {
       }
 
       // Update Customer Debt
+      const remainingDebt = Math.max(0, (selectedCustomer.totalDebt || 0) - amount);
       const custRef = doc(db, 'customers', selectedCustomer.id!);
       batch.update(custRef, {
-        totalDebt: Math.max(0, (selectedCustomer.totalDebt || 0) - amount),
+        totalDebt: remainingDebt,
         updatedAt: serverTimestamp()
       });
 
       await batch.commit();
 
+      const compAmount = amount;
       setPaymentAmount('');
       alert('Amortização processada com sucesso!');
+
+      // Generate and trigger WhatsApp message
+      const heading = '⚽ *ERP CLUB DA BOLA - Comprovante de Pagamento* ⚽';
+      const message = `${heading}\n` +
+        `-------------------------------------------\n` +
+        `👤 *Cliente:* ${selectedCustomer.name}\n` +
+        `💵 *Valor Compensado:* ${formatCurrency(compAmount)}\n` +
+        `📝 *Saldo Devedor Restante:* ${formatCurrency(remainingDebt)}\n` +
+        `-------------------------------------------\n` +
+        `Obrigado! Seu pagamento foi registrado e seu saldo foi atualizado.`;
+
+      const encoded = encodeURIComponent(message);
+      const phone = selectedCustomer.contact ? selectedCustomer.contact.replace(/\D/g, '') : '';
+      let finalPhone = phone;
+      if (phone && phone.length <= 11) {
+        finalPhone = '55' + phone;
+      }
+
+      try {
+        window.open(`https://wa.me/${finalPhone}?text=${encoded}`, '_blank');
+      } catch (err) {
+        console.warn("WhatsApp block or error:", err);
+      }
     } catch (err: any) {
       console.error(err);
       alert('Erro ao processar pagamento: ' + err.message);
@@ -822,7 +847,7 @@ export default function Customers() {
                   </form>
                 ) : (
                   <div className="p-8 space-y-8 font-serif">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="bg-slate-950 text-white rounded-2xl p-6 border border-slate-800 shadow-xl">
                         <p className="text-[9px] font-black uppercase text-slate-500 tracking-[0.2em] mb-1">Dívida Total</p>
                         <p className="text-3xl font-black text-red-600 italic tracking-tighter">{formatCurrency(editingCustomer?.totalDebt || 0)}</p>

@@ -45,3 +45,26 @@ body {
 .label-analytical {
   @apply text-[10px] font-bold uppercase tracking-widest text-slate-400;
 }
+
+/* iOS Safari Automatic Zoom Prevention & Touch Optimizations */
+@media (max-width: 768px) {
+  input, select, textarea, input:focus, select:focus, textarea:focus {
+    font-size: 16px !important;
+  }
+}
+
+/* Hide scrollbars for sliders and horizontal nav menus */
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+}
+.no-scrollbar {
+  -ms-overflow-style: none !important;  /* IE and Edge */
+  scrollbar-width: none !important;  /* Firefox */
+  overflow-y: hidden;
+}
+
+/* Smooth physics scrolling on iOS devices */
+.overflow-momentum {
+  -webkit-overflow-scrolling: touch;
+}
+
