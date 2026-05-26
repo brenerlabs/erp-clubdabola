@@ -31,7 +31,7 @@ body {
 }
 
 .analytical-card {
-  @apply bg-white rounded-lg border border-slate-200 shadow-sm p-6 hover:border-slate-300 transition-all duration-300;
+  /* Semantic class for Framer Motion animated cards in the dashboard */
 }
 
 .data-value {

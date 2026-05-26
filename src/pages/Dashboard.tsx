@@ -741,7 +741,7 @@ export default function Dashboard() {
           whileInView={{ opacity: 1, scale: 1 }}
           viewport={{ once: true }}
           transition={{ duration: 0.4, delay: 0.1 }}
-          className="analytical-card rounded-[24px] flex items-center justify-between"
+          className="analytical-card bg-white p-6 rounded-[24px] border border-slate-200 hover:border-slate-300 shadow-sm flex items-center justify-between transition-all duration-300"
         >
            <div className="flex items-center gap-3">
               <div className={cn(
@@ -770,7 +770,7 @@ export default function Dashboard() {
           whileInView={{ opacity: 1, scale: 1 }}
           viewport={{ once: true }}
           transition={{ duration: 0.4, delay: 0.15 }}
-          className="analytical-card rounded-[24px] flex items-center justify-between"
+          className="analytical-card bg-white p-6 rounded-[24px] border border-slate-200 hover:border-slate-300 shadow-sm flex items-center justify-between transition-all duration-300"
         >
            <div className="flex items-center gap-3">
               <div className="size-10 bg-rose-100 text-rose-800 rounded-xl flex items-center justify-center shadow-lg shadow-rose-900/5">
@@ -790,7 +790,7 @@ export default function Dashboard() {
           whileInView={{ opacity: 1, scale: 1 }}
           viewport={{ once: true }}
           transition={{ duration: 0.4, delay: 0.2 }}
-          className="analytical-card rounded-[24px] flex items-center justify-between md:col-span-2 lg:col-span-1"
+          className="analytical-card bg-white p-6 rounded-[24px] border border-slate-200 hover:border-slate-300 shadow-sm flex items-center justify-between md:col-span-2 lg:col-span-1 transition-all duration-300"
         >
            <div className="flex items-center gap-3">
               <div className="size-10 bg-slate-950 text-white rounded-xl flex items-center justify-center">
