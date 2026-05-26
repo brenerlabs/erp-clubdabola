@@ -846,11 +846,11 @@ export default function Customers() {
                     </div>
                   </form>
                 ) : (
-                  <div className="p-8 space-y-8 font-serif">
+                  <div className="p-8 space-y-8 font-sans">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="bg-slate-950 text-white rounded-2xl p-6 border border-slate-800 shadow-xl">
                         <p className="text-[9px] font-black uppercase text-slate-500 tracking-[0.2em] mb-1">Dívida Total</p>
-                        <p className="text-3xl font-black text-red-600 italic tracking-tighter">{formatCurrency(editingCustomer?.totalDebt || 0)}</p>
+                        <p className="text-3xl font-black text-red-600 tracking-tighter">{formatCurrency(editingCustomer?.totalDebt || 0)}</p>
                       </div>
                       <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
                         <p className="text-[9px] font-black uppercase text-slate-400 tracking-[0.2em] mb-1">Última Transação</p>
@@ -929,7 +929,7 @@ export default function Customers() {
             />
             <motion.div 
               initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-3xl shadow-2xl relative z-10 w-full max-w-2xl overflow-hidden flex flex-col max-h-[85vh] border border-slate-200 font-serif"
+              className="bg-white rounded-3xl shadow-2xl relative z-10 w-full max-w-2xl overflow-hidden flex flex-col max-h-[85vh] border border-slate-200 font-sans"
             >
               <div className="p-8 border-b border-amber-500 bg-slate-950 text-white relative overflow-hidden">
                 <div className="absolute top-0 right-0 p-8 opacity-5">

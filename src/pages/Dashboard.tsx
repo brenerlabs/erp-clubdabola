@@ -21,7 +21,10 @@ import {
   Receipt,
   Truck,
   Activity,
-  LayoutDashboard
+  LayoutDashboard,
+  Search,
+  Tag,
+  SlidersHorizontal
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -54,8 +57,15 @@ export default function Dashboard() {
   // Filters
   const [customerFilter, setCustomerFilter] = useState('all');
   const [productFilter, setProductFilter] = useState('all');
+  const [genderFilter, setGenderFilter] = useState('all');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [productSearch, setProductSearch] = useState('');
   const [salesTableFilter, setSalesTableFilter] = useState<'all' | 'pending-fiado' | 'completed'>('all');
   const [salesLimit, setSalesLimit] = useState(10);
+
+  const categories = React.useMemo(() => {
+    return ['all', ...Array.from(new Set(products.map(p => p.category || ''))).filter(Boolean).sort()];
+  }, [products]);
 
   useEffect(() => {
     const unsubSales = onSnapshot(query(collection(db, 'sales'), orderBy('createdAt', 'desc')), (snapshot) => {
@@ -96,11 +106,33 @@ export default function Dashboard() {
   const filteredSales = React.useMemo(() => {
     return sales.filter(sale => {
       if (sale.status === 'Pré-venda') return false;
+      
       const matchesCustomer = customerFilter === 'all' || sale.customerId === customerFilter;
       const matchesProduct = productFilter === 'all' || sale.items.some(item => item.productId === productFilter);
-      return matchesCustomer && matchesProduct;
+      
+      const matchesGender = genderFilter === 'all' || sale.items.some(item => {
+        const p = products.find(prod => prod.id === item.productId);
+        return p && (p.gender === genderFilter || p.gender === 'Ambos');
+      });
+      
+      const matchesCategory = categoryFilter === 'all' || sale.items.some(item => {
+        const p = products.find(prod => prod.id === item.productId);
+        return p && p.category === categoryFilter;
+      });
+      
+      const matchesProductSearch = productSearch.trim() === '' || sale.items.some(item => {
+        const p = products.find(prod => prod.id === item.productId);
+        const term = productSearch.toLowerCase();
+        return (
+          (p && p.name.toLowerCase().includes(term)) ||
+          item.productName.toLowerCase().includes(term) ||
+          item.productId.toLowerCase().includes(term)
+        );
+      });
+
+      return matchesCustomer && matchesProduct && matchesGender && matchesCategory && matchesProductSearch;
     });
-  }, [sales, customerFilter, productFilter]);
+  }, [sales, products, customerFilter, productFilter, genderFilter, categoryFilter, productSearch]);
 
   const stats = React.useMemo(() => {
     let revenue = 0;
@@ -513,55 +545,142 @@ export default function Dashboard() {
       </div>
 
       {/* Filters Section */}
-      <div className="flex flex-wrap items-center gap-3">
-        <motion.div 
-          whileHover={{ y: -1 }}
-          className="bg-white/40 backdrop-blur-md px-4 py-3 rounded-2xl border border-white/60 shadow-lg shadow-slate-200/40 flex items-center gap-3 hover:bg-white/60 transition-all group min-w-[200px]"
-        >
-          <div className="size-8 bg-slate-900 text-white rounded-lg flex items-center justify-center shrink-0 shadow-lg group-hover:scale-110 transition-transform">
-             <Users size={14} />
+      <div className="bg-white/45 backdrop-blur-md p-4 sm:p-5 rounded-[24px] border border-white/60 shadow-lg shadow-slate-200/40 space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <SlidersHorizontal size={14} className="text-slate-500" />
+            <span className="text-[10px] font-black uppercase text-slate-800 tracking-widest font-sans">Filtros de Vendas & Desempenho</span>
           </div>
-          <div className="flex-1">
-            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1 font-sans">Cliente</p>
-            <select 
-              className="w-full bg-transparent font-black text-slate-900 outline-none text-[11px] appearance-none cursor-pointer uppercase tracking-tight"
-              value={customerFilter}
-              onChange={e => setCustomerFilter(e.target.value)}
-            >
-              <option value="all">TODOS</option>
-              {customers.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
+          <div className="flex items-center gap-2 md:ml-auto">
+             <span className="size-2 bg-emerald-500 rounded-full animate-pulse"></span>
+             <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest font-sans">Atualização Contínua</span>
           </div>
-        </motion.div>
-
-        <motion.div 
-          whileHover={{ y: -1 }}
-          className="bg-white/40 backdrop-blur-md px-4 py-3 rounded-2xl border border-white/60 shadow-lg shadow-slate-200/40 flex items-center gap-3 hover:bg-white/60 transition-all group min-w-[200px]"
-        >
-          <div className="size-8 bg-red-800 text-white rounded-lg flex items-center justify-center shrink-0 shadow-lg group-hover:scale-110 transition-transform">
-             <Package size={14} />
-          </div>
-          <div className="flex-1">
-            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1 font-sans">Produto (SKU)</p>
-            <select 
-              className="w-full bg-transparent font-black text-slate-900 outline-none text-[11px] appearance-none cursor-pointer uppercase tracking-tight"
-              value={productFilter}
-              onChange={e => setProductFilter(e.target.value)}
-            >
-              <option value="all">TODOS</option>
-              {products.map(p => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-          </div>
-        </motion.div>
-
-        <div className="ml-auto flex items-center gap-2">
-           <span className="size-2 bg-emerald-500 rounded-full animate-pulse"></span>
-           <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest font-sans">Sistema em Tempo Real</span>
         </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          {/* Active Product Name/SKU Search */}
+          <div className="bg-white px-4 py-2.5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3 group relative">
+            <div className="size-8 bg-amber-500/10 text-amber-600 rounded-lg flex items-center justify-center shrink-0">
+               <Search size={14} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1 font-sans">Buscar Produto</p>
+              <input 
+                type="text"
+                placeholder="PRODUTO OU SKU..."
+                className="w-full bg-transparent font-black text-slate-900 outline-none text-[11px] placeholder:text-slate-300 uppercase tracking-tight"
+                value={productSearch}
+                onChange={e => setProductSearch(e.target.value)}
+              />
+            </div>
+            {productSearch && (
+              <button 
+                onClick={() => setProductSearch('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 bg-slate-50 rounded"
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
+
+          {/* Customer Filter */}
+          <div className="bg-white px-4 py-2.5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3 group font-sans">
+            <div className="size-8 bg-slate-900 text-white rounded-lg flex items-center justify-center shrink-0">
+               <Users size={14} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1 font-sans">Cliente</p>
+              <select 
+                className="w-full bg-transparent font-black text-slate-900 outline-none text-[11px] cursor-pointer uppercase tracking-tight"
+                value={customerFilter}
+                onChange={e => setCustomerFilter(e.target.value)}
+              >
+                <option value="all">TODOS CLIENTES</option>
+                {customers.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Product Select Filter */}
+          <div className="bg-white px-4 py-2.5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3 group font-sans">
+            <div className="size-8 bg-red-800 text-white rounded-lg flex items-center justify-center shrink-0">
+               <Package size={14} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1 font-sans">Selecionar SKU</p>
+              <select 
+                className="w-full bg-transparent font-black text-slate-900 outline-none text-[11px] cursor-pointer uppercase tracking-tight text-ellipsis overflow-hidden"
+                value={productFilter}
+                onChange={e => setProductFilter(e.target.value)}
+              >
+                <option value="all">TODOS PRODUTOS</option>
+                {products.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Gender Filter */}
+          <div className="bg-white px-4 py-2.5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3 group font-sans">
+            <div className="size-8 bg-blue-500/10 text-blue-600 rounded-lg flex items-center justify-center shrink-0">
+               <Activity size={14} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1 font-sans">Gênero</p>
+              <select 
+                className="w-full bg-transparent font-black text-slate-900 outline-none text-[11px] cursor-pointer uppercase tracking-tight"
+                value={genderFilter}
+                onChange={e => setGenderFilter(e.target.value)}
+              >
+                <option value="all">TODOS GÊNEROS</option>
+                <option value="Masculino">MASCULINO</option>
+                <option value="Feminino">FEMININO</option>
+                <option value="Ambos">UNISSEX / AMBOS</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Category Filter */}
+          <div className="bg-white px-4 py-2.5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3 group font-sans">
+            <div className="size-8 bg-emerald-50 text-emerald-600 rounded-lg flex items-center justify-center shrink-0">
+               <Tag size={14} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1 font-sans">Categoria</p>
+              <select 
+                className="w-full bg-transparent font-black text-slate-900 outline-none text-[11px] cursor-pointer uppercase tracking-tight font-sans"
+                value={categoryFilter}
+                onChange={e => setCategoryFilter(e.target.value)}
+              >
+                <option value="all">TODAS CATEGORIAS</option>
+                {categories.filter(cat => cat !== 'all').map(cat => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Filters Clear Button if any is changed */}
+        {(customerFilter !== 'all' || productFilter !== 'all' || genderFilter !== 'all' || categoryFilter !== 'all' || productSearch !== '') && (
+          <div className="flex justify-end pt-1">
+            <button 
+              onClick={() => {
+                setCustomerFilter('all');
+                setProductFilter('all');
+                setGenderFilter('all');
+                setCategoryFilter('all');
+                setProductSearch('');
+              }}
+              className="text-[9px] font-black uppercase text-red-850 hover:text-red-900 transition-colors flex items-center gap-1.5"
+            >
+              <X size={12} /> Limpar Todos os Filtros Ativos
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Stats Cards */}
@@ -617,7 +736,13 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <div className="bg-white p-6 rounded-[24px] border border-slate-200 shadow-sm flex items-center justify-between">
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          whileInView={{ opacity: 1, scale: 1 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.4, delay: 0.1 }}
+          className="analytical-card rounded-[24px] flex items-center justify-between"
+        >
            <div className="flex items-center gap-3">
               <div className={cn(
                 "size-10 rounded-xl flex items-center justify-center",
@@ -639,8 +764,14 @@ export default function Dashboard() {
                 />
               </div>
            </div>
-        </div>
-        <div className="bg-white p-6 rounded-[24px] border border-slate-200 shadow-sm flex items-center justify-between">
+        </motion.div>
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          whileInView={{ opacity: 1, scale: 1 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.4, delay: 0.15 }}
+          className="analytical-card rounded-[24px] flex items-center justify-between"
+        >
            <div className="flex items-center gap-3">
               <div className="size-10 bg-rose-100 text-rose-800 rounded-xl flex items-center justify-center shadow-lg shadow-rose-900/5">
                 <Receipt size={20} />
@@ -651,10 +782,16 @@ export default function Dashboard() {
               </div>
            </div>
            <div className="text-right">
-              <p className="text-[9px] font-black uppercase text-rose-800 tracking-widest">Pend: {formatCurrency(stats.pendingTaxes)}</p>
+              <p className="text-[9px] font-black uppercase text-rose-800 tracking-widest font-sans">Pend: {formatCurrency(stats.pendingTaxes)}</p>
            </div>
-        </div>
-        <div className="bg-white p-6 rounded-[24px] border border-slate-200 shadow-sm flex items-center justify-between md:col-span-2 lg:col-span-1">
+        </motion.div>
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          whileInView={{ opacity: 1, scale: 1 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.4, delay: 0.2 }}
+          className="analytical-card rounded-[24px] flex items-center justify-between md:col-span-2 lg:col-span-1"
+        >
            <div className="flex items-center gap-3">
               <div className="size-10 bg-slate-950 text-white rounded-xl flex items-center justify-center">
                 <Truck size={20} />
@@ -665,9 +802,9 @@ export default function Dashboard() {
               </div>
            </div>
            <div className="text-right">
-              <p className="text-[9px] font-black uppercase text-amber-500 tracking-widest">Itens: {shipments.reduce((acc, s) => acc + s.items.length, 0)}</p>
+              <p className="text-[9px] font-black uppercase text-amber-500 tracking-widest font-sans">Itens: {shipments.reduce((acc, s) => acc + s.items.length, 0)}</p>
            </div>
-        </div>
+        </motion.div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
@@ -1166,7 +1303,7 @@ export default function Dashboard() {
                     <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
                     <input 
                       type="number"
-                      className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-xl font-black text-slate-900 outline-none focus:ring-2 focus:ring-amber-500 transition-all font-serif"
+                      className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-xl font-black text-slate-900 outline-none focus:ring-2 focus:ring-amber-500 transition-all font-sans"
                       value={compAmount}
                       onChange={e => setCompAmount(e.target.value)}
                       onFocus={e => e.target.value === '0' || e.target.value === selectedSale.total.toString() ? setCompAmount('') : null}
@@ -1226,11 +1363,12 @@ function StatCard({ title, value, icon: Icon, trend, positive, variant = 'glass'
 
   return (
     <motion.div 
-      initial={{ opacity: 0, y: 10 }}
-      whileInView={{ opacity: 1, y: 0 }}
+      initial={{ opacity: 0, scale: 0.95 }}
+      whileInView={{ opacity: 1, scale: 1 }}
       viewport={{ once: true }}
+      transition={{ duration: 0.4 }}
       className={cn(
-        "p-5 rounded-2xl border relative overflow-hidden transition-all duration-300 group",
+        "analytical-card p-5 rounded-2xl border relative overflow-hidden transition-all duration-300 group",
         containerVariants[variant as keyof typeof containerVariants]
       )}
     >

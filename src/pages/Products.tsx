@@ -46,11 +46,41 @@ export default function Products() {
     return unsubscribe;
   }, []);
 
+  // Padronização automática de categorias cadastradas na base de dados para Caixa Alta (CX)
+  useEffect(() => {
+    if (products.length === 0) return;
+
+    const runAutoStandardization = async () => {
+      const nonStandardProducts = products.filter(p => !p.category || p.category !== p.category.toUpperCase().trim());
+      if (nonStandardProducts.length === 0) return;
+
+      try {
+        const batch = writeBatch(db);
+        nonStandardProducts.forEach(p => {
+          const productRef = doc(db, 'products', p.id!);
+          batch.update(productRef, {
+            category: (p.category || 'GERAL').toUpperCase().trim(),
+            updatedAt: serverTimestamp()
+          });
+        });
+        await batch.commit();
+        console.log(`[Auto-Standardization] ${nonStandardProducts.length} categorias padronizadas em Caixa Alta (CX).`);
+      } catch (err) {
+        console.error('Erro ao padronizar categorias automaticamente:', err);
+      }
+    };
+
+    const timer = setTimeout(() => {
+      runAutoStandardization();
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [products]);
+
   const openModal = (product?: Product, isDuplicate = false) => {
     setLastAddedId(null);
     if (product) {
       setName(isDuplicate ? `${product.name} (Cópia)` : product.name);
-      setCategory(product.category);
+      setCategory((product.category || '').toUpperCase().trim());
       setGender(product.gender || 'Ambos');
       setCostPrice(product.costPrice.toString());
       setSellingPrice(product.sellingPrice.toString());
@@ -141,7 +171,7 @@ export default function Products() {
             const productRef = doc(collection(db, 'products'));
             batch.set(productRef, {
               name: rawName,
-              category: columns[1] || 'Geral',
+              category: (columns[1] || 'GERAL').toUpperCase().trim(),
               gender: (columns[6] as any) || 'Ambos',
               costPrice: cPrice,
               sellingPrice: sPrice,
@@ -191,7 +221,7 @@ export default function Products() {
       const totalStock = variations.reduce((acc, v) => acc + (parseInt(v.stock?.toString() || '0') || 0), 0);
       const productData = {
         name,
-        category,
+        category: category.toUpperCase().trim(),
         gender,
         costPrice: cPrice,
         sellingPrice: sPrice,
@@ -528,7 +558,7 @@ export default function Products() {
                     <div className="size-8 bg-black rounded-lg flex items-center justify-center text-amber-500 border border-amber-500/20">
                       <Box size={18} />
                     </div>
-                    <h3 className="text-lg font-black uppercase italic italic tracking-tighter text-slate-900 font-serif">
+                    <h3 className="text-sm font-black uppercase tracking-wider text-slate-900 font-sans">
                       {editingProduct ? 'Configurar Produto' : 'Cadastrar Novo Item'}
                     </h3>
                   </div>
@@ -580,9 +610,9 @@ export default function Products() {
                           required 
                           type="text" 
                           value={category} 
-                          onChange={e => setCategory(e.target.value)}
-                          className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-red-800 font-black text-sm transition-all"
-                          placeholder="Ex: Tênis"
+                          onChange={e => setCategory(e.target.value.toUpperCase())}
+                          className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-red-800 font-black text-sm transition-all uppercase animate-fade-in"
+                          placeholder="EX: TÊNIS"
                         />
                       </div>
                     </div>
@@ -649,20 +679,20 @@ export default function Products() {
                       </div>
                     </div>
 
-                    <div className="p-5 bg-slate-950 border border-amber-500/30 rounded-2xl shadow-xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 text-white font-serif italic">
+                    <div className="p-5 bg-slate-950 border border-slate-800 rounded-2xl shadow-xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 text-white font-sans">
                       <div className="grid grid-cols-2 sm:flex sm:gap-8 gap-4 w-full sm:w-auto">
                         <div>
-                          <p className="text-[10px] font-black uppercase opacity-60 tracking-widest mb-1 font-sans not-italic">Margem Lucro</p>
-                          <div className="text-xl sm:text-2xl font-black text-amber-500">{calculateMargin(parseFloat(costPrice) || 0, parseFloat(sellingPrice) || 0).toFixed(1)}%</div>
+                          <p className="text-[10px] font-black uppercase opacity-60 tracking-widest mb-1 font-sans">Margem Lucro</p>
+                          <div className="text-xl sm:text-2xl font-black text-amber-500 tracking-tight">{calculateMargin(parseFloat(costPrice) || 0, parseFloat(sellingPrice) || 0).toFixed(1)}%</div>
                         </div>
                         <div>
-                          <p className="text-[10px] font-black uppercase opacity-60 tracking-widest mb-1 font-sans not-italic">Markup (Mark-on)</p>
-                          <div className="text-xl sm:text-2xl font-black text-amber-500">{calculateMarkup(parseFloat(costPrice) || 0, parseFloat(sellingPrice) || 0).toFixed(1)}%</div>
+                          <p className="text-[10px] font-black uppercase opacity-60 tracking-widest mb-1 font-sans">Markup (Mark-on)</p>
+                          <div className="text-xl sm:text-2xl font-black text-amber-500 tracking-tight">{calculateMarkup(parseFloat(costPrice) || 0, parseFloat(sellingPrice) || 0).toFixed(1)}%</div>
                         </div>
                       </div>
                       <div className="text-left sm:text-right border-t border-slate-800 pt-3 sm:pt-0 sm:border-t-0">
-                        <p className="text-[10px] font-black uppercase opacity-60 tracking-widest mb-1 font-sans not-italic">Lucro un.</p>
-                        <p className="text-lg sm:text-xl font-black text-red-500">{formatCurrency((parseFloat(sellingPrice) || 0) - (parseFloat(costPrice) || 0))}</p>
+                        <p className="text-[10px] font-black uppercase opacity-60 tracking-widest mb-1 font-sans">Lucro un.</p>
+                        <p className="text-lg sm:text-xl font-black text-red-500 tracking-tight">{formatCurrency((parseFloat(sellingPrice) || 0) - (parseFloat(costPrice) || 0))}</p>
                       </div>
                     </div>
                   </div>

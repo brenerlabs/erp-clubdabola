@@ -555,7 +555,7 @@ export default function PDV() {
                 </div>
 
                 {/* Financial Breakdown */}
-                <div className="bg-slate-950 rounded-[32px] p-6 text-white space-y-3 font-serif border border-slate-900">
+                <div className="bg-slate-950 rounded-[32px] p-6 text-white space-y-3 font-sans border border-slate-900">
                   <div className="flex justify-between items-center opacity-40 text-[10px] font-black uppercase tracking-widest">
                      <span>Subtotal</span>
                      <span>{formatCurrency(lastSale.items.reduce((acc: number, i: any) => acc + (i.price * i.quantity), 0))}</span>
@@ -623,7 +623,7 @@ export default function PDV() {
 
         <div className="flex-1 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 pb-4">
           {filteredProducts.map(product => (
-            <div key={product.id} className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm flex flex-col group hover:border-red-800/30 transition-all">
+            <div key={product.id} className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm flex flex-col group hover:-translate-y-1 hover:shadow-md hover:border-red-800/30 transition-all duration-300 ease-out">
               <div className="mb-2">
                 <div className="flex items-center justify-between gap-2">
                   <span className="px-1.5 py-0.5 bg-slate-100 text-[8px] font-black text-slate-400 rounded uppercase tracking-wider">{product.category}</span>
