@@ -236,9 +236,9 @@ export default function App() {
                 animate={{ opacity: 1 }}
                 className="flex items-center gap-3"
               >
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-white border border-slate-800/50 shadow-lg group-hover:scale-110 transition-transform overflow-hidden p-0.5">
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-white border border-slate-850 shadow-lg group-hover:scale-110 transition-transform overflow-hidden relative">
                   {logoUrl ? (
-                    <img src={logoUrl} alt="Logo ERP" className="w-full h-full object-contain" referrerPolicy="no-referrer" />
+                    <img src={logoUrl} alt="Logo ERP" className="w-full h-full object-cover rounded-lg" referrerPolicy="no-referrer" />
                   ) : (
                     <LayoutDashboard size={18} className="text-slate-900" />
                   )}
@@ -331,9 +331,9 @@ export default function App() {
 
              <div className="flex items-center gap-3">
                 <div className="flex items-center gap-2 group cursor-pointer" onClick={() => setActivePage('dashboard')}>
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center shadow-lg transition-transform bg-transparent shadow-slate-200/30 overflow-hidden border border-slate-200 p-0.5">
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center shadow-lg transition-transform bg-transparent shadow-slate-200/30 overflow-hidden border border-slate-200/80 relative">
                     {logoUrl ? (
-                      <img src={logoUrl} alt="Logo" className="w-full h-full object-contain" referrerPolicy="no-referrer" />
+                      <img src={logoUrl} alt="Logo" className="w-full h-full object-cover rounded-lg" referrerPolicy="no-referrer" />
                     ) : (
                       <LayoutDashboard size={16} className="text-amber-600" />
                     )}

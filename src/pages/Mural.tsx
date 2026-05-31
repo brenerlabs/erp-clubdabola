@@ -16,6 +16,8 @@ export function resizeImage(file: File, maxWidth: number, maxHeight: number): Pr
       image.onload = () => {
         let width = image.width;
         let height = image.height;
+        
+        // Calculate aspect ratio bounds
         if (width > height) {
           if (width > maxWidth) {
             height = Math.round((height * maxWidth) / width);
@@ -36,10 +38,22 @@ export function resizeImage(file: File, maxWidth: number, maxHeight: number): Pr
           resolve(readerEvent.target?.result as string);
           return;
         }
+
+        // Enable ultra high-quality smoothing and rendering for maximum sharpness
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+
         ctx.drawImage(image, 0, 0, width, height);
-        // Compressed JPEG is smaller and loads faster
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
-        resolve(dataUrl);
+
+        // Preserve original quality/transparency for PNGs, use high quality factor for JPEGs
+        const isPng = file.type === 'image/png' || file.name.toLowerCase().endsWith('.png');
+        if (isPng) {
+          const dataUrl = canvas.toDataURL('image/png');
+          resolve(dataUrl);
+        } else {
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.95); // High sharpness (95%)
+          resolve(dataUrl);
+        }
       };
       image.onerror = (err) => reject(err);
       image.src = readerEvent.target?.result as string;
@@ -152,8 +166,8 @@ export default function Mural() {
 
     try {
       setUploadProgress(true);
-      // For customer photos, 800px width/height provides excellent presentation detail
-      const base64Url = await resizeImage(file, 800, 800);
+      // For customer photos, 1200px width/height provides outstanding custom presentation detail with full sharpness
+      const base64Url = await resizeImage(file, 1200, 1200);
       setSelectedPhotoFile(base64Url);
     } catch (err) {
       console.error(err);
@@ -234,8 +248,8 @@ export default function Mural() {
 
     try {
       setIsSavingLogo(true);
-      // For header logos/favicons, 350px provides super high-res quality at tiny size (under 15KB)
-      const base64Url = await resizeImage(file, 350, 350);
+      // For header logos/favicons, 512px provides amazing crisp high-res quality at tiny size
+      const base64Url = await resizeImage(file, 512, 512);
       setLogoFile(base64Url);
 
       // Save to Firebase settings
@@ -386,7 +400,7 @@ export default function Mural() {
                       src={item.photoUrl} 
                       alt={item.customerName}
                       referrerPolicy="no-referrer"
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
+                      className="w-full h-full object-cover rounded-2xl group-hover:scale-105 transition-transform duration-500 ease-out"
                     />
                     
                     {/* Floating delete option */}
@@ -489,8 +503,13 @@ export default function Mural() {
                   </div>
                 ) : logoFile ? (
                   <div className="space-y-4">
-                    <div className="size-24 rounded-2xl bg-white border border-slate-200 p-2 shadow-sm flex items-center justify-center mx-auto overflow-hidden">
-                      <img src={logoFile} alt="Logo ERP" className="max-w-full max-h-full object-contain" referrerPolicy="no-referrer" />
+                    <div className="size-28 rounded-2xl border border-slate-200 shadow-md flex items-center justify-center mx-auto overflow-hidden bg-slate-100 relative">
+                      <img 
+                        src={logoFile} 
+                        alt="Logo ERP" 
+                        className="w-full h-full object-cover rounded-2xl hover:scale-105 transition-transform duration-300" 
+                        referrerPolicy="no-referrer" 
+                      />
                     </div>
                     <div>
                       <p className="text-[10px] font-black text-slate-900 uppercase tracking-wider">Sua Logo Ativa</p>
