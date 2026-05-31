@@ -100,5 +100,15 @@ service cloud.firestore {
     match /expenses/{expenseId} {
       allow read, write: if isAdmin();
     }
+
+    match /settings/{settingId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /customer_photos/{photoId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
   }
 }

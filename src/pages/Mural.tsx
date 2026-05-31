@@ -1,0 +1,742 @@
+import React, { useState, useEffect, useRef, useContext } from 'react';
+import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { collection, query, onSnapshot, addDoc, deleteDoc, doc, updateDoc, setDoc, getDoc, orderBy } from 'firebase/firestore';
+import { Customer, Sale, CustomerPhoto } from '../types';
+import { Plus, Search, Trash2, Camera, Upload, Image as ImageIcon, Sparkles, X, Settings, Check, HelpCircle, FileImage } from 'lucide-react';
+import { formatCurrency, cn } from '../lib/utils';
+import { motion, AnimatePresence } from 'motion/react';
+import { SidebarContext } from '../App';
+
+// Utility to resize images on-the-fly using HTML5 Canvas to keep Firestore payloads lightweight
+export function resizeImage(file: File, maxWidth: number, maxHeight: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (readerEvent) => {
+      const image = new Image();
+      image.onload = () => {
+        let width = image.width;
+        let height = image.height;
+        if (width > height) {
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(readerEvent.target?.result as string);
+          return;
+        }
+        ctx.drawImage(image, 0, 0, width, height);
+        // Compressed JPEG is smaller and loads faster
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+        resolve(dataUrl);
+      };
+      image.onerror = (err) => reject(err);
+      image.src = readerEvent.target?.result as string;
+    };
+    reader.onerror = (err) => reject(err);
+    reader.readAsDataURL(file);
+  });
+}
+
+export default function Mural() {
+  const { setIsSidebarOpen } = useContext(SidebarContext);
+  const [activeSubTab, setActiveSubTab] = useState<'photos' | 'logo'>('photos');
+
+  // Customer Photos state
+  const [photos, setPhotos] = useState<CustomerPhoto[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [sales, setSales] = useState<Sale[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // New photo modal state
+  const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(false);
+  const [selectedPhotoFile, setSelectedPhotoFile] = useState<string | null>(null);
+  const [selectedCustomerId, setSelectedCustomerId] = useState('');
+  const [selectedCustomerName, setSelectedCustomerName] = useState('');
+  const [selectedSaleId, setSelectedSaleId] = useState('');
+  const [photoDescription, setPhotoDescription] = useState('');
+  const [customerSearchQuery, setCustomerSearchQuery] = useState('');
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+
+  // Settings State
+  const [logoFile, setLogoFile] = useState<string | null>(null);
+  const [isSavingLogo, setIsSavingLogo] = useState(false);
+  const [logoSuccessMsg, setLogoSuccessMsg] = useState(false);
+
+  useEffect(() => {
+    if (isPhotoModalOpen) {
+      setIsSidebarOpen(false);
+    } else {
+      setIsSidebarOpen(true);
+    }
+  }, [isPhotoModalOpen, setIsSidebarOpen]);
+
+  // Read data on snapshot
+  useEffect(() => {
+    // Read photos
+    const qPhotos = query(collection(db, 'customer_photos'), orderBy('createdAt', 'desc'));
+    const unsubPhotos = onSnapshot(qPhotos, (snapshot) => {
+      setPhotos(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as CustomerPhoto)));
+      setLoading(false);
+    }, (err) => {
+      console.error(err);
+      setLoading(false);
+    });
+
+    // Read customers
+    const qCust = query(collection(db, 'customers'), orderBy('name', 'asc'));
+    const unsubCust = onSnapshot(qCust, (snapshot) => {
+      setCustomers(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Customer)));
+    });
+
+    // Read sales
+    const qSales = query(collection(db, 'sales'), orderBy('createdAt', 'desc'));
+    const unsubSales = onSnapshot(qSales, (snapshot) => {
+      setSales(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Sale)));
+    });
+
+    // Read saved logo
+    const getLogo = async () => {
+      try {
+        const docRef = doc(db, 'settings', 'appearance');
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          setLogoFile(docSnap.data().logoUrl || null);
+        }
+      } catch (err) {
+        console.error("Error reading logo configuration", err);
+      }
+    };
+    getLogo();
+
+    return () => {
+      unsubPhotos();
+      unsubCust();
+      unsubSales();
+    };
+  }, []);
+
+  // Filtered customers for dropdown autocomplete
+  const filteredCustomers = customerSearchQuery
+    ? customers.filter(c => c.name.toLowerCase().includes(customerSearchQuery.toLowerCase()))
+    : customers;
+
+  // Sales linked to the selected customer
+  const customerSales = selectedCustomerId
+    ? sales.filter(s => s.customerId === selectedCustomerId)
+    : [];
+
+  const handleChooseCustomer = (customer: Customer) => {
+    setSelectedCustomerId(customer.id || '');
+    setSelectedCustomerName(customer.name);
+    setCustomerSearchQuery(customer.name);
+    setShowCustomerDropdown(false);
+    setSelectedSaleId(''); // Reset sale selection
+  };
+
+  const handlePhotoUploadChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setUploadProgress(true);
+      // For customer photos, 800px width/height provides excellent presentation detail
+      const base64Url = await resizeImage(file, 800, 800);
+      setSelectedPhotoFile(base64Url);
+    } catch (err) {
+      console.error(err);
+      alert("Erro ao processar imagem. Verifique o formato do arquivo.");
+    } finally {
+      setUploadProgress(false);
+    }
+  };
+
+  const handleAddPhotoSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedPhotoFile) {
+      alert("Por favor, selecione ou tire uma foto do cliente.");
+      return;
+    }
+    if (!selectedCustomerId) {
+      alert("Por favor, selecione um cliente real cadastrado.");
+      return;
+    }
+
+    try {
+      setUploadProgress(true);
+
+      // Find selected sale info for audit context
+      let saleDateStr: string | null = null;
+      let saleItemsStr: string | null = null;
+
+      if (selectedSaleId) {
+        const foundSale = sales.find(s => s.id === selectedSaleId);
+        if (foundSale) {
+          saleDateStr = foundSale.createdAt?.toDate ? foundSale.createdAt.toDate().toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR');
+          saleItemsStr = foundSale.items.map(it => `${it.quantity}x ${it.name}`).join(', ');
+        }
+      }
+
+      await addDoc(collection(db, 'customer_photos'), {
+        customerId: selectedCustomerId,
+        customerName: selectedCustomerName,
+        saleId: selectedSaleId || null,
+        saleDate: saleDateStr,
+        saleItemsSummary: saleItemsStr,
+        photoUrl: selectedPhotoFile,
+        description: photoDescription,
+        createdAt: new Date(), // Local fallback or standard ServerTimestamp mock
+      });
+
+      // Clear form & close
+      setSelectedPhotoFile(null);
+      setSelectedCustomerId('');
+      setSelectedCustomerName('');
+      setCustomerSearchQuery('');
+      setSelectedSaleId('');
+      setPhotoDescription('');
+      setIsPhotoModalOpen(false);
+
+    } catch (err) {
+      console.error("Error saving photo:", err);
+      alert("Erro ao salvar foto no banco de dados.");
+    } finally {
+      setUploadProgress(false);
+    }
+  };
+
+  const handleDeletePhoto = async (photoId: string) => {
+    if (!confirm("Tem certeza que deseja remover esta foto qualitativa do cliente do mural?")) return;
+    try {
+      await deleteDoc(doc(db, 'customer_photos', photoId));
+    } catch (err) {
+      console.error("Error removing customer photo:", err);
+      alert("Erro ao remover foto do mural.");
+    }
+  };
+
+  // Upload main logo for the business
+  const handleLogoUploadChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsSavingLogo(true);
+      // For header logos/favicons, 350px provides super high-res quality at tiny size (under 15KB)
+      const base64Url = await resizeImage(file, 350, 350);
+      setLogoFile(base64Url);
+
+      // Save to Firebase settings
+      const settingsRef = doc(db, 'settings', 'appearance');
+      await setDoc(settingsRef, {
+        logoUrl: base64Url,
+        updatedAt: new Date()
+      }, { merge: true });
+
+      // Save to localStorage for instant client-side read on page loads
+      localStorage.setItem('erp-custom-logo', base64Url);
+
+      // Dynamically update favicon link so the browser tab logo updates on the fly!
+      const existingFavicon = document.querySelector("link[rel*='icon']");
+      if (existingFavicon) {
+        existingFavicon.setAttribute('href', base64Url);
+      } else {
+        const link = document.createElement('link');
+        link.rel = 'icon';
+        link.href = base64Url;
+        document.head.appendChild(link);
+      }
+
+      // Fire a custom event to alert App.tsx that the global logo has updated
+      window.dispatchEvent(new CustomEvent('logo-updated', { detail: { logoUrl: base64Url } }));
+
+      setLogoSuccessMsg(true);
+      setTimeout(() => setLogoSuccessMsg(false), 4000);
+
+    } catch (err) {
+      console.error("Error saving logo:", err);
+      alert("Erro ao processar e salvar a logo.");
+    } finally {
+      setIsSavingLogo(false);
+    }
+  };
+
+  const handleResetLogo = async () => {
+    if (!confirm("Deseja voltar para a logo padrão do ERP?")) return;
+    try {
+      setIsSavingLogo(true);
+      const settingsRef = doc(db, 'settings', 'appearance');
+      await setDoc(settingsRef, {
+        logoUrl: '',
+        updatedAt: new Date()
+      }, { merge: true });
+
+      setLogoFile(null);
+      localStorage.removeItem('erp-custom-logo');
+
+      // Dispatch event to put the default icon back
+      window.dispatchEvent(new CustomEvent('logo-updated', { detail: { logoUrl: '' } }));
+
+      // Reset favicon web icon back to standard or let it use browser default
+      const favicon = document.querySelector("link[rel*='icon']");
+      if (favicon) {
+        favicon.setAttribute('href', 'https://www.google.com/favicon.ico');
+      }
+
+      setLogoSuccessMsg(true);
+      setTimeout(() => setLogoSuccessMsg(false), 4000);
+    } catch (err) {
+      console.error(err);
+      alert("Erro ao redefinir a logo.");
+    } finally {
+      setIsSavingLogo(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-6 font-sans">
+      {/* Title block with submenu */}
+      <div className="bg-white rounded-[32px] p-6 border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-black text-slate-900 font-sans tracking-tight">Mural de Fotos & Ajustes de Logo</h1>
+          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Sua vitrine afetiva e personalização da identidade do ERP</p>
+        </div>
+        <div className="flex rounded-xl bg-slate-100 p-1 self-start md:self-center">
+          <button 
+            onClick={() => setActiveSubTab('photos')}
+            className={cn(
+              "px-5 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-2",
+              activeSubTab === 'photos' ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-900"
+            )}
+          >
+            <Camera size={14} /> Mural de Clientes
+          </button>
+          <button 
+            onClick={() => setActiveSubTab('logo')}
+            className={cn(
+              "px-5 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-2",
+              activeSubTab === 'logo' ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-900"
+            )}
+          >
+            <Settings size={14} /> Logo e Capa (Favicon)
+          </button>
+        </div>
+      </div>
+
+      {activeSubTab === 'photos' && (
+        <>
+          {/* Action Header */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <h2 className="text-xs font-black uppercase text-slate-400 tracking-widest flex items-center gap-2">
+              <Sparkles size={16} className="text-amber-500 animate-pulse" /> Mural de Encomendas dos Clientes ({photos.length})
+            </h2>
+
+            <button 
+              onClick={() => setIsPhotoModalOpen(true)}
+              className="w-full sm:w-auto px-6 py-4 bg-red-800 hover:bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg hover:scale-[1.02] flex items-center justify-center gap-2"
+            >
+              <Upload size={14} /> Registrar Nova Foto de Cliente
+            </button>
+          </div>
+
+          {/* Photos Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            {loading ? (
+              <div className="col-span-full py-20 flex flex-col items-center justify-center gap-3">
+                <div className="size-10 border-2 border-slate-200 border-t-red-800 rounded-full animate-spin" />
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest animate-pulse">Carregando fotos do mural...</p>
+              </div>
+            ) : photos.length === 0 ? (
+              <div className="col-span-full bg-white rounded-[32px] p-20 border border-slate-200 flex flex-col items-center justify-center text-center">
+                <div className="size-16 bg-slate-50 text-slate-300 rounded-3xl flex items-center justify-center mb-4">
+                  <Camera size={28} />
+                </div>
+                <h3 className="text-sm font-black text-slate-700 uppercase tracking-wider mb-2">Seu Mural está vazio</h3>
+                <p className="text-xs text-slate-400 max-w-sm mb-6 leading-relaxed">Guarde fotos de qualidade dos seus clientes vestindo as camisas vendidas. Isso serve como excelente prova social e dado qualitativo de caimento dos mantos.</p>
+                <button 
+                  onClick={() => setIsPhotoModalOpen(true)}
+                  className="px-6 py-3 bg-red-800 text-white rounded-xl text-[10px] uppercase font-black tracking-widest hover:bg-slate-900 transition-all font-sans"
+                >
+                  Subir Primeira Foto
+                </button>
+              </div>
+            ) : (
+              photos.map((item) => (
+                <motion.div 
+                  key={item.id}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="bg-white border rounded-[28px] overflow-hidden shadow-sm group hover:shadow-xl transition-all duration-300 relative flex flex-col border-slate-200 p-4"
+                >
+                  {/* Polaroid Frame Container */}
+                  <div className="aspect-square w-full rounded-2xl overflow-hidden bg-slate-950 relative border border-slate-100">
+                    <img 
+                      src={item.photoUrl} 
+                      alt={item.customerName}
+                      referrerPolicy="no-referrer"
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
+                    />
+                    
+                    {/* Floating delete option */}
+                    <button 
+                      onClick={() => item.id && handleDeletePhoto(item.id)}
+                      className="absolute top-3 right-3 p-2 bg-black/60 hover:bg-red-800 text-white rounded-xl shadow-lg transition-all scale-90 group-hover:scale-100 opacity-0 group-hover:opacity-100 z-10"
+                      title="Excluir do mural"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+
+                  {/* Descriptions block (Inside the polaroid aesthetic area) */}
+                  <div className="pt-4 pb-1 flex-1 flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-black text-slate-900 uppercase tracking-tight truncate">{item.customerName}</span>
+                        {item.saleId && (
+                          <span className="text-[7.5px] font-black bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded uppercase tracking-widest font-sans">Venda</span>
+                        )}
+                      </div>
+
+                      {item.saleDate && (
+                        <p className="text-[8.5px] font-bold text-slate-400 uppercase tracking-wider mt-1 flex items-center gap-1">
+                          <span>Vendido em {item.saleDate}</span>
+                        </p>
+                      )}
+
+                      {item.saleItemsSummary && (
+                        <p className="text-[9px] font-medium text-slate-500 italic mt-1 line-clamp-1 truncate" title={item.saleItemsSummary}>
+                          Manto(s): {item.saleItemsSummary}
+                        </p>
+                      )}
+
+                      {item.description && (
+                        <p className="text-[10px] text-slate-600 mt-2 bg-slate-50 border border-slate-100 p-2.5 rounded-xl font-sans leading-relaxed">
+                          "{item.description}"
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[8px] font-bold text-slate-400 uppercase tracking-widest">
+                       <span>Qualitativo</span>
+                       <span>ERP CLUB DA BOLA</span>
+                    </div>
+                  </div>
+                </motion.div>
+              ))
+            )}
+          </div>
+        </>
+      )}
+
+      {activeSubTab === 'logo' && (
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+          {/* Instructions Column */}
+          <div className="md:col-span-4 bg-slate-900 text-white rounded-[32px] p-8 border border-slate-800 flex flex-col justify-between gap-8 h-fit">
+            <div className="space-y-6">
+              <div className="size-12 rounded-2xl bg-amber-500 text-slate-900 flex items-center justify-center">
+                <Settings size={22} />
+              </div>
+              <div>
+                <h3 className="text-md font-black uppercase tracking-wider text-amber-500">Logotipia Global</h3>
+                <p className="text-xs text-slate-300 mt-2 leading-relaxed">Ao fazer o upload da logo aqui ela substituirá instantaneamente a logo do ERP no cabeçalho, na barra lateral (desktop) e no menu inferior de expansão (celular).</p>
+              </div>
+
+              <div className="space-y-3.5 border-t border-white/5 pt-6 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                <div className="flex items-center gap-3">
+                  <div className="size-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-[8px]">✓</div>
+                  <span>Injeção dinâmica de Favicon</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="size-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-[8px]">✓</div>
+                  <span>Redimensionamento Automático</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="size-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-[8px]">✓</div>
+                  <span>Sincronização em tempo real</span>
+                </div>
+              </div>
+            </div>
+            
+            <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Controles internos · Configuração</p>
+          </div>
+
+          {/* Action Upload Box Column */}
+          <div className="md:col-span-8 bg-white rounded-[32px] p-8 border border-slate-200 shadow-sm space-y-8">
+            <div>
+              <h3 className="text-sm font-black text-slate-850 uppercase tracking-wider">Trocar Imagem de Identidade</h3>
+              <p className="text-xs text-slate-400 mt-1">Insira um arquivo de imagem (JPG ou PNG). O sistema irá compactar e injetar em toda a plataforma.</p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 items-center">
+              {/* Box 1: Current Logo View */}
+              <div className="border border-slate-100 rounded-3xl p-6 bg-slate-50/50 flex flex-col items-center justify-center text-center aspect-square md:aspect-auto md:h-56">
+                {isSavingLogo ? (
+                  <div className="flex flex-col items-center justify-center gap-3">
+                    <div className="size-10 border-2 border-slate-200 border-t-red-800 rounded-full animate-spin" />
+                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest animate-pulse">Escrevendo no Banco...</p>
+                  </div>
+                ) : logoFile ? (
+                  <div className="space-y-4">
+                    <div className="size-24 rounded-2xl bg-white border border-slate-200 p-2 shadow-sm flex items-center justify-center mx-auto overflow-hidden">
+                      <img src={logoFile} alt="Logo ERP" className="max-w-full max-h-full object-contain" referrerPolicy="no-referrer" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black text-slate-900 uppercase tracking-wider">Sua Logo Ativa</p>
+                      <button 
+                        onClick={handleResetLogo}
+                        className="text-[9px] font-bold text-red-600 uppercase tracking-widest mt-2 hover:underline hover:text-red-700 block mx-auto"
+                      >
+                        Remover e Voltar ao Padrão
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="size-16 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
+                      <ImageIcon size={28} />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider">Nenhuma logo personalizada</p>
+                      <p className="text-[9.5px] text-slate-400 mt-1 max-w-[180px] mx-auto text-center">Usando ícone dinâmico padrão</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Box 2: Drop & Upload Inputs */}
+              <div className="relative border-2 border-dashed border-slate-200 hover:border-slate-400 rounded-3xl p-6 flex flex-col items-center justify-center text-center cursor-pointer transition-all aspect-square md:aspect-auto md:h-56 bg-slate-50/20 group">
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  className="absolute inset-0 opacity-0 cursor-pointer z-10" 
+                  onChange={handleLogoUploadChange}
+                  disabled={isSavingLogo}
+                />
+                <div className="space-y-3">
+                  <div className="size-12 rounded-xl bg-slate-100 text-slate-500 flex items-center justify-center mx-auto group-hover:scale-110 transition-transform">
+                    <Upload size={20} />
+                  </div>
+                  <div>
+                    <span className="text-xs font-black text-slate-700 uppercase block">Arrastar ou Escolher Foto</span>
+                    <span className="text-[9px] text-slate-400 mt-1.5 block">Favicon, PNG ou JPG de alta qualidade</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <AnimatePresence>
+              {logoSuccessMsg && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  className="bg-emerald-50 text-emerald-800 p-4 rounded-xl border border-emerald-100 text-[10px] font-black uppercase tracking-wider flex items-center gap-2"
+                >
+                  <Check size={14} /> Logo e capa sincronizados com sucesso no sistema e cabeçalhos!
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
+      )}
+
+      {/* Customer select photo Modal */}
+      <AnimatePresence>
+        {isPhotoModalOpen && (
+          <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-md z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-[32px] max-w-lg w-full flex flex-col shadow-2xl overflow-hidden border border-slate-100 relative max-h-[90vh]"
+            >
+              <div className="bg-slate-900 p-6 text-white flex items-center justify-between border-b border-slate-800">
+                <div className="flex items-center gap-3">
+                  <div className="size-8 rounded-lg bg-red-800 flex items-center justify-center">
+                    <Camera size={14} className="text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-black text-rose-50 uppercase tracking-widest leading-none">Registrar Manto no Cliente</h3>
+                    <p className="text-[9px] text-slate-400 uppercase font-bold tracking-widest mt-1">Conectar momento afetivo à base de vendas</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setIsPhotoModalOpen(false)}
+                  className="p-2 text-slate-400 hover:text-white bg-white/5 rounded-lg transition-all"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <form onSubmit={handleAddPhotoSubmit} className="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar">
+                {/* Photo Dropzone */}
+                <div className="space-y-2">
+                  <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Foto do Cliente vestindo o Manto</label>
+                  
+                  {selectedPhotoFile ? (
+                    <div className="relative aspect-video rounded-2xl overflow-hidden border border-slate-200 group bg-slate-950">
+                      <img src={selectedPhotoFile} alt="Preview" className="w-full h-full object-contain mx-auto" />
+                      <button 
+                        type="button"
+                        onClick={() => setSelectedPhotoFile(null)}
+                        className="absolute top-3 right-3 p-2 bg-black/60 text-white rounded-xl hover:bg-red-800 transition-all shadow-lg"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="relative border-2 border-dashed border-slate-200 hover:border-slate-400 bg-slate-50/30 rounded-2xl p-8 flex flex-col items-center justify-center text-center cursor-pointer transition-all aspect-video">
+                      <input 
+                        required
+                        type="file" 
+                        accept="image/*" 
+                        className="absolute inset-0 opacity-0 cursor-pointer z-10" 
+                        onChange={handlePhotoUploadChange}
+                        disabled={uploadProgress}
+                      />
+                      {uploadProgress ? (
+                        <div className="space-y-2">
+                          <div className="size-8 border-2 border-slate-200 border-t-red-800 rounded-full animate-spin mx-auto" />
+                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Processando Foto...</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          <div className="size-12 rounded-xl bg-white shadow-sm border border-slate-100 flex items-center justify-center text-slate-400 mx-auto">
+                            <Upload size={18} />
+                          </div>
+                          <div>
+                            <span className="text-xs font-black text-slate-700 uppercase block">Selecionar Foto do Cliente</span>
+                            <span className="text-[9px] text-slate-400 mt-1 block">Tire no celular ou escolha da galeria</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Autocomplete Customer Select */}
+                <div className="space-y-2 relative">
+                  <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Vincular Cliente do Clube</label>
+                  <div className="relative">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                    <input 
+                      required
+                      type="text"
+                      className="w-full pl-11 pr-4 py-3 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-red-800 font-sans text-sm font-semibold text-slate-800 placeholder:text-slate-300"
+                      placeholder="Pesquise o nome do cliente..."
+                      value={customerSearchQuery}
+                      onChange={(e) => {
+                        setCustomerSearchQuery(e.target.value);
+                        setShowCustomerDropdown(true);
+                        if (!e.target.value) {
+                          setSelectedCustomerId('');
+                          setSelectedCustomerName('');
+                          setSelectedSaleId('');
+                        }
+                      }}
+                      onFocus={() => setShowCustomerDropdown(true)}
+                    />
+                  </div>
+
+                  {/* Customer autocomplete results dropdown */}
+                  <AnimatePresence>
+                    {showCustomerDropdown && (
+                      <motion.div 
+                        initial={{ opacity: 0, y: 5 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0 }}
+                        className="absolute top-full left-0 right-0 max-h-48 overflow-y-auto bg-white border border-slate-200 rounded-xl shadow-xl z-20 divide-y mt-1.5 custom-scrollbar"
+                      >
+                        {filteredCustomers.length === 0 ? (
+                          <div className="p-4 text-center text-xs text-slate-400 font-bold uppercase tracking-wider">
+                            Nenhum cliente cadastrado com esse nome
+                          </div>
+                        ) : (
+                          filteredCustomers.map(cust => (
+                            <div 
+                              key={cust.id}
+                              onClick={() => cust && handleChooseCustomer(cust)}
+                              className="px-4 py-3 text-xs font-semibold text-slate-750 hover:bg-slate-50 cursor-pointer flex items-center justify-between"
+                            >
+                              <span>{cust.name}</span>
+                              <span className="text-[8.5px] font-black text-slate-400">{cust.contact}</span>
+                            </div>
+                          ))
+                        )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                {/* Choose Customer Sale if selected */}
+                {selectedCustomerId && (
+                  <div className="space-y-2">
+                    <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider flex items-center gap-1">
+                      Venda / Pedido Relacionado <span className="text-[8px] text-slate-400 font-normal lowercase">(opcional)</span>
+                    </label>
+                    <select 
+                      className="w-full px-4 py-3 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-red-800 font-sans text-sm font-semibold text-slate-800"
+                      value={selectedSaleId}
+                      onChange={(e) => setSelectedSaleId(e.target.value)}
+                    >
+                      <option value="">Não vincular a uma venda específica</option>
+                      {customerSales.map(sl => (
+                        <option key={sl.id} value={sl.id}>
+                          {sl.createdAt?.toDate ? sl.createdAt.toDate().toLocaleDateString('pt-BR') : 'Data Indisp'}: {sl.items.map(it => `${it.quantity}x ${it.name}`).join(' | ')} ({formatCurrency(sl.total)})
+                        </option>
+                      ))}
+                    </select>
+                    {customerSales.length === 0 && (
+                      <p className="text-[9px] text-amber-600 font-bold uppercase tracking-wider">O cliente selecionado ainda não possui vendas registradas no sistema.</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Qualititative Description / Comments */}
+                <div className="space-y-2">
+                  <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Anotações Qualitativas (Tamanho, Caimento, Feedback)</label>
+                  <textarea 
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-red-800 font-sans text-xs focus:border-red-800 transition-all font-medium min-h-24"
+                    placeholder="Ex: Felipe adorou o caimento G da camisa de jogador do Brasil. Achou o tecido excelente e super confortável..."
+                    value={photoDescription}
+                    onChange={(e) => setPhotoDescription(e.target.value)}
+                  />
+                </div>
+
+                {/* Form submit buttons */}
+                <div className="bg-slate-50 border-t border-slate-100 -mx-8 -mb-8 p-6 flex justify-end gap-3 mt-8">
+                  <button 
+                    type="button" 
+                    onClick={() => setIsPhotoModalOpen(false)}
+                    className="px-6 py-2.5 text-[10px] font-black uppercase text-slate-400 hover:text-slate-600 transition-all tracking-widest"
+                  >
+                    Descartar
+                  </button>
+                  <button 
+                    type="submit"
+                    disabled={uploadProgress || !selectedCustomerId}
+                    className="px-10 py-3 bg-red-800 hover:bg-slate-950 text-white text-[10px] font-black uppercase rounded-xl transition-all shadow-lg tracking-widest disabled:opacity-40"
+                  >
+                    Salvar no Mural
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}

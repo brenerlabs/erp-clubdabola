@@ -895,127 +895,179 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-        <StatCard 
-          title="Faturamento Bruto" 
-          value={formatCurrency(stats.totalRevenue)} 
-          icon={ShoppingCart} 
-          trend="Invoicing bruto" 
-          positive 
-          variant="glass"
-        />
-        <StatCard 
-          title="Lucro Real Líquido" 
-          value={formatCurrency(stats.totalProfit)} 
-          icon={TrendingUp} 
-          trend="Resultado final" 
-          positive={stats.totalProfit >= 0} 
-          variant="glass"
-        />
-        <StatCard 
-          title="Consumo Médio" 
-          value={formatCurrency(stats.avgTicket)} 
-          icon={Activity} 
-          trend="Ticket por pedido" 
-          positive 
-          variant="glass"
-        />
-        <StatCard 
-          title="Despesas Operacionais" 
-          value={formatCurrency(stats.totalExpenses)} 
-          icon={Receipt} 
-          trend="Custos administrativos" 
-          positive={stats.totalExpenses === 0} 
-          variant="glass"
-        />
-        <StatCard 
-          title="Contas a Receber" 
-          value={formatCurrency(stats.totalDebt)} 
-          icon={Wallet} 
-          trend={`${debtors.length} Contas em aberto`}
-          positive={stats.totalDebt === 0} 
-          variant="glass"
-        />
-        <StatCard 
-          title="Dropship Logístico" 
-          value={`${((stats.dropshippingOrders / (stats.totalOrders || 1)) * 100).toFixed(1)}%`} 
-          icon={Truck} 
-          trend={`${stats.dropshippingOrders} Lotes ativos`} 
-          positive 
-          variant="glass"
-        />
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {/* Consolidated Dual-Metric KPI Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {/* Card 1: Faturamento & Rentabilidade */}
         <motion.div 
-          initial={{ opacity: 0, scale: 0.95 }}
-          whileInView={{ opacity: 1, scale: 1 }}
+          initial={{ opacity: 0, scale: 0.98, y: 12 }}
+          whileInView={{ opacity: 1, scale: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.4 }}
+          className="bg-white p-6 rounded-[28px] border border-slate-200 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col justify-between group h-full relative overflow-hidden"
+        >
+          <div>
+            <div className="flex justify-between items-center mb-4">
+              <span className="text-[9px] font-black tracking-widest uppercase text-slate-400">Financeiro Consolidado</span>
+              <div className="size-8 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center font-bold">
+                <TrendingUp size={16} />
+              </div>
+            </div>
+            
+            <div className="space-y-1">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Faturamento Bruto</span>
+              <h3 className="text-2xl font-black text-slate-900 font-display tracking-tight leading-none uppercase tabular-nums">
+                {formatCurrency(stats.totalRevenue)}
+              </h3>
+            </div>
+          </div>
+
+          <div className="mt-6 pt-4 border-t border-slate-100/70 flex items-center justify-between">
+            <div>
+              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Lucro Líquido Real</span>
+              <span className="text-xs font-black text-emerald-600 font-mono tracking-tight tabular-nums">
+                {formatCurrency(stats.totalProfit)}
+              </span>
+            </div>
+            {stats.totalRevenue > 0 && (
+              <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 text-[10px] font-black rounded-lg uppercase tracking-wider font-mono">
+                {((stats.totalProfit / stats.totalRevenue) * 100).toFixed(1)}% Margem
+              </span>
+            )}
+          </div>
+        </motion.div>
+
+        {/* Card 2: Controle de Crédito & Liquidez */}
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.98, y: 12 }}
+          whileInView={{ opacity: 1, scale: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.4, delay: 0.05 }}
+          className="bg-white p-6 rounded-[28px] border border-slate-200 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col justify-between group h-full relative overflow-hidden"
+        >
+          <div>
+            <div className="flex justify-between items-center mb-4">
+              <span className="text-[9px] font-black tracking-widest uppercase text-slate-400">Crédito & Recebimentos</span>
+              <div className={cn(
+                "size-8 rounded-xl flex items-center justify-center font-bold",
+                stats.totalDebt > 0 ? "bg-amber-50 text-amber-600 animate-pulse" : "bg-emerald-50 text-emerald-600"
+              )}>
+                <Wallet size={16} />
+              </div>
+            </div>
+            
+            <div className="space-y-1">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Contas a Receber (Fiado)</span>
+              <h3 className="text-2xl font-black text-slate-900 font-display tracking-tight leading-none uppercase tabular-nums">
+                {formatCurrency(stats.totalDebt)}
+              </h3>
+            </div>
+          </div>
+
+          <div className="mt-5 pt-4 border-t border-slate-100/70 space-y-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Eficiência de Caixa</span>
+                <span className={cn(
+                  "text-xs font-black font-mono tracking-tight",
+                  stats.efficiencyRatio > 85 ? "text-emerald-600" : "text-amber-600"
+                )}>
+                  {stats.efficiencyRatio.toFixed(1)}% Liquidado
+                </span>
+              </div>
+              <span className="text-[9px] font-black text-slate-500 uppercase tracking-wider bg-slate-50 px-2 py-0.5 rounded-md">
+                {debtors.length} Contas
+              </span>
+            </div>
+            {/* Soft inline progress bar */}
+            <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+              <motion.div 
+                initial={{ width: 0 }}
+                animate={{ width: `${stats.efficiencyRatio}%` }}
+                className={cn(
+                  "h-full rounded-full",
+                  stats.efficiencyRatio > 85 ? "bg-emerald-500" : "bg-amber-500"
+                )}
+              />
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Card 3: Operacional & Despesas */}
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.98, y: 12 }}
+          whileInView={{ opacity: 1, scale: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.4, delay: 0.1 }}
-          className="analytical-card bg-white p-6 rounded-[24px] border border-slate-200 hover:border-slate-300 shadow-sm flex items-center justify-between transition-all duration-300"
+          className="bg-white p-6 rounded-[28px] border border-slate-200 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col justify-between group h-full relative overflow-hidden"
         >
-           <div className="flex items-center gap-3">
-              <div className={cn(
-                "size-10 rounded-xl flex items-center justify-center",
-                stats.efficiencyRatio > 80 ? "bg-emerald-100 text-emerald-600" : "bg-amber-100 text-amber-600"
-              )}>
-                <TrendingUp size={20} />
+          <div>
+            <div className="flex justify-between items-center mb-4">
+              <span className="text-[9px] font-black tracking-widest uppercase text-slate-400">Eficiência de Custos</span>
+              <div className="size-8 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center font-bold">
+                <Activity size={16} />
               </div>
-              <div>
-                <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest leading-none mb-1">Eficiência Receita</p>
-                <h4 className="text-xl font-bold text-slate-900 leading-tight font-display tabular-nums">{stats.efficiencyRatio.toFixed(1)}%</h4>
-              </div>
-           </div>
-           <div className="text-right">
-              <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden shadow-inner">
-                <motion.div 
-                  initial={{ width: 0 }}
-                  animate={{ width: `${stats.efficiencyRatio}%` }}
-                  className={cn("h-full", stats.efficiencyRatio > 80 ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.3)]" : "bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.3)]")} 
-                />
-              </div>
-           </div>
+            </div>
+            
+            <div className="space-y-1">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Consumo Médio (Ticket)</span>
+              <h3 className="text-2xl font-black text-slate-900 font-display tracking-tight leading-none uppercase tabular-nums">
+                {formatCurrency(stats.avgTicket)}
+              </h3>
+            </div>
+          </div>
+
+          <div className="mt-6 pt-4 border-t border-slate-100/70 flex items-center justify-between">
+            <div>
+              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Despesas Operacionais</span>
+              <span className="text-xs font-black text-slate-700 font-mono tracking-tight tabular-nums animate-pulse">
+                {formatCurrency(stats.totalExpenses)}
+              </span>
+            </div>
+            {stats.totalRevenue > 0 && (
+              <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-[9px] font-bold rounded-lg uppercase tracking-wider">
+                {((stats.totalExpenses / stats.totalRevenue) * 100).toFixed(1)}% do Fatur.
+              </span>
+            )}
+          </div>
         </motion.div>
+
+        {/* Card 4: Logística, Lotes & Tributações */}
         <motion.div 
-          initial={{ opacity: 0, scale: 0.95 }}
-          whileInView={{ opacity: 1, scale: 1 }}
+          initial={{ opacity: 0, scale: 0.98, y: 12 }}
+          whileInView={{ opacity: 1, scale: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.4, delay: 0.15 }}
-          className="analytical-card bg-white p-6 rounded-[24px] border border-slate-200 hover:border-slate-300 shadow-sm flex items-center justify-between transition-all duration-300"
+          className="bg-white p-6 rounded-[28px] border border-slate-200 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col justify-between group h-full relative overflow-hidden"
         >
-           <div className="flex items-center gap-3">
-              <div className="size-10 bg-rose-100 text-rose-800 rounded-xl flex items-center justify-center shadow-lg shadow-rose-900/5">
-                <Receipt size={20} />
+          <div>
+            <div className="flex justify-between items-center mb-4">
+              <span className="text-[9px] font-black tracking-widest uppercase text-slate-400">Logística & Aduana</span>
+              <div className="size-8 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center font-bold">
+                <Truck size={16} />
               </div>
-              <div>
-                <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest leading-none mb-1">Taxas Pagas</p>
-                <h4 className="text-xl font-bold text-slate-900 leading-tight font-display tabular-nums">{formatCurrency(stats.paidTaxes)}</h4>
-              </div>
-           </div>
-           <div className="text-right">
-              <p className="text-[9px] font-black uppercase text-rose-800 tracking-widest font-sans">Pend: {formatCurrency(stats.pendingTaxes)}</p>
-           </div>
-        </motion.div>
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.95 }}
-          whileInView={{ opacity: 1, scale: 1 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.4, delay: 0.2 }}
-          className="analytical-card bg-white p-6 rounded-[24px] border border-slate-200 hover:border-slate-300 shadow-sm flex items-center justify-between md:col-span-2 lg:col-span-1 transition-all duration-300"
-        >
-           <div className="flex items-center gap-3">
-              <div className="size-10 bg-slate-950 text-white rounded-xl flex items-center justify-center">
-                <Truck size={20} />
-              </div>
-              <div>
-                <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest leading-none mb-1">Lotes Ativos</p>
-                <h4 className="text-xl font-bold text-slate-900 leading-tight font-display tabular-nums">{shipments.filter(s => s.status !== 'Entregue').length}</h4>
-              </div>
-           </div>
-           <div className="text-right">
-              <p className="text-[9px] font-black uppercase text-amber-500 tracking-widest font-sans">Itens: {shipments.reduce((acc, s) => acc + s.items.length, 0)}</p>
-           </div>
+            </div>
+            
+            <div className="space-y-1">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Tributação de Importação</span>
+              <h3 className="text-2xl font-black text-slate-900 font-display tracking-tight leading-none uppercase tabular-nums">
+                {formatCurrency(stats.paidTaxes + stats.pendingTaxes)}
+              </h3>
+            </div>
+          </div>
+
+          <div className="mt-6 pt-4 border-t border-slate-100/70 flex items-center justify-between">
+            <div>
+              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Logística Ativa</span>
+              <span className="text-xs font-black text-purple-750 font-mono tracking-tight">
+                {shipments.filter(s => s.status !== 'Entregue').length} Lotes Ativos
+              </span>
+            </div>
+            {stats.totalOrders > 0 && (
+              <span className="px-2 py-0.5 bg-purple-50 text-purple-700 text-[9px] font-black rounded-lg uppercase tracking-wider font-mono">
+                {((stats.dropshippingOrders / stats.totalOrders) * 100).toFixed(1)}% Dropship
+              </span>
+            )}
+          </div>
         </motion.div>
       </div>
 
@@ -1107,61 +1159,6 @@ export default function Dashboard() {
                 <p className="text-center py-6 text-white/40 text-[10px] font-black uppercase tracking-widest">Nenhum dado disponível</p>
               )}
             </div>
-          </div>
-        </div>
-
-        {/* Global Business Health Index */}
-        <div className="xl:col-span-3 grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-slate-950 rounded-3xl p-6 text-white relative overflow-hidden group border border-slate-900">
-             <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:scale-110 transition-transform">
-                <Activity size={80} />
-             </div>
-             <div className="relative z-10">
-                <p className="text-[8px] font-black text-amber-500 uppercase tracking-[0.3em] mb-1">Taxa de Liquidez</p>
-                <div className="flex items-end gap-2">
-                   <h4 className="text-3xl font-bold tracking-tight">
-                     {Math.floor(stats.efficiencyRatio)}
-                     <span className="text-xl text-amber-500">.{(stats.efficiencyRatio % 1).toFixed(1).substring(2) || '0'}</span>
-                   </h4>
-                   <p className="text-[8px] font-bold text-amber-400/60 mb-1 uppercase tracking-widest">
-                     {stats.efficiencyRatio === 100 ? 'Máxima' : `${(100 - stats.efficiencyRatio).toFixed(1)}% Risco`}
-                   </p>
-                </div>
-                <div className="mt-4 flex gap-1.5 overflow-x-auto">
-                   {['Liquidez', 'Estores', 'Tributos'].map(tag => (
-                     <span key={tag} className="px-2 py-0.5 bg-white/5 border border-white/10 rounded-full text-[7px] font-black uppercase tracking-widest whitespace-nowrap">{tag}</span>
-                   ))}
-                </div>
-             </div>
-          </div>
-          
-          <div className="md:col-span-3 bg-red-900 rounded-3xl p-6 text-white flex flex-col justify-center relative overflow-hidden border border-white/5">
-             <div className="absolute top-0 right-0 p-6 opacity-10">
-                <LayoutDashboard size={60} />
-             </div>
-             <div className="relative z-10">
-                <h4 className="text-sm font-bold tracking-tight mb-4 uppercase font-display">Diretivas Executivas</h4>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                   <div className="bg-black/20 backdrop-blur-sm p-3 rounded-2xl border border-white/5">
-                      <p className="text-[8px] font-black text-amber-500 uppercase mb-1">Otimizar</p>
-                      <p className="text-[10px] font-black leading-tight uppercase tracking-tight">
-                        {stats.pendingTaxes > 0 ? `Taxas Fiscais: R$ ${stats.pendingTaxes.toFixed(0)} pendentes` : "Logística de Importação e Dropshipping"}
-                      </p>
-                   </div>
-                   <div className="bg-black/20 backdrop-blur-sm p-3 rounded-2xl border border-white/5">
-                      <p className="text-[8px] font-black text-amber-500 uppercase mb-1">Oportunidade</p>
-                      <p className="text-[10px] font-black leading-tight uppercase tracking-tight">
-                        {stats.lowStockItems > 0 ? `Abastecer ${stats.lowStockItems} SKUs com estoque mínimo` : "Expandir Mix do Clube da Bola"}
-                      </p>
-                   </div>
-                   <div className="bg-black/20 backdrop-blur-sm p-3 rounded-2xl border border-white/5 hidden md:block">
-                      <p className="text-[8px] font-black text-amber-500 uppercase mb-1">Risco</p>
-                      <p className="text-[10px] font-black leading-tight uppercase tracking-tight">
-                        {stats.totalDebt > 0 ? `Fiado Ativo em R$ ${stats.totalDebt.toFixed(0)} (${(100 - stats.efficiencyRatio).toFixed(1)}% receita)` : "Inadimplência Fiado com Risco Zero"}
-                      </p>
-                   </div>
-                </div>
-             </div>
           </div>
         </div>
 
@@ -1283,6 +1280,61 @@ export default function Dashboard() {
                 <p className="text-center py-6 text-white/40 text-[10px] font-black uppercase tracking-widest">Nenhum dado disponível</p>
               )}
             </div>
+          </div>
+        </div>
+
+        {/* Global Business Health Index */}
+        <div className="xl:col-span-3 grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="bg-slate-950 rounded-3xl p-6 text-white relative overflow-hidden group border border-slate-900">
+             <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:scale-110 transition-transform">
+                <Activity size={80} />
+             </div>
+             <div className="relative z-10">
+                <p className="text-[8px] font-black text-amber-500 uppercase tracking-[0.3em] mb-1">Taxa de Liquidez</p>
+                <div className="flex items-end gap-2">
+                   <h4 className="text-3xl font-bold tracking-tight">
+                     {Math.floor(stats.efficiencyRatio)}
+                     <span className="text-xl text-amber-500">.{(stats.efficiencyRatio % 1).toFixed(1).substring(2) || '0'}</span>
+                   </h4>
+                   <p className="text-[8px] font-bold text-amber-400/60 mb-1 uppercase tracking-widest">
+                     {stats.efficiencyRatio === 100 ? 'Máxima' : `${(100 - stats.efficiencyRatio).toFixed(1)}% Risco`}
+                   </p>
+                </div>
+                <div className="mt-4 flex gap-1.5 overflow-x-auto">
+                   {['Liquidez', 'Estores', 'Tributos'].map(tag => (
+                     <span key={tag} className="px-2 py-0.5 bg-white/5 border border-white/10 rounded-full text-[7px] font-black uppercase tracking-widest whitespace-nowrap">{tag}</span>
+                   ))}
+                </div>
+             </div>
+          </div>
+          
+          <div className="md:col-span-3 bg-red-900 rounded-3xl p-6 text-white flex flex-col justify-center relative overflow-hidden border border-white/5">
+             <div className="absolute top-0 right-0 p-6 opacity-10">
+                <LayoutDashboard size={60} />
+             </div>
+             <div className="relative z-10">
+                <h4 className="text-sm font-bold tracking-tight mb-4 uppercase font-display">Diretivas Executivas</h4>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                   <div className="bg-black/20 backdrop-blur-sm p-3 rounded-2xl border border-white/5">
+                      <p className="text-[8px] font-black text-amber-500 uppercase mb-1">Otimizar</p>
+                      <p className="text-[10px] font-black leading-tight uppercase tracking-tight">
+                        {stats.pendingTaxes > 0 ? `Taxas Fiscais: R$ ${stats.pendingTaxes.toFixed(0)} pendentes` : "Logística de Importação e Dropshipping"}
+                      </p>
+                   </div>
+                   <div className="bg-black/20 backdrop-blur-sm p-3 rounded-2xl border border-white/5">
+                      <p className="text-[8px] font-black text-amber-500 uppercase mb-1">Oportunidade</p>
+                      <p className="text-[10px] font-black leading-tight uppercase tracking-tight">
+                        {stats.lowStockItems > 0 ? `Abastecer ${stats.lowStockItems} SKUs com estoque mínimo` : "Expandir Mix do Clube da Bola"}
+                      </p>
+                   </div>
+                   <div className="bg-black/20 backdrop-blur-sm p-3 rounded-2xl border border-white/5 hidden md:block">
+                      <p className="text-[8px] font-black text-amber-500 uppercase mb-1">Risco</p>
+                      <p className="text-[10px] font-black leading-tight uppercase tracking-tight">
+                        {stats.totalDebt > 0 ? `Fiado Ativo em R$ ${stats.totalDebt.toFixed(0)} (${(100 - stats.efficiencyRatio).toFixed(1)}% receita)` : "Inadimplência Fiado com Risco Zero"}
+                      </p>
+                   </div>
+                </div>
+             </div>
           </div>
         </div>
 

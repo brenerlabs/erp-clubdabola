@@ -105,3 +105,16 @@ export interface Expense {
   createdAt: any;
   updatedAt: any;
 }
+
+export interface CustomerPhoto {
+  id?: string;
+  customerId: string;
+  customerName: string;
+  saleId?: string | null;
+  saleDate?: string | null;
+  saleItemsSummary?: string | null;
+  photoUrl: string;
+  description: string;
+  createdAt: any;
+}
+

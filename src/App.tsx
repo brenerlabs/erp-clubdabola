@@ -12,10 +12,12 @@ import {
   Plus,
   RefreshCcw,
   Send,
-  Truck
+  Truck,
+  Camera
 } from 'lucide-react';
-import { auth } from './lib/firebase';
+import { auth, db } from './lib/firebase';
 import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from 'firebase/auth';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
 import { seedInitialData } from './lib/seedService';
 import { cn } from './lib/utils';
@@ -26,8 +28,10 @@ import Customers from './pages/Customers';
 import Finance from './pages/Finance';
 import Compensations from './pages/Compensations';
 import Shipments from './pages/Shipments';
+import Mural from './pages/Mural';
 
-type Page = 'dashboard' | 'pdv' | 'products' | 'customers' | 'finance' | 'compensations' | 'shipments';
+type Page = 'dashboard' | 'pdv' | 'products' | 'customers' | 'finance' | 'compensations' | 'shipments' | 'mural';
+
 
 interface SidebarContextType {
   isSidebarOpen: boolean;
@@ -45,6 +49,47 @@ export default function App() {
   const [activePage, setActivePage] = useState<Page>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [logoUrl, setLogoUrl] = useState<string>('');
+
+  // Sync Global Settings & Logo
+  useEffect(() => {
+    const cachedLogo = localStorage.getItem('erp-custom-logo');
+    if (cachedLogo) {
+      setLogoUrl(cachedLogo);
+      const faviconLink = document.querySelector("link[rel*='icon']");
+      if (faviconLink) {
+        faviconLink.setAttribute('href', cachedLogo);
+      }
+    }
+
+    const settingsRef = doc(db, 'settings', 'appearance');
+    const unsubscribeLogo = onSnapshot(settingsRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const url = docSnap.data().logoUrl || '';
+        setLogoUrl(url);
+        if (url) {
+          localStorage.setItem('erp-custom-logo', url);
+          const faviconLink = document.querySelector("link[rel*='icon']");
+          if (faviconLink) {
+            faviconLink.setAttribute('href', url);
+          }
+        } else {
+          localStorage.removeItem('erp-custom-logo');
+        }
+      }
+    });
+
+    const handleLogoUpdated = (e: any) => {
+      setLogoUrl(e.detail?.logoUrl || '');
+    };
+    window.addEventListener('logo-updated', handleLogoUpdated);
+
+    return () => {
+      unsubscribeLogo();
+      window.removeEventListener('logo-updated', handleLogoUpdated);
+    };
+  }, []);
+
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
@@ -149,6 +194,7 @@ export default function App() {
     { id: 'shipments', label: 'Encomendas', icon: Truck },
     { id: 'compensations', label: 'Compensações', icon: RefreshCcw },
     { id: 'finance', label: 'Financeiro & Auditoria', icon: DollarSign },
+    { id: 'mural', label: 'Mural & Logo', icon: Camera },
   ];
 
   return (
@@ -190,9 +236,14 @@ export default function App() {
                 animate={{ opacity: 1 }}
                 className="flex items-center gap-3"
               >
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center p-1 bg-gradient-to-br from-red-800 to-red-950 border border-white/10 shadow-lg group-hover:scale-110 transition-transform">
-                  <LayoutDashboard size={18} className="text-white" />
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-white border border-slate-800/50 shadow-lg group-hover:scale-110 transition-transform overflow-hidden p-0.5">
+                  {logoUrl ? (
+                    <img src={logoUrl} alt="Logo ERP" className="w-full h-full object-contain" referrerPolicy="no-referrer" />
+                  ) : (
+                    <LayoutDashboard size={18} className="text-slate-900" />
+                  )}
                 </div>
+
                 {(isSidebarOpen || isMobileMenuOpen) && (
                   <h1 className="text-white font-bold tracking-tight leading-none text-sm font-display">
                     ERP CLUB DA <span className="text-amber-500 uppercase font-display">BOLA</span>
@@ -279,9 +330,13 @@ export default function App() {
               </button>
 
              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2 group cursor-pointer">
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center p-1 shadow-lg transition-transform bg-slate-900 shadow-slate-200">
-                    <LayoutDashboard size={16} className="text-white" />
+                <div className="flex items-center gap-2 group cursor-pointer" onClick={() => setActivePage('dashboard')}>
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center shadow-lg transition-transform bg-transparent shadow-slate-200/30 overflow-hidden border border-slate-200 p-0.5">
+                    {logoUrl ? (
+                      <img src={logoUrl} alt="Logo" className="w-full h-full object-contain" referrerPolicy="no-referrer" />
+                    ) : (
+                      <LayoutDashboard size={16} className="text-amber-600" />
+                    )}
                   </div>
                   <div className="flex flex-col -space-y-0.5">
                     <span className="text-xs font-black uppercase tracking-tight text-slate-900 font-sans">
@@ -293,6 +348,7 @@ export default function App() {
                   </div>
                 </div>
              </div>
+
           </div>
           <div className="flex items-center gap-3 md:gap-6">
             <button className="hidden md:flex items-center gap-2 bg-slate-900 text-white px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-widest shadow-xl shadow-slate-200 hover:bg-black transition-all">
@@ -330,6 +386,7 @@ export default function App() {
               {activePage === 'compensations' && <Compensations />}
               {activePage === 'shipments' && <Shipments />}
               {activePage === 'finance' && <Finance />}
+              {activePage === 'mural' && <Mural />}
             </motion.div>
           </AnimatePresence>
         </div>

@@ -264,6 +264,36 @@ export default function Products() {
     }
   };
 
+  const { physicalStock, dropshipStock, physicalValue, dropshipValue, avgMargin, hasOnlyDropshipping } = React.useMemo(() => {
+    let pStock = 0;
+    let dStock = 0;
+    let pValue = 0;
+    let dValue = 0;
+    let marginSum = 0;
+    let isAllDropshipping = products.length > 0;
+
+    products.forEach(p => {
+      if (p.isDropshipping) {
+        dStock += p.totalStock || 0;
+        dValue += (p.costPrice || 0) * (p.totalStock || 0);
+      } else {
+        pStock += p.totalStock || 0;
+        pValue += (p.costPrice || 0) * (p.totalStock || 0);
+        isAllDropshipping = false;
+      }
+      marginSum += p.margin || 0;
+    });
+
+    return {
+      physicalStock: pStock,
+      dropshipStock: dStock,
+      physicalValue: pValue,
+      dropshipValue: dValue,
+      avgMargin: marginSum / (products.length || 1),
+      hasOnlyDropshipping: isAllDropshipping && products.length > 0
+    };
+  }, [products]);
+
   const filtered = products.filter(p => {
     const searchTerm = search.toLowerCase();
     
@@ -317,7 +347,7 @@ export default function Products() {
         </div>
       </div>
 
-      {products.some(p => (p.totalStock || 0) <= (p.minStock || 0)) && (
+      {products.some(p => (p.totalStock || 0) <= (p.minStock || 0) && !p.isDropshipping) && (
         <motion.div 
           initial={{ height: 0, opacity: 0 }}
           animate={{ height: 'auto', opacity: 1 }}
@@ -329,7 +359,7 @@ export default function Products() {
           <div className="flex-1">
             <h4 className="text-sm font-black text-rose-900 uppercase italic tracking-tighter">Atenção: Estoque Crítico Detectado</h4>
             <p className="text-[10px] font-bold text-rose-600/70 uppercase tracking-widest">
-              Existem {products.filter(p => (p.totalStock || 0) <= (p.minStock || 0)).length} produtos que atingiram ou estão abaixo do limite de segurança.
+              Existem {products.filter(p => (p.totalStock || 0) <= (p.minStock || 0) && !p.isDropshipping).length} produtos que atingiram ou estão abaixo do limite de segurança.
             </p>
           </div>
           <button 
@@ -385,19 +415,43 @@ export default function Products() {
           </div>
         </div>
         <div className="flex items-center gap-8 px-6 border-l border-slate-200 hidden lg:flex font-sans">
+           {hasOnlyDropshipping ? (
+             <>
+               <div className="text-right">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 leading-none">Estoque Virtual (DS)</p>
+                  <p className="text-2xl font-black text-slate-900 font-display tabular-nums tracking-tight leading-none">{dropshipStock} <span className="text-[10px] opacity-40">UN</span></p>
+                  <p className="text-[9px] font-medium text-amber-600 uppercase tracking-tight mt-1.5">Local Físico Escaler: 0 UN</p>
+               </div>
+               <div className="text-right">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 leading-none">Giro Potencial de Catálogo</p>
+                  <p className="text-2xl font-black text-slate-900 font-display tabular-nums tracking-tight leading-none">{formatCurrency(dropshipValue)}</p>
+                  <p className="text-[9px] font-bold text-emerald-600 uppercase tracking-tight mt-1.5">Capital Real Retido: R$ 0,00</p>
+               </div>
+             </>
+           ) : (
+             <>
+               <div className="text-right">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 leading-none">Estoque Físico Local</p>
+                  <p className="text-2xl font-black text-slate-900 font-display tabular-nums tracking-tight leading-none">{physicalStock} <span className="text-[10px] opacity-40">UN</span></p>
+                  {dropshipStock > 0 && (
+                    <p className="text-[9px] font-semibold text-slate-500 uppercase tracking-tight mt-1.5">Dropshipping: {dropshipStock} UN (Virtual)</p>
+                  )}
+               </div>
+               <div className="text-right">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 leading-none">Capital Imobilizado (Físico)</p>
+                  <p className="text-2xl font-black text-red-800 font-display tabular-nums tracking-tight leading-none">{formatCurrency(physicalValue)}</p>
+                  {dropshipValue > 0 && (
+                    <p className="text-[9px] font-semibold text-slate-500 uppercase tracking-tight mt-1.5">Giro DS Livre: {formatCurrency(dropshipValue)}</p>
+                  )}
+               </div>
+             </>
+           )}
            <div className="text-right">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 leading-none">Ativos em Estoque</p>
-              <p className="text-2xl font-black text-slate-900 font-display tabular-nums tracking-tight leading-none">{products.reduce((acc, p) => acc + (p.totalStock || 0), 0)} <span className="text-[10px] opacity-40">UN</span></p>
-           </div>
-           <div className="text-right">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 leading-none">Valor de Inventário</p>
-              <p className="text-2xl font-black text-red-800 font-display tabular-nums tracking-tight leading-none">{formatCurrency(products.reduce((acc, p) => acc + (p.costPrice * (p.totalStock || 0)), 0))}</p>
-           </div>
-           <div className="text-right">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 leading-none">Margem Média</p>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 leading-none">Margem Média</p>
               <p className="text-2xl font-black text-amber-600 font-display tabular-nums tracking-tight leading-none">
-                {(products.reduce((acc, p) => acc + (p.margin || 0), 0) / (products.length || 1)).toFixed(1)}%
+                {avgMargin.toFixed(1)}%
               </p>
+              <p className="text-[9px] font-medium text-slate-400 uppercase tracking-tight mt-1.5">Lucratividade de Venda</p>
            </div>
         </div>
       </div>
