@@ -24,6 +24,12 @@ export function calculateMargin(cost: number, sell: number) {
   return isFinite(result) ? result : 0;
 }
 
+export function cleanVariationName(name: string | null | undefined): string {
+  if (!name) return '';
+  const parts = name.split('/').map(v => v.trim()).filter(v => v && v !== '' && v.toUpperCase() !== 'N/A' && v.toUpperCase() !== 'SEM VARIAÇÃO' && v.toUpperCase() !== 'SEM VARIACOES');
+  return parts.join(' / ');
+}
+
 export function cleanObject(obj: any): any {
   if (obj === null || obj === undefined) return obj;
   if (obj instanceof Date) return obj;

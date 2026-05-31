@@ -8,7 +8,7 @@ import {
   MessageCircle, DollarSign, X, Receipt,
   ChevronRight, ArrowRight, ShoppingBag, Box, History, CheckSquare, Square, Calculator
 } from 'lucide-react';
-import { formatCurrency, cn } from '../lib/utils';
+import { formatCurrency, cn, cleanVariationName } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 
 const SHIPMENT_STATUSES = [
@@ -138,7 +138,8 @@ export default function Shipments() {
   ]);
 
   const addSingleSaleItem = (sale: Sale, item: SaleItem) => {
-    const pName = `${item.name} ${item.variationName ? `(${item.variationName})` : ''}`;
+    const cleanedVar = cleanVariationName(item.variationName);
+    const pName = `${item.name}${cleanedVar ? ` (${cleanedVar})` : ''}`;
     const cId = sale.customerId || 'final-consumer';
     const cName = sale.customerName || 'Consumidor Final';
     
@@ -166,7 +167,8 @@ export default function Shipments() {
       const itemKey = `${sale.id}-${item.productId}-${item.variationId}`;
       if (shippedItemKeys.has(itemKey)) return; 
 
-      const pName = `${item.name} ${item.variationName ? `(${item.variationName})` : ''}`;
+      const cleanedVar = cleanVariationName(item.variationName);
+      const pName = `${item.name}${cleanedVar ? ` (${cleanedVar})` : ''}`;
       const cId = sale.customerId || 'final-consumer';
       const cName = sale.customerName || 'Consumidor Final';
       
@@ -829,7 +831,7 @@ export default function Shipments() {
                               <div key={idx} className="flex items-center justify-between bg-white border border-slate-100 p-2.5 rounded-xl shadow-sm">
                                 <div className="min-w-0 flex-1">
                                   <p className="text-[10px] font-black text-slate-900 truncate uppercase">{item.name}</p>
-                                  <p className="text-[9px] text-slate-400 font-bold uppercase">{item.variationName || 'Sem variação'}</p>
+                                  <p className="text-[9px] text-slate-400 font-bold uppercase">{cleanVariationName(item.variationName) || 'Sem variação'}</p>
                                 </div>
                                 <div className="flex items-center gap-3 ml-4">
                                   <span className="text-[10px] font-black text-slate-900">x{item.quantity}</span>

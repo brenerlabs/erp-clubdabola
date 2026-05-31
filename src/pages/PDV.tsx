@@ -3,7 +3,7 @@ import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, query, onSnapshot, addDoc, updateDoc, doc, serverTimestamp, writeBatch, orderBy, deleteDoc } from 'firebase/firestore';
 import { Product, Customer, SaleItem, Variation, Sale } from '../types';
 import { Search, ShoppingCart, User, Plus, Minus, Trash2, CreditCard, Banknote, QrCode, ClipboardList, Send, X, CheckCircle2, MessageCircle, FileImage, Share2, Receipt } from 'lucide-react';
-import { formatCurrency, cn, cleanObject } from '../lib/utils';
+import { formatCurrency, cn, cleanObject, cleanVariationName } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { SidebarContext } from '../App';
 
@@ -61,11 +61,15 @@ export default function PDV() {
           : item
       ));
     } else {
+      const formattedVariation = cleanVariationName(
+        [variation.size, variation.color].join(' / ')
+      );
+
       setCart([...cart, {
         productId: product.id!,
         variationId: variation.id,
         name: product.name,
-        variationName: `${variation.size || 'N/A'} / ${variation.color || 'N/A'}`,
+        variationName: formattedVariation,
         quantity: 1,
         price: product.sellingPrice || 0,
         isDropshipping: product.isDropshipping || false
@@ -345,9 +349,11 @@ export default function PDV() {
     const sale = saleToShare || lastSale;
     if (!sale) return;
     
-    const itemsText = sale.items.map((i: any) => 
-      `- ${i.name} (${i.variationName}) x ${i.quantity}: ${formatCurrency(i.price * i.quantity)}`
-    ).join('\n');
+    const itemsText = sale.items.map((i: any) => {
+      const cleaned = cleanVariationName(i.variationName);
+      const varSuffix = cleaned ? ` (${cleaned})` : '';
+      return `- ${i.name}${varSuffix} x ${i.quantity}: ${formatCurrency(i.price * i.quantity)}`;
+    }).join('\n');
 
     const isPre = sale.status === 'Pré-venda';
     const heading = isPre ? '⚽ *ERP CLUB DA BOLA - Orçamento / Pré-venda* ⚽' : '⚽ *ERP CLUB DA BOLA - Comprovante* ⚽';
@@ -546,7 +552,9 @@ export default function PDV() {
                       <div key={idx} className="flex justify-between items-center p-4 bg-white rounded-3xl border border-slate-100 shadow-sm">
                          <div>
                             <p className="text-sm font-black text-slate-900 uppercase tracking-tight">{item.name}</p>
-                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">{item.variationName} x {item.quantity}</p>
+                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">
+                              {cleanVariationName(item.variationName) ? `${cleanVariationName(item.variationName)} x ${item.quantity}` : `x ${item.quantity}`}
+                            </p>
                          </div>
                          <p className="text-sm font-black text-red-800">{formatCurrency(item.price * item.quantity)}</p>
                       </div>
@@ -658,7 +666,7 @@ export default function PDV() {
                         product.isDropshipping && "border-amber-100 text-amber-600 bg-amber-50/20"
                       )}
                     >
-                      {v.size} <span className="opacity-40">{product.isDropshipping ? 'DS' : v.stock}</span>
+                      {[v.size, v.color].map(x => x?.trim()).filter(x => x && x !== '' && x.toUpperCase() !== 'N/A').join(' - ')} <span className="opacity-40">{product.isDropshipping ? 'DS' : v.stock}</span>
                     </button>
                   ))}
                 </div>
@@ -913,7 +921,9 @@ export default function PDV() {
                                    <span className="text-[7px] font-black bg-amber-500 text-white px-1.5 py-0.5 rounded italic animate-pulse">DS</span>
                                  )}
                               </div>
-                              <p className="text-[8px] font-black text-white/30 mt-1 uppercase tracking-widest">{item.variationName}</p>
+                              {cleanVariationName(item.variationName) && (
+                                <p className="text-[8px] font-black text-white/30 mt-1 uppercase tracking-widest">{cleanVariationName(item.variationName)}</p>
+                              )}
                             </div>
                             <p className="font-black text-sm ml-2 text-white tabular-nums tracking-tighter">{formatCurrency(item.price * item.quantity)}</p>
                           </div>

@@ -219,6 +219,7 @@ export default function Products() {
       const sPrice = parseFloat(sellingPrice) || 0;
       const mStock = parseInt(minStock) || 0;
       const totalStock = variations.reduce((acc, v) => acc + (parseInt(v.stock?.toString() || '0') || 0), 0);
+      const isShirtCategory = category.toUpperCase().trim().includes('CAMISA');
       const productData = {
         name,
         category: category.toUpperCase().trim(),
@@ -227,7 +228,11 @@ export default function Products() {
         sellingPrice: sPrice,
         margin: calculateMargin(cPrice, sPrice),
         markup: calculateMarkup(cPrice, sPrice),
-        variations: variations.map(v => ({ ...v, stock: parseInt(v.stock?.toString() || '0') || 0 })),
+        variations: variations.map(v => ({ 
+          ...v, 
+          color: isShirtCategory ? '' : (v.color || ''),
+          stock: parseInt(v.stock?.toString() || '0') || 0 
+        })),
         totalStock,
         minStock: mStock,
         isDropshipping,
@@ -753,7 +758,9 @@ export default function Products() {
 
                   <div className="lg:col-span-2 space-y-4">
                     <div className="flex items-center justify-between">
-                      <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Grade Dimensional / Cores</label>
+                      <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider">
+                        {category.toUpperCase().trim().includes('CAMISA') ? 'Grade Dimensional (Tamanho)' : 'Grade Dimensional / Cores'}
+                      </label>
                       <button 
                         type="button" 
                         onClick={addVariation}
@@ -769,79 +776,84 @@ export default function Products() {
                           <p className="text-[11px] font-black text-slate-800 uppercase tracking-widest">Defina a grade do produto</p>
                         </div>
                       )}
-                      {variations.map((v, i) => (
-                        <div key={v.id} className="grid grid-cols-12 gap-2 items-center p-2 sm:p-0 border-b sm:border-0 border-slate-100 last:border-0">
-                          <div className="col-span-3">
-                            <input 
-                              autoFocus={v.id === lastAddedId}
-                              placeholder="Tamanho"
-                              className="w-full text-[10px] font-black px-2 py-2 border rounded-lg border-slate-200 bg-white focus:ring-1 focus:ring-red-800 outline-none"
-                              value={v.size}
-                              onChange={e => {
-                                const next = [...variations];
-                                next[i].size = e.target.value;
-                                setVariations(next);
-                              }}
-                            />
-                          </div>
-                          <div className="col-span-4">
-                            <input 
-                              placeholder="Cor"
-                              className="w-full text-[10px] font-black px-2 py-2 border rounded-lg border-slate-200 bg-white focus:ring-1 focus:ring-red-800 outline-none"
-                              value={v.color}
-                              onChange={e => {
-                                const next = [...variations];
-                                next[i].color = e.target.value;
-                                setVariations(next);
-                              }}
-                            />
-                          </div>
-                          <div className="col-span-3">
-                            <input 
-                              type="text"
-                              inputMode="numeric"
-                              placeholder="Est"
-                              className="w-full text-[10px] font-black uppercase px-2 py-2 border rounded-lg border-slate-200 bg-white font-black text-red-800 focus:ring-1 focus:ring-red-800 outline-none"
-                              value={v.stock}
-                              onKeyDown={e => {
-                                if (e.key === 'Tab' && !e.shiftKey && i === variations.length - 1) {
-                                  e.preventDefault();
-                                  addVariation();
-                                }
-                              }}
-                              onChange={e => {
-                                const next = [...variations];
-                                next[i].stock = e.target.value.replace(/[^0-9]/g, '') as any;
-                                setVariations(next);
-                              }}
-                              onFocus={e => {
-                                if (e.target.value === '0') {
+                      {variations.map((v, i) => {
+                        const isShirt = category.toUpperCase().trim().includes('CAMISA');
+                        return (
+                          <div key={v.id} className="grid grid-cols-12 gap-2 items-center p-2 sm:p-0 border-b sm:border-0 border-slate-100 last:border-0">
+                            <div className={isShirt ? 'col-span-7' : 'col-span-3'}>
+                              <input 
+                                autoFocus={v.id === lastAddedId}
+                                placeholder="Tamanho"
+                                className="w-full text-[10px] font-black px-2 py-2 border rounded-lg border-slate-200 bg-white focus:ring-1 focus:ring-red-800 outline-none"
+                                value={v.size}
+                                onChange={e => {
                                   const next = [...variations];
-                                  next[i].stock = '' as any;
+                                  next[i].size = e.target.value;
                                   setVariations(next);
-                                }
-                              }}
-                              onBlur={e => {
-                                if (e.target.value === '') {
+                                }}
+                              />
+                            </div>
+                            {!isShirt && (
+                              <div className="col-span-4">
+                                <input 
+                                  placeholder="Cor"
+                                  className="w-full text-[10px] font-black px-2 py-2 border rounded-lg border-slate-200 bg-white focus:ring-1 focus:ring-red-800 outline-none"
+                                  value={v.color}
+                                  onChange={e => {
+                                    const next = [...variations];
+                                    next[i].color = e.target.value;
+                                    setVariations(next);
+                                  }}
+                                />
+                              </div>
+                            )}
+                            <div className={isShirt ? 'col-span-3' : 'col-span-3'}>
+                              <input 
+                                type="text"
+                                inputMode="numeric"
+                                placeholder="Est"
+                                className="w-full text-[10px] font-black uppercase px-2 py-2 border rounded-lg border-slate-200 bg-white font-black text-red-800 focus:ring-1 focus:ring-red-800 outline-none"
+                                value={v.stock}
+                                onKeyDown={e => {
+                                  if (e.key === 'Tab' && !e.shiftKey && i === variations.length - 1) {
+                                    e.preventDefault();
+                                    addVariation();
+                                  }
+                                }}
+                                onChange={e => {
                                   const next = [...variations];
-                                  next[i].stock = 0;
+                                  next[i].stock = e.target.value.replace(/[^0-9]/g, '') as any;
                                   setVariations(next);
-                                }
-                              }}
-                            />
+                                }}
+                                onFocus={e => {
+                                  if (e.target.value === '0') {
+                                    const next = [...variations];
+                                    next[i].stock = '' as any;
+                                    setVariations(next);
+                                  }
+                                }}
+                                onBlur={e => {
+                                  if (e.target.value === '') {
+                                    const next = [...variations];
+                                    next[i].stock = 0;
+                                    setVariations(next);
+                                  }
+                                }}
+                              />
+                            </div>
+                            <div className="col-span-2 flex justify-center">
+                              <button 
+                                type="button"
+                                onClick={() => setVariations(variations.filter((_, idx) => idx !== i))}
+                                className="text-slate-300 hover:text-red-800 transition-colors p-2"
+                                title="Remover variação"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
                           </div>
-                          <div className="col-span-2 flex justify-center">
-                            <button 
-                              type="button"
-                              onClick={() => setVariations(variations.filter((_, idx) => idx !== i))}
-                              className="text-slate-300 hover:text-red-800 transition-colors p-2"
-                              title="Remover variação"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
