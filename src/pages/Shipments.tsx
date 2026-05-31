@@ -73,6 +73,23 @@ export default function Shipments() {
     };
   }, []);
 
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const storedSearch = localStorage.getItem('shipment-search');
+      if (storedSearch !== null) {
+        setSearch(storedSearch);
+        localStorage.removeItem('shipment-search');
+      }
+    };
+
+    handleStorageChange();
+
+    window.addEventListener('shipment-search-update', handleStorageChange);
+    return () => {
+      window.removeEventListener('shipment-search-update', handleStorageChange);
+    };
+  }, []);
+
   const openModal = (shipment?: Shipment) => {
     if (shipment) {
       setEditingShipment(shipment);

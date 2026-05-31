@@ -54,6 +54,19 @@ export default function App() {
     return unsubscribe;
   }, []);
 
+  useEffect(() => {
+    const handleNavigate = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail?.page) {
+        setActivePage(customEvent.detail.page);
+      }
+    };
+    window.addEventListener('navigate-app', handleNavigate);
+    return () => {
+      window.removeEventListener('navigate-app', handleNavigate);
+    };
+  }, []);
+
   const login = async () => {
     try {
       const provider = new GoogleAuthProvider();

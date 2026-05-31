@@ -24,7 +24,11 @@ import {
   LayoutDashboard,
   Search,
   Tag,
-  SlidersHorizontal
+  SlidersHorizontal,
+  Lightbulb,
+  Sparkles,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -62,6 +66,22 @@ export default function Dashboard() {
   const [productSearch, setProductSearch] = useState('');
   const [salesTableFilter, setSalesTableFilter] = useState<'all' | 'pending-fiado' | 'completed'>('all');
   const [salesLimit, setSalesLimit] = useState(10);
+  const [showInsights, setShowInsights] = useState(true);
+  const [expandedSuppliers, setExpandedSuppliers] = useState<Record<string, boolean>>({});
+
+  const toggleSupplierExpanded = (name: string) => {
+    setExpandedSuppliers(prev => ({
+      ...prev,
+      [name]: !prev[name]
+    }));
+  };
+
+  const handleShipmentClick = (trackingCode: string) => {
+    if (trackingCode === 'Sem Rastreio') return;
+    localStorage.setItem('shipment-search', trackingCode);
+    window.dispatchEvent(new CustomEvent('navigate-app', { detail: { page: 'shipments' } }));
+    window.dispatchEvent(new CustomEvent('shipment-search-update'));
+  };
 
   const categories = React.useMemo(() => {
     return ['all', ...Array.from(new Set(products.map(p => p.category || ''))).filter(Boolean).sort()];
@@ -498,16 +518,208 @@ export default function Dashboard() {
 
   const debtors = customers.filter(c => (c.totalDebt || 0) > 0).sort((a, b) => (b.totalDebt || 0) - (a.totalDebt || 0));
   
+  const businessInsights = React.useMemo(() => {
+    const list: { id: string; type: 'warning' | 'success' | 'info'; title: string; desc: string }[] = [];
+
+    // 1. Low Stock alert
+    const criticalStock = products.filter(p => !p.isDropshipping && p.totalStock <= p.minStock);
+    if (criticalStock.length > 0) {
+      const pNames = criticalStock.slice(0, 3).map(p => p.name).join(', ');
+      list.push({
+        id: 'stock-alert',
+        type: 'warning',
+        title: 'Estoque Mínimo Atingido',
+        desc: `${criticalStock.length} produto(s) (${pNames}${criticalStock.length > 3 ? ' e outros' : ''}) com estoque baixo ou zerado. Faça reposições para evitar perdas de vendas.`
+      });
+    } else {
+      list.push({
+        id: 'stock-ok',
+        type: 'success',
+        title: 'Estoque Saudável',
+        desc: 'Muito bem! Todos os seus produtos físicos ativos possuem níveis de estoque superiores ao mínimo configurado.'
+      });
+    }
+
+    // 2. High Debt & Active receivables alert
+    const totalPendingFiado = sales
+      .filter(s => s.paymentMethod === 'Fiado')
+      .reduce((acc, s) => acc + getSaleBalance(s), 0);
+
+    const debtorsCount = debtors.length;
+    if (totalPendingFiado > 0) {
+      const topDebtor = debtors.slice().sort((a,b) => (b.totalDebt || 0) - (a.totalDebt || 0))[0];
+      const debtorInfo = topDebtor ? ` O maior valor acumulado pertence a ${topDebtor.name} (${formatCurrency(topDebtor.totalDebt || 0)}) no controle consolidado de inadimplências.` : '';
+      list.push({
+        id: 'debtors-alert',
+        type: 'warning',
+        title: 'Acompanhamento de Fiado',
+        desc: `Há um saldo pendente de ${formatCurrency(totalPendingFiado)} distribuído em ${debtorsCount} cliente(s).${debtorInfo} O valor pendente agora está visível diretamente por venda na tabela abaixo para facilitar cobranças cirúrgicas.`
+      });
+    } else {
+      list.push({
+        id: 'debtors-ok',
+        type: 'success',
+        title: 'Inadimplência Zerada',
+        desc: 'Excelente! Todos os fiados ativos foram liquidados com êxito. A saúde de crédito da loja está exemplar.'
+      });
+    }
+
+    // 3. Operating Margin insight
+    if (stats.totalRevenue > 0) {
+      const marginPercentage = (stats.totalProfit / stats.totalRevenue) * 100;
+      if (marginPercentage < 20) {
+        list.push({
+          id: 'margin-low',
+          type: 'info',
+          title: 'Ajuste de Margens Recomendado',
+          desc: `Sua margem líquida consolidada é de ${marginPercentage.toFixed(1)}%. Despesas gerais (${formatCurrency(stats.totalExpenses)}) ou tributos retidos estão diluindo o retorno. Ajuste markups ou revise custos fixos.`
+        });
+      } else {
+        list.push({
+          id: 'margin-healthy',
+          type: 'success',
+          title: 'Eficiência de Margem Fantástica',
+          desc: `Sua taxa de lucro líquido real sobre o faturamento é de excelentes ${marginPercentage.toFixed(1)}%. Parabéns pela excelente dosagem de custos com produtos e despesas gerais!`
+        });
+      }
+    }
+
+    // 4. Average ticket optimization
+    if (stats.avgTicket > 0) {
+      if (stats.avgTicket < 150) {
+        list.push({
+          id: 'ticket-low',
+          type: 'info',
+          title: 'Alavancagem de Ticket Médio',
+          desc: `Seu ticket médio é de ${formatCurrency(stats.avgTicket)}. Para aumentar este kpi, crie combos progressivos ou configure ofertas complementares (cross-selling) no PDV.`
+        });
+      } else {
+        list.push({
+          id: 'ticket-high',
+          type: 'success',
+          title: 'Consumo Médio em Alta',
+          desc: `Seu ticket médio é de expressivos ${formatCurrency(stats.avgTicket)}. Isso significa que seus clientes estão comprando múltiplos itens ou itens de alto valor unitário.`
+        });
+      }
+    }
+
+    // 5. Customer Concentration Insight
+    if (sales.length > 0 && stats.totalRevenue > 0) {
+      const ranking: Record<string, { name: string, total: number }> = {};
+      sales.filter(s => s.status !== 'Pré-venda').forEach(sale => {
+        if (!sale.customerId) return;
+        if (!ranking[sale.customerId]) {
+          ranking[sale.customerId] = { name: sale.customerName || 'Cliente', total: 0 };
+        }
+        ranking[sale.customerId].total += sale.total;
+      });
+      const sortedRanking = Object.values(ranking).sort((a, b) => b.total - a.total);
+      if (sortedRanking.length > 0) {
+        const topCust = sortedRanking[0];
+        const custShare = (topCust.total / stats.totalRevenue) * 100;
+        if (custShare > 25) {
+          list.push({
+            id: 'customer-concentration',
+            type: 'warning',
+            title: 'Concentração de Faturamento',
+            desc: `Atenção: O cliente ${topCust.name} concentra sozinho ${custShare.toFixed(1)}% do seu faturamento histórico (${formatCurrency(topCust.total)}). Crie campanhas de fidelização de novos compradores para mitigar riscos de receita.`
+          });
+        } else {
+          list.push({
+            id: 'customer-diversity',
+            type: 'success',
+            title: 'Distribuição Saudável de Carteira',
+            desc: `Excelente! Sua carteira é bem descentralizada. Seu principal comprador (${topCust.name}) representa apenas ${custShare.toFixed(1)}% das vendas totais, garantindo alta estabilidade de faturamento.`
+          });
+        }
+      }
+    }
+
+    // 6. Cash Flow / Efficacy of collections
+    if (stats.totalRevenue > 0) {
+      if (stats.efficiencyRatio < 90) {
+        list.push({
+          id: 'efficiency-alert',
+          type: 'warning',
+          title: 'Eficiência de Fluxo de Caixa',
+          desc: `Seu índice de conversão de faturamento em caixa imediato é de ${stats.efficiencyRatio.toFixed(1)}% devido ao saldo pendente de fiados. Estabeleça travas preventivas no PDV para compras fiadas contínuas.`
+        });
+      } else {
+        list.push({
+          id: 'efficiency-ok',
+          type: 'success',
+          title: 'Forte Conversão de Caixa',
+          desc: `Excepcional! Seu índice de liquidez imediata sob vendas realizadas é de excelentes ${stats.efficiencyRatio.toFixed(1)}%. Isso demonstra excelente perfil de adimplência do seu público.`
+        });
+      }
+    }
+
+    // 7. Fiscal Incident ratio under shipments
+    const totalTaxes = stats.paidTaxes + stats.pendingTaxes;
+    if (totalTaxes > 0 && stats.totalRevenue > 0) {
+      const taxOnRevenue = (totalTaxes / stats.totalRevenue) * 100;
+      if (taxOnRevenue > 10) {
+        list.push({
+          id: 'fiscal-heavy',
+          type: 'warning',
+          title: 'Carga Fiscal Aduaneira Elevada',
+          desc: `O volume acumulado de taxas fiscais aduaneiras (${formatCurrency(totalTaxes)}) equivale a ${taxOnRevenue.toFixed(1)}% do faturamento líquido. Estude otimizações estruturais para amortizar o markup.`
+        });
+      } else {
+        list.push({
+          id: 'fiscal-light',
+          type: 'success',
+          title: 'Impacto Aduaneiro sob Controle',
+          desc: `Excelente! O somatório geral de custos de taxas alfandegárias (${formatCurrency(totalTaxes)}) corresponde a saudáveis ${taxOnRevenue.toFixed(1)}% de suas receitas consolidadas.`
+        });
+      }
+    }
+
+    // 8. Dropshipping Ratio mix
+    if (stats.totalOrders > 0) {
+      const dsRatio = (stats.dropshippingOrders / stats.totalOrders) * 100;
+      if (dsRatio > 40) {
+        list.push({
+          id: 'ds-heavy',
+          type: 'info',
+          title: 'Foco em Operação Dropshipping',
+          desc: `${dsRatio.toFixed(1)}% das encomendas recentes operam na modalidade Dropshipping, permitindo manter um estoque físico leve e ágil sem imobilização de capital.`
+        });
+      } else if (dsRatio > 0) {
+        list.push({
+          id: 'ds-hybrid',
+          type: 'success',
+          title: 'Hibridismo Operacional de Estoque',
+          desc: `Modelo híbrido estável: ${dsRatio.toFixed(1)}% de suas vendas utilizam Dropshipping estratégico direto de fornecedores internacionais, enquanto a maior parte atende via estoque físico rápida-entrega.`
+        });
+      }
+    }
+
+    return list;
+  }, [products, sales, debtors, stats, getSaleBalance]);
+  
   const supplierRanking = React.useMemo(() => {
-    const ranking: Record<string, { name: string, totalTax: number, count: number }> = {};
+    const ranking: Record<string, { 
+      name: string; 
+      totalTax: number; 
+      count: number; 
+      shipments: Array<{ id?: string; trackingCode: string; status: string; hasTax: boolean; taxAmount: number }> 
+    }> = {};
     
     shipments.forEach(s => {
       const supplier = s.supplierName || 'Desconhecido';
       if (!ranking[supplier]) {
-        ranking[supplier] = { name: supplier, totalTax: 0, count: 0 };
+        ranking[supplier] = { name: supplier, totalTax: 0, count: 0, shipments: [] };
       }
       ranking[supplier].totalTax += (s.taxAmount || 0);
       ranking[supplier].count += 1;
+      ranking[supplier].shipments.push({
+        id: s.id,
+        trackingCode: s.trackingCode || 'Sem Rastreio',
+        status: s.status || 'Processando',
+        hasTax: !!s.hasTax,
+        taxAmount: s.taxAmount || 0
+      });
     });
 
     return Object.values(ranking).sort((a, b) => b.totalTax - a.totalTax).slice(0, 5);
@@ -699,7 +911,7 @@ export default function Dashboard() {
           icon={TrendingUp} 
           trend="Resultado final" 
           positive={stats.totalProfit >= 0} 
-          variant="gradient"
+          variant="glass"
         />
         <StatCard 
           title="Consumo Médio" 
@@ -967,23 +1179,106 @@ export default function Dashboard() {
             </h3>
             
             <div className="space-y-4">
-              {supplierRanking.map((rank, index) => (
-                <div key={index} className="bg-white/5 border border-white/5 rounded-2xl p-4 flex items-center justify-between hover:bg-white/10 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <div className="size-8 rounded-full bg-slate-800 text-slate-400 flex items-center justify-center font-black text-xs border border-slate-700">
-                      {index + 1}
+              {supplierRanking.map((rank, index) => {
+                const isExpanded = !!expandedSuppliers[rank.name];
+                return (
+                  <div 
+                    key={index} 
+                    className="bg-white/5 border border-white/5 rounded-2xl p-4 flex flex-col hover:bg-white/10 transition-all duration-300"
+                  >
+                    <div 
+                      onClick={() => toggleSupplierExpanded(rank.name)}
+                      className="flex items-center justify-between cursor-pointer select-none"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="size-8 rounded-full bg-slate-800 text-slate-400 flex items-center justify-center font-black text-xs border border-slate-700">
+                          {index + 1}
+                        </div>
+                        <div>
+                          <div className="text-xs font-black uppercase tracking-tight truncate max-w-[120px]">{rank.name}</div>
+                          <div className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">{rank.count} ENTREGAS</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="text-right">
+                          <div className="text-sm font-black text-amber-500 font-mono tracking-tighter tabular-nums">{formatCurrency(rank.totalTax)}</div>
+                          <div className="text-[8px] font-bold text-slate-500 uppercase">TRIBUTAÇÃO ∑</div>
+                        </div>
+                        <div className="text-slate-400 hover:text-white transition-colors">
+                          {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <div className="text-xs font-black uppercase tracking-tight truncate max-w-[100px]">{rank.name}</div>
-                      <div className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">{rank.count} ENTREGAS</div>
-                    </div>
+
+                    <AnimatePresence>
+                      {isExpanded && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          transition={{ duration: 0.2 }}
+                          className="overflow-hidden"
+                        >
+                          <div className="mt-3 pt-3 border-t border-white/5 space-y-2">
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Cod. Rastreio & Status</span>
+                            <div className="space-y-1.5 max-h-[160px] overflow-y-auto pr-1">
+                              {rank.shipments.map((ship, idx) => (
+                                <div 
+                                  key={idx} 
+                                  onClick={() => handleShipmentClick(ship.trackingCode)}
+                                  className={cn(
+                                    "rounded-xl p-2.5 flex items-center justify-between border transition-all duration-200 select-none group/item",
+                                    ship.trackingCode !== 'Sem Rastreio' 
+                                      ? "bg-black/25 border-white/5 hover:border-amber-500/30 hover:bg-white/10 cursor-pointer active:scale-[0.99]" 
+                                      : "bg-black/10 border-white/5 opacity-50"
+                                  )}
+                                  title={ship.trackingCode !== 'Sem Rastreio' ? "Clique para ver detalhes das encomendas" : undefined}
+                                >
+                                  <div className="flex flex-col gap-0.5">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className={cn(
+                                        "font-mono text-[11px] font-black tracking-tight transition-colors",
+                                        ship.trackingCode !== 'Sem Rastreio' 
+                                          ? "text-slate-200 underline decoration-slate-500 decoration-dotted group-hover/item:text-amber-400 group-hover/item:decoration-amber-400" 
+                                          : "text-slate-400"
+                                      )}>
+                                        {ship.trackingCode}
+                                      </span>
+                                      <span className={`text-[7px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider ${
+                                        ship.status === 'Entregue' 
+                                          ? 'bg-emerald-500/20 text-emerald-300' 
+                                          : ship.status === 'Recebido' 
+                                          ? 'bg-blue-500/20 text-blue-300'
+                                          : 'bg-amber-500/20 text-amber-300'
+                                      }`}>
+                                        {ship.status}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  {ship.hasTax ? (
+                                    <span className="text-[9px] font-black text-red-400 font-mono">
+                                      + {formatCurrency(ship.taxAmount)}
+                                    </span>
+                                  ) : (
+                                    ship.trackingCode !== 'Sem Rastreio' && (
+                                      <span className="text-[8px] font-black uppercase tracking-wider text-slate-500 group-hover/item:text-amber-400 transition-colors">
+                                        Explorar →
+                                      </span>
+                                    )
+                                  )}
+                                </div>
+                              ))}
+                              {rank.shipments.length === 0 && (
+                                <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest text-center py-2">Sem remessas vinculadas</p>
+                              )}
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
-                  <div className="text-right">
-                    <div className="text-sm font-black text-amber-500 font-mono tracking-tighter tabular-nums">{formatCurrency(rank.totalTax)}</div>
-                    <div className="text-[8px] font-bold text-slate-500 uppercase">TRIBUTAÇÃO ∑</div>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
               {supplierRanking.length === 0 && (
                 <p className="text-center py-6 text-white/40 text-[10px] font-black uppercase tracking-widest">Nenhum dado disponível</p>
               )}
@@ -1076,6 +1371,83 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* Smart Business Insights Section */}
+      <div className="bg-white rounded-[32px] border border-slate-200 shadow-sm p-6 mt-6">
+        <div className="flex items-center justify-between border-b border-slate-50 pb-4 mb-4">
+          <div className="flex items-center gap-2">
+            <div className="size-8 bg-amber-500/10 text-amber-600 rounded-lg flex items-center justify-center">
+              <Lightbulb size={16} className="animate-pulse" />
+            </div>
+            <div>
+              <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest flex items-center gap-1.5">
+                Central de Insights de Performance
+                <span className="bg-red-100 text-red-800 text-[8px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider">Inteligência</span>
+              </h3>
+              <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Diagnósticos baseados no fluxo do seu estoque, caixa e inadimplências</p>
+            </div>
+          </div>
+          <button 
+            onClick={() => setShowInsights(!showInsights)}
+            className="text-[9px] font-black uppercase text-slate-500 hover:text-slate-800 border border-slate-200 rounded-xl px-3 py-1.5 hover:bg-slate-50 transition-all flex items-center gap-1"
+          >
+            {showInsights ? 'Minimizar Insights' : 'Expandir Insights'}
+          </button>
+        </div>
+
+        <AnimatePresence>
+          {showInsights && (
+            <motion.div 
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.3 }}
+              className="overflow-hidden"
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {businessInsights.map((insight) => (
+                  <div 
+                    key={insight.id} 
+                    className={cn(
+                      "p-4 rounded-2xl border transition-all duration-300 flex gap-3.5 items-start",
+                      insight.type === 'warning' 
+                        ? "bg-amber-50/50 border-amber-100 text-amber-900 shadow-sm shadow-amber-500/5" 
+                        : insight.type === 'success' 
+                        ? "bg-emerald-50/40 border-emerald-100 text-emerald-950" 
+                        : "bg-blue-50/40 border-blue-100 text-blue-950"
+                    )}
+                  >
+                    <div className={cn(
+                      "size-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5",
+                      insight.type === 'warning' 
+                        ? "bg-amber-100 text-amber-700" 
+                        : insight.type === 'success' 
+                        ? "bg-emerald-100 text-emerald-700" 
+                        : "bg-blue-100 text-blue-700"
+                    )}>
+                      {insight.type === 'warning' ? (
+                        <Activity size={15} />
+                      ) : insight.type === 'success' ? (
+                        <CheckCircle2 size={15} />
+                      ) : (
+                        <Sparkles size={15} />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <h4 className="text-[11px] font-black uppercase tracking-wider mb-1 flex items-center gap-1">
+                        {insight.title}
+                      </h4>
+                      <p className="text-xs text-slate-600 leading-relaxed font-semibold">
+                        {insight.desc}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
       <div className="bg-white rounded-[32px] border border-slate-200 shadow-sm overflow-hidden mt-6">
         <div className="px-8 py-6 border-b border-slate-50 flex flex-col lg:flex-row gap-4 lg:items-center justify-between">
           <div>
@@ -1151,6 +1523,7 @@ export default function Dashboard() {
                 <th className="px-6 py-4 text-[10px] uppercase font-black text-slate-400 tracking-widest">ID Venda</th>
                 <th className="px-6 py-4 text-[10px] uppercase font-black text-slate-400 tracking-widest">Cliente</th>
                 <th className="px-6 py-4 text-[10px] uppercase font-black text-slate-400 tracking-widest">Valor Total</th>
+                <th className="px-6 py-4 text-[10px] uppercase font-black text-slate-400 tracking-widest text-amber-600">Valor Pendente</th>
                 <th className="px-6 py-4 text-[10px] uppercase font-black text-slate-400 tracking-widest">Status</th>
                 <th className="px-6 py-4 text-right text-[10px] uppercase font-black text-slate-400 tracking-widest">Ações</th>
               </tr>
@@ -1172,7 +1545,7 @@ export default function Dashboard() {
                 if (results.length === 0) {
                   return (
                     <tr>
-                      <td colSpan={5} className="px-6 py-12 text-center text-xs font-black text-slate-400 uppercase tracking-widest">
+                      <td colSpan={6} className="px-6 py-12 text-center text-xs font-black text-slate-400 uppercase tracking-widest">
                         Nenhuma venda encontrada para o filtro selecionado
                       </td>
                     </tr>
@@ -1190,6 +1563,18 @@ export default function Dashboard() {
                       </td>
                       <td className="px-6 py-4">
                         <div className="text-xs font-bold text-slate-900">{formatCurrency(sale.total)}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        {sale.paymentMethod === 'Fiado' ? (
+                          <div className={cn(
+                            "text-xs font-black font-mono tabular-nums",
+                            balance > 0 ? "text-amber-600 font-black animate-pulse" : "text-emerald-600"
+                          )}>
+                            {formatCurrency(balance)}
+                          </div>
+                        ) : (
+                          <div className="text-xs font-mono text-slate-400">-</div>
+                        )}
                       </td>
                       <td className="px-6 py-4">
                         <span className={cn(
