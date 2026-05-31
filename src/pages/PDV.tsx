@@ -2,10 +2,12 @@ import React, { useState, useEffect, useContext } from 'react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, query, onSnapshot, addDoc, updateDoc, doc, serverTimestamp, writeBatch, orderBy, deleteDoc } from 'firebase/firestore';
 import { Product, Customer, SaleItem, Variation, Sale } from '../types';
-import { Search, ShoppingCart, User, Plus, Minus, Trash2, CreditCard, Banknote, QrCode, ClipboardList, Send, X, CheckCircle2, MessageCircle, FileImage, Share2, Receipt } from 'lucide-react';
+import { Search, ShoppingCart, User, Plus, Minus, Trash2, CreditCard, Banknote, QrCode, ClipboardList, Send, X, CheckCircle2, MessageCircle, FileImage, Share2, Receipt, FileText } from 'lucide-react';
 import { formatCurrency, cn, cleanObject, cleanVariationName } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { SidebarContext } from '../App';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 export default function PDV() {
   const { setIsSidebarOpen } = useContext(SidebarContext);
@@ -25,6 +27,7 @@ export default function PDV() {
   const [saleDate, setSaleDate] = useState(new Date().toISOString().split('T')[0]);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [showBudgetModal, setShowBudgetModal] = useState(false);
   const [lastSale, setLastSale] = useState<any>(null);
   const [sendWhatsAppOnFinish, setSendWhatsAppOnFinish] = useState(true);
 
@@ -393,6 +396,224 @@ export default function PDV() {
     }
   };
 
+  const getBudgetWhatsAppUrl = () => {
+    const now = new Date();
+    const validityDate = new Date();
+    validityDate.setDate(now.getDate() + 7); // Valid for 7 days
+    const discountValue = safeFloat(discountVal);
+
+    const textItems = cart.map((i: any) => {
+      const cleaned = cleanVariationName(i.variationName);
+      const varStr = cleaned ? ` (${cleaned})` : '';
+      return `- ${i.name}${varStr} x${i.quantity}: ${formatCurrency(i.price * i.quantity)}`;
+    }).join('\n');
+
+    const whatsappText = `⚽ *CLUB DA BOLA - Orçamento* ⚽\n` +
+      `-------------------------------------------\n` +
+      `👤 *Cliente:* ${selectedCustomer ? selectedCustomer.name : 'Consumidor Final'}\n` +
+      `📅 *Data de Emissão:* ${now.toLocaleDateString('pt-BR')}\n` +
+      `⏳ *Validade:* ${validityDate.toLocaleDateString('pt-BR')} (7 dias)\n` +
+      `-------------------------------------------\n` +
+      `📦 *Itens do Orçamento:*\n${textItems}\n` +
+      `-------------------------------------------\n` +
+      (discountValue > 0 ? `💵 *Subtotal:* ${formatCurrency(subtotal)}\n` : '') +
+      (discountValue > 0 ? `💸 *Desconto Aplicado:* -${formatCurrency(discountValue)}\n` : '') +
+      `💰 *VALOR TOTAL: ${formatCurrency(total)}*\n` +
+      `-------------------------------------------\n` +
+      `📞 *Contato Club da Bola:*\n` +
+      `• WhatsApp: (91) 99324-9580\n\n` +
+      `*Atenção:* O PDF completo e detalhado do seu orçamento foi gerado e baixado no seu dispositivo. Favor anexá-lo a esta conversa para fechar seu pedido!`;
+
+    const encoded = encodeURIComponent(whatsappText);
+    const phone = selectedCustomer?.contact ? selectedCustomer.contact.replace(/\D/g, '') : '';
+    let finalPhone = phone;
+    if (phone && phone.length <= 11) {
+      finalPhone = '55' + phone;
+    }
+    return `https://wa.me/${finalPhone}?text=${encoded}`;
+  };
+
+  const openBudgetWhatsApp = () => {
+    const url = getBudgetWhatsAppUrl();
+    try {
+      window.open(url, '_blank');
+    } catch (err) {
+      alert("Não foi possível redirecionar para o WhatsApp automaticamente.");
+    }
+  };
+
+  const generateBudgetPDF = (isManualDownloadOnly: boolean = false) => {
+    if (cart.length === 0) return alert('O carrinho está vazio!');
+
+    const doc = new jsPDF();
+    const now = new Date();
+    const validityDate = new Date();
+    validityDate.setDate(now.getDate() + 7); // Valid for 7 days
+
+    // PDF Page Design & Header
+    doc.setFillColor(15, 23, 42); // slate-900 (Dark Slate Background for Header)
+    doc.rect(0, 0, 210, 42, 'F');
+
+    // Header Title
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(22);
+    doc.setTextColor(255, 255, 255);
+    doc.text('CLUB DA BOLA', 14, 18);
+
+    doc.setFontSize(9);
+    doc.setTextColor(239, 68, 68); // Soft Red text
+    doc.text('ERP SYSTEM • ORÇAMENTO DE PRODUTOS', 14, 25);
+
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(203, 213, 225); // slate-300
+    doc.text(`PROPOSTA COMERCIAL / PRÉ-VENDA COMERCIAL`, 14, 32);
+    doc.text(`Gerado em: ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR')}`, 140, 32);
+
+    // Club da Bola info section on header right or subheader
+    // Let's make an organization details card
+    doc.setDrawColor(226, 232, 240); // slate-200
+    doc.setFillColor(248, 250, 252); // slate-50
+    doc.roundedRect(14, 50, 182, 38, 4, 4, 'FD');
+
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(15, 23, 42);
+    doc.text('DADOS DO DOCUMENTO & CONTATO', 20, 58);
+
+    doc.setDrawColor(226, 232, 240);
+    doc.line(20, 62, 190, 62);
+
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(71, 85, 105);
+
+    doc.text(`Cliente:`, 20, 68);
+    doc.setFont('Helvetica', 'bold');
+    doc.setTextColor(15, 23, 42);
+    doc.text(selectedCustomer ? selectedCustomer.name : 'Consumidor Final', 60, 68);
+
+    doc.setFont('Helvetica', 'normal');
+    doc.setTextColor(71, 85, 105);
+    doc.text(`Contato Cliente:`, 20, 74);
+    doc.setFont('Helvetica', 'bold');
+    doc.setTextColor(15, 23, 42);
+    doc.text(selectedCustomer?.contact || 'S/D', 60, 74);
+
+    doc.setFont('Helvetica', 'normal');
+    doc.setTextColor(71, 85, 105);
+    doc.text(`Emissor:`, 20, 80);
+    doc.setFont('Helvetica', 'bold');
+    doc.setTextColor(15, 23, 42);
+    doc.text(`Club da Bola Sports`, 60, 80);
+
+    // Contato Club da Bola block
+    doc.setFillColor(254, 243, 199); // amber-50
+    doc.setDrawColor(245, 158, 11); // amber-500
+    doc.roundedRect(132, 65, 58, 15, 3, 3, 'FD');
+
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(146, 64, 14); // amber-800
+    doc.text('CONTATO CLUB DA BOLA', 136, 70);
+
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(146, 64, 14);
+    doc.text('WhatsApp: (91) 99324-9580', 136, 75);
+
+    // 3. Financial Summary card in PDF
+    doc.setDrawColor(226, 232, 240); // slate-200
+    doc.setFillColor(255, 255, 255);
+    doc.roundedRect(14, 94, 182, 26, 4, 4, 'FD');
+
+    const discountValue = safeFloat(discountVal);
+
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139); // slate-500
+    doc.text('SUBTOTAL DOS ITENS', 20, 102);
+    doc.setFontSize(11);
+    doc.setTextColor(15, 23, 42);
+    doc.text(formatCurrency(subtotal), 20, 111);
+
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139);
+    doc.text('DESCONTOS APLICADOS', 80, 102);
+    doc.setFontSize(11);
+    doc.setTextColor(discountValue > 0 ? 153 : 15, discountValue > 0 ? 27 : 23, discountValue > 0 ? 27 : 42);
+    doc.text(`-${formatCurrency(discountValue)}`, 80, 111);
+
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139);
+    doc.text('TOTAL ESTIMADO', 140, 102);
+    doc.setFontSize(11);
+    doc.setTextColor(15, 23, 42);
+    doc.text(formatCurrency(total), 140, 111);
+
+    // 4. Detailed Items Table
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(15, 23, 42);
+    doc.text('LISTA DE ITENS SELECIONADOS NO ORÇAMENTO', 14, 130);
+
+    const tableRows = cart.map((item, idx) => {
+      const pIdx = idx + 1;
+      const variationName = cleanVariationName(item.variationName) || 'Grade Única';
+      const unitPriceStr = formatCurrency(item.price);
+      const qtyStr = `${item.quantity} UN`;
+      const subtotalItemStr = formatCurrency(item.price * item.quantity);
+
+      return [pIdx, item.name, variationName, qtyStr, unitPriceStr, subtotalItemStr];
+    });
+
+    autoTable(doc, {
+      startY: 135,
+      head: [['#', 'Produto/SKU', 'Grade/Variação', 'Quantidade', 'Preço Unit.', 'Total Líquido']],
+      body: tableRows,
+      theme: 'grid',
+      headStyles: {
+        fillColor: [15, 23, 42],
+        textColor: [255, 255, 255],
+        fontSize: 8,
+        fontStyle: 'bold',
+        halign: 'center'
+      },
+      styles: {
+        fontSize: 8.5,
+        font: 'Helvetica'
+      },
+      columnStyles: {
+        0: { halign: 'center', cellWidth: 10 },
+        1: { cellWidth: 70 },
+        2: { cellWidth: 35, halign: 'center' },
+        3: { halign: 'center', cellWidth: 20 },
+        4: { halign: 'right', cellWidth: 22 },
+        5: { halign: 'right', cellWidth: 25, fontStyle: 'bold' }
+      }
+    });
+
+    // Valid conditions
+    const finalY = (doc as any).lastAutoTable.finalY + 12;
+    doc.setFont('Helvetica', 'oblique');
+    doc.setFontSize(8.5);
+    doc.setTextColor(100, 116, 139);
+
+    doc.text(`Observações importantes:`, 14, finalY);
+    doc.text(`• Proposta comercial válida até: ${validityDate.toLocaleDateString('pt-BR')}.`, 14, finalY + 5);
+    doc.text(`• O presente documento não garante reserva de mercadoria física em estoque prévia à aprovação.`, 14, finalY + 10);
+    doc.text(`• Club da Bola • Atendimento esportivo de excelência.`, 14, finalY + 15);
+
+    const fileSlug = (selectedCustomer ? selectedCustomer.name : 'avulso').toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 30);
+    doc.save(`orcamento-clubdabola-${fileSlug}.pdf`);
+
+    if (!isManualDownloadOnly) {
+      setShowBudgetModal(true);
+    }
+  };
+
   const [isCartVisible, setIsCartVisible] = useState(false);
 
   return (
@@ -605,6 +826,72 @@ export default function PDV() {
                     Fechar
                   </button>
                 </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Budget Generated Modal */}
+      <AnimatePresence>
+        {showBudgetModal && (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }}
+              onClick={() => setShowBudgetModal(false)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" 
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="bg-white rounded-[32px] shadow-2xl relative z-10 w-full max-w-sm overflow-hidden border border-slate-200"
+            >
+              <div className="p-8 text-center bg-slate-900 text-white relative">
+                <div className="absolute top-0 left-0 w-full h-full opacity-5 pointer-events-none">
+                  <FileText size={240} className="-translate-x-1/4 -translate-y-1/4" />
+                </div>
+                <div className="size-16 bg-white/10 rounded-2xl flex items-center justify-center mx-auto mb-4 backdrop-blur-sm p-3 border border-white/5">
+                  <FileText size={32} className="text-amber-500" />
+                </div>
+                <h3 className="text-xl font-black uppercase tracking-tight italic">Orçamento Pronto!</h3>
+                <p className="text-white/60 font-bold opacity-80 mt-1 uppercase text-[9px] tracking-widest leading-relaxed">
+                  Gerado e disponibilizado para envio e download.
+                </p>
+              </div>
+
+              <div className="p-6 space-y-5">
+                <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 text-center font-sans">
+                  <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1">Total Calculado</p>
+                  <p className="text-3xl font-black text-slate-900 tracking-tighter leading-none tabular-nums font-display">{formatCurrency(total)}</p>
+                  <p className="text-[9px] font-bold text-slate-500 mt-1.5 uppercase tracking-widest">{selectedCustomer ? selectedCustomer.name : 'Consumidor Final'}</p>
+                </div>
+
+                <div className="space-y-4">
+                  <button 
+                    onClick={() => generateBudgetPDF(true)}
+                    className="w-full flex items-center justify-center gap-2.5 p-3.5 bg-slate-900 hover:bg-black text-white rounded-xl transition-all font-black uppercase tracking-widest text-[9.5px]"
+                  >
+                    <FileText size={16} className="text-amber-500" />
+                    Baixar PDF do Orçamento
+                  </button>
+                  <button 
+                    onClick={openBudgetWhatsApp}
+                    className="w-full flex items-center justify-center gap-2.5 p-3.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl transition-all font-black uppercase tracking-widest text-[9.5px] shadow-md shadow-amber-500/10"
+                  >
+                    <MessageCircle size={16} />
+                    Enviar pelo WhatsApp
+                  </button>
+                </div>
+
+                <button 
+                  onClick={() => setShowBudgetModal(false)}
+                  className="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700 font-bold rounded-xl transition-all uppercase tracking-widest text-[9px]"
+                >
+                  Fechar Janela
+                </button>
               </div>
             </motion.div>
           </div>
@@ -959,6 +1246,15 @@ export default function PDV() {
                       <span className="text-3xl font-bold tracking-tight text-white tabular-nums">{formatCurrency(total)}</span>
                     </div>
                   </div>
+
+                  {cart.length > 0 && (
+                    <button 
+                      onClick={generateBudgetPDF}
+                      className="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-3 rounded-xl transition-all flex items-center justify-center gap-2 uppercase tracking-widest text-[10px] shadow-lg shadow-amber-500/15 font-sans active:scale-95"
+                    >
+                      <FileText size={15} /> Gerar Orçamento PDF
+                    </button>
+                  )}
 
                   {paymentMethod === 'Fiado' && !selectedCustomer && (
                     <div className="bg-red-950/50 border border-red-800/50 p-2 rounded-xl text-center">

@@ -1,20 +1,24 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, orderBy, writeBatch } from 'firebase/firestore';
-import { Product, Variation } from '../types';
-import { Plus, Search, Edit2, Trash2, Copy, Package, Box, X } from 'lucide-react';
-import { formatCurrency, calculateMargin, calculateMarkup, cn } from '../lib/utils';
+import { Product, Variation, Sale } from '../types';
+import { Plus, Search, Edit2, Trash2, Copy, Package, Box, X, Eye, FileText, Download, TrendingUp, ShoppingBag, Users, Calendar } from 'lucide-react';
+import { formatCurrency, calculateMargin, calculateMarkup, cn, cleanVariationName } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { SidebarContext } from '../App';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 export default function Products() {
   const { setIsSidebarOpen } = useContext(SidebarContext);
   const [products, setProducts] = useState<Product[]>([]);
+  const [sales, setSales] = useState<Sale[]>([]);
   const [search, setSearch] = useState('');
   const [filterCategory, setFilterCategory] = useState('Todas');
   const [filterGender, setFilterGender] = useState('Todos');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [historyProduct, setHistoryProduct] = useState<Product | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
@@ -31,12 +35,12 @@ export default function Products() {
   const [lastAddedId, setLastAddedId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (isModalOpen) {
+    if (isModalOpen || historyProduct) {
       setIsSidebarOpen(false);
     } else {
       setIsSidebarOpen(true);
     }
-  }, [isModalOpen, setIsSidebarOpen]);
+  }, [isModalOpen, historyProduct, setIsSidebarOpen]);
 
   useEffect(() => {
     const q = query(collection(db, 'products'), orderBy('name', 'asc'));
@@ -44,6 +48,14 @@ export default function Products() {
       setProducts(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Product)));
     });
     return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    const qSales = query(collection(db, 'sales'), orderBy('createdAt', 'desc'));
+    const unsubscribeSales = onSnapshot(qSales, (snapshot) => {
+      setSales(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Sale)));
+    });
+    return unsubscribeSales;
   }, []);
 
   // Padronização automática de categorias cadastradas na base de dados para Caixa Alta (CX)
@@ -75,6 +87,207 @@ export default function Products() {
     }, 1000);
     return () => clearTimeout(timer);
   }, [products]);
+
+  const exportProductPDF = (product: Product, productSales: Sale[]) => {
+    const doc = new jsPDF();
+    const now = new Date();
+
+    // 1. PDF Header (Slate Executive Theme)
+    doc.setFillColor(15, 23, 42); // slate-900 (Dark Slate Background for Header)
+    doc.rect(0, 0, 210, 42, 'F');
+
+    // Header Title
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(22);
+    doc.setTextColor(255, 255, 255);
+    doc.text('CLUB DA BOLA', 14, 18);
+
+    doc.setFontSize(9);
+    doc.setTextColor(239, 68, 68); // Soft Red text
+    doc.text('ERP SYSTEM • RELATÓRIO FINANCEIRO E DESEMPENHO DE PRODUTO', 14, 25);
+
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(203, 213, 225); // slate-300
+    doc.text(`DESEMPENHO COMERCIAL DE PRODUTO`, 14, 32);
+    doc.text(`Gerado em: ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR')}`, 140, 32);
+
+    // 2. Product Identity Section
+    doc.setDrawColor(226, 232, 240); // slate-200
+    doc.setFillColor(248, 250, 252); // slate-50
+    doc.roundedRect(14, 50, 182, 38, 4, 4, 'FD');
+
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(15, 23, 42);
+    doc.text('FICHA CADASTRAL DO PRODUTO', 20, 58);
+
+    doc.setDrawColor(226, 232, 240);
+    doc.line(20, 62, 190, 62);
+
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(71, 85, 105);
+
+    doc.text(`Nome do SKU:`, 20, 68);
+    doc.setFont('Helvetica', 'bold');
+    doc.setTextColor(15, 23, 42);
+    doc.text(product.name, 60, 68);
+
+    doc.setFont('Helvetica', 'normal');
+    doc.setTextColor(71, 85, 105);
+    doc.text(`Categoria / Gênero:`, 20, 74);
+    doc.setFont('Helvetica', 'bold');
+    doc.setTextColor(15, 23, 42);
+    doc.text(`${(product.category || '').toUpperCase()} • ${product.gender || 'Ambos'}`, 60, 74);
+
+    doc.setFont('Helvetica', 'normal');
+    doc.setTextColor(71, 85, 105);
+    doc.text(`Preço de Custo / Venda:`, 20, 80);
+    doc.setFont('Helvetica', 'bold');
+    doc.setTextColor(15, 23, 42);
+    doc.text(`${formatCurrency(product.costPrice || 0)} / ${formatCurrency(product.sellingPrice || 0)}`, 60, 80);
+
+    // Calculations of specific metrics
+    const totalQty = productSales.reduce((acc, sale) => {
+      const itemsMatching = (sale.items || []).filter(item => item.productId === product.id);
+      return acc + itemsMatching.reduce((sub, i) => sub + (i.quantity || 0), 0);
+    }, 0);
+
+    const totalRev = productSales.reduce((acc, sale) => {
+      const itemsMatching = (sale.items || []).filter(item => item.productId === product.id);
+      return acc + itemsMatching.reduce((sub, i) => sub + ((i.price || product.sellingPrice) * (i.quantity || 0)), 0);
+    }, 0);
+
+    const totalCostOfGoods = totalQty * (product.costPrice || 0);
+    const estProfit = totalRev - totalCostOfGoods;
+
+    // Stock levels nested box
+    doc.setFillColor(254, 243, 199); // amber-50
+    doc.setDrawColor(245, 158, 11); // amber-500
+    doc.roundedRect(135, 65, 55, 20, 3, 3, 'FD');
+
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(146, 64, 14); // amber-800
+    doc.text('ESTOQUE FÍSICO ATUAL', 139, 71);
+
+    doc.setFontSize(11);
+    doc.setTextColor(146, 64, 14);
+    doc.text(`${product.totalStock || 0} UN (Mín: ${product.minStock || 0})`, 139, 79);
+
+    // 3. Performance Metrics Grid Panel
+    doc.setDrawColor(226, 232, 240); // slate-200
+    doc.setFillColor(255, 255, 255);
+    doc.roundedRect(14, 94, 182, 32, 4, 4, 'FD');
+
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139); // slate-500
+    doc.text('UNIDADES VENDIDAS', 20, 103);
+    doc.setFontSize(13);
+    doc.setTextColor(15, 23, 42);
+    doc.text(`${totalQty} Unidades`, 20, 113);
+
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139);
+    doc.text('FATURAMENTO DIRETOR', 75, 103);
+    doc.setFontSize(13);
+    doc.setTextColor(15, 23, 42);
+    doc.text(formatCurrency(totalRev), 75, 113);
+
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139);
+    doc.text('LUCRO ESTIMADO', 135, 103);
+    doc.setFontSize(13);
+    doc.setTextColor(estProfit >= 0 ? 5 : 153, estProfit >= 0 ? 150 : 27, estProfit >= 0 ? 105 : 27); // green vs red
+    doc.text(formatCurrency(estProfit), 135, 113);
+
+    // 4. Detailed History Table
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(15, 23, 42);
+    doc.text('HISTÓRICO ACUMULADO DE VENDAS DESSE PRODUTO', 14, 141);
+
+    const tableRows: any[][] = [];
+    
+    // Sort matching sales by date descending
+    const sortedSales = [...productSales].sort((a, b) => {
+      const dateA = a.createdAt?.seconds ? a.createdAt.seconds : 0;
+      const dateB = b.createdAt?.seconds ? b.createdAt.seconds : 0;
+      return dateB - dateA;
+    });
+
+    sortedSales.forEach(sale => {
+      const saleDateObj = sale.createdAt?.seconds 
+        ? new Date(sale.createdAt.seconds * 1000) 
+        : (sale.createdAt instanceof Date ? sale.createdAt : new Date());
+      const dateStr = saleDateObj.toLocaleDateString('pt-BR');
+      const refCode = `#${sale.id?.slice(-6).toUpperCase()}`;
+      
+      const itemsMatching = (sale.items || []).filter(item => item.productId === product.id);
+      
+      itemsMatching.forEach(item => {
+        const variationStr = cleanVariationName(item.variationName) || 'Grade Única';
+        const clientStr = sale.customerName || 'Consumidor Final';
+        const qtyStr = `${item.quantity || 0} UN`;
+        const itemPriceStr = formatCurrency(item.price || product.sellingPrice || 0);
+        const methodStr = sale.paymentMethod || 'Outro';
+        const itemTotalStr = formatCurrency((item.price || product.sellingPrice || 0) * (item.quantity || 0));
+        const statusStr = sale.status || 'Concluída';
+
+        tableRows.push([
+          dateStr,
+          refCode,
+          clientStr,
+          variationStr,
+          qtyStr,
+          itemPriceStr,
+          methodStr,
+          statusStr,
+          itemTotalStr
+        ]);
+      });
+    });
+
+    autoTable(doc, {
+      startY: 146,
+      head: [['Data', 'Ref Pedido', 'Cliente', 'Grade/Variação', 'Qtd', 'Preço Unit', 'Pagamento', 'Status', 'Total Item']],
+      body: tableRows.length > 0 ? tableRows : [['S/D', '-', 'Nenhum registro de venda no histórico.', '-', '-', '-', '-', '-', 'R$ 0,00']],
+      theme: 'grid',
+      headStyles: {
+        fillColor: [15, 23, 42],
+        textColor: [255, 255, 255],
+        fontSize: 7.5,
+        fontStyle: 'bold',
+        halign: 'center'
+      },
+      styles: {
+        fontSize: 7,
+        font: 'Helvetica'
+      },
+      columnStyles: {
+        2: { cellWidth: 35 }, // client name
+        3: { cellWidth: 25 }, // variation
+        4: { halign: 'center' },
+        5: { halign: 'right' },
+        7: { halign: 'center' },
+        8: { halign: 'right', fontStyle: 'bold' }
+      }
+    });
+
+    // Summary description under table or on new page if needed
+    const finalY = (doc as any).lastAutoTable.finalY + 12;
+    doc.setFont('Helvetica', 'oblique');
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139);
+    doc.text('Este relatório reflete as auditorias de pedidos de venda registradas no banco de dados consolidado.', 14, finalY);
+
+    const fileSlug = (product.name || 'documento').toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 30);
+    doc.save(`relatorio-produto-${fileSlug}.pdf`);
+  };
 
   const openModal = (product?: Product, isDuplicate = false) => {
     setLastAddedId(null);
@@ -538,6 +751,9 @@ export default function Products() {
                 </td>
                 <td className="px-8 py-5">
                   <div className="flex items-center justify-end gap-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
+                    <button onClick={() => setHistoryProduct(product)} className="p-2.5 hover:bg-red-800 hover:text-white text-slate-900 rounded-xl transition-all bg-white shadow-sm border border-slate-100" title="Histórico de Compras">
+                      <Eye size={16} />
+                    </button>
                     <button onClick={() => openModal(product, true)} className="p-2.5 hover:bg-red-800 hover:text-white text-slate-900 rounded-xl transition-all bg-white shadow-sm border border-slate-100" title="Duplicar">
                       <Copy size={16} />
                     </button>
@@ -585,6 +801,9 @@ export default function Products() {
                   <div className="text-[9px] bg-indigo-50 px-1.5 py-0.5 rounded font-bold text-indigo-500 uppercase">Mk: {calculateMarkup(product.costPrice, product.sellingPrice).toFixed(1)}%</div>
                 </div>
                 <div className="flex gap-2">
+                  <button onClick={() => setHistoryProduct(product)} className="p-2 bg-slate-100 text-slate-600 rounded-lg flex items-center gap-1 text-[10px] font-black uppercase tracking-wider px-3" title="Histórico">
+                    <Eye size={14} /> Histórico
+                  </button>
                   <button onClick={() => openModal(product)} className="p-2 bg-slate-100 text-slate-600 rounded-lg"><Edit2 size={14} /></button>
                   <button onClick={() => confirmDelete(product)} className="p-2 bg-rose-50 text-rose-600 rounded-lg"><Trash2 size={14} /></button>
                 </div>
@@ -920,6 +1139,258 @@ export default function Products() {
             </motion.div>
           </div>
         )}
+      </AnimatePresence>
+
+      {/* Product Purchase History Modal */}
+      <AnimatePresence>
+        {historyProduct && (() => {
+          const productSales = sales.filter(s => (s.items || []).some(item => item.productId === historyProduct.id));
+          
+          const totalUnitsSold = productSales.reduce((acc, sale) => {
+            const matching = (sale.items || []).filter(item => item.productId === historyProduct.id);
+            return acc + matching.reduce((sum, item) => sum + (item.quantity || 0), 0);
+          }, 0);
+
+          const totalRevenue = productSales.reduce((acc, sale) => {
+            const matching = (sale.items || []).filter(item => item.productId === historyProduct.id);
+            return acc + matching.reduce((sum, item) => sum + ((item.price || historyProduct.sellingPrice || 0) * (item.quantity || 0)), 0);
+          }, 0);
+
+          const totalCost = totalUnitsSold * (historyProduct.costPrice || 0);
+          const profit = totalRevenue - totalCost;
+          const avgPrice = totalUnitsSold > 0 ? (totalRevenue / totalUnitsSold) : 0;
+
+          // Leaderboard logic
+          const buyerRankingMap: Record<string, { name: string; quantity: number; revenue: number }> = {};
+          productSales.forEach(s => {
+            const clientName = s.customerName || 'Consumidor Final';
+            const matching = (s.items || []).filter(item => item.productId === historyProduct.id);
+            const qty = matching.reduce((sum, item) => sum + (item.quantity || 0), 0);
+            const rev = matching.reduce((sum, item) => sum + ((item.price || historyProduct.sellingPrice || 0) * (item.quantity || 0)), 0);
+            
+            if (!buyerRankingMap[clientName]) {
+              buyerRankingMap[clientName] = { name: clientName, quantity: 0, revenue: 0 };
+            }
+            buyerRankingMap[clientName].quantity += qty;
+            buyerRankingMap[clientName].revenue += rev;
+          });
+
+          const topBuyers = Object.values(buyerRankingMap).sort((a,b) => b.quantity - a.quantity).slice(0, 3);
+
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <motion.div 
+                initial={{ opacity: 0 }} 
+                animate={{ opacity: 1 }} 
+                exit={{ opacity: 0 }}
+                onClick={() => setHistoryProduct(null)}
+                className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" 
+              />
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                className="bg-white rounded-[32px] shadow-2xl relative z-10 w-full max-w-5xl overflow-hidden border border-slate-200"
+              >
+                <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                  <div className="flex items-center gap-3">
+                    <div className="size-8 bg-red-800 text-white rounded-lg flex items-center justify-center border border-red-900/20">
+                      <ShoppingBag size={18} />
+                    </div>
+                    <div>
+                      <h3 className="text-xs font-black uppercase tracking-wider text-slate-500 leading-none mb-1">
+                        Histórico de vendas
+                      </h3>
+                      <p className="text-sm font-bold text-slate-900 leading-none">{historyProduct.name}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={() => exportProductPDF(historyProduct, productSales)}
+                      className="px-4 py-2.5 bg-red-800 hover:bg-slate-950 text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all shadow-md shadow-red-900/10 flex items-center gap-1.5"
+                      title="Emitir PDF de auditoria e performance"
+                    >
+                      <Download size={14} /> Exportar relatório PDF
+                    </button>
+                    <button 
+                      onClick={() => setHistoryProduct(null)} 
+                      className="text-slate-400 hover:text-slate-600 p-2 hover:bg-slate-200 rounded-lg transition-colors"
+                    >
+                      <X size={20} />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="p-8 overflow-y-auto max-h-[75vh] space-y-6 md:space-y-8">
+                  {/* Performance Indicators Grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pb-1">
+                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-150">
+                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-2 leading-none">Unidades Vendidas</span>
+                      <span className="text-xl font-black text-slate-900 tracking-tight font-display italic leading-none tabular-nums">
+                        {totalUnitsSold} <span className="text-xs opacity-40">UN</span>
+                      </span>
+                    </div>
+
+                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-150">
+                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-2 leading-none">Receita Total Bruta</span>
+                      <span className="text-xl font-black text-slate-900 tracking-tight font-display italic leading-none tabular-nums">
+                        {formatCurrency(totalRevenue)}
+                      </span>
+                    </div>
+
+                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-150">
+                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-2 leading-none">Preço Médio Praticado</span>
+                      <span className="text-xl font-black text-slate-900 tracking-tight font-display italic leading-none tabular-nums">
+                        {formatCurrency(avgPrice)}
+                      </span>
+                    </div>
+
+                    <div className="bg-emerald-50/50 p-4 rounded-2xl border border-emerald-150">
+                      <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest block mb-2 leading-none">Margem de Lucro Bruta</span>
+                      <span className={cn(
+                        "text-xl font-black tracking-tight font-display italic leading-none tabular-nums",
+                        profit >= 0 ? "text-emerald-700" : "text-rose-700"
+                      )}>
+                        {formatCurrency(profit)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Leaderboard & Category context */}
+                  {topBuyers.length > 0 && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      <div className="md:col-span-2 bg-slate-50 p-5 rounded-2xl border border-slate-200">
+                        <h4 className="text-[9px] font-black uppercase text-slate-500 tracking-widest mb-4 flex items-center gap-1.5 leading-none">
+                          <Users size={12} className="text-red-800" /> Maiores Clientes de Referência
+                        </h4>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                          {topBuyers.map((b, idx) => (
+                            <div key={idx} className="bg-white p-3.5 rounded-xl border border-slate-100 flex flex-col justify-between">
+                              <div>
+                                <span className="text-[10px] text-slate-400 font-bold block leading-none mb-1">Rank #{idx+1}</span>
+                                <p className="font-bold text-slate-900 text-sm leading-tight line-clamp-1">{b.name}</p>
+                              </div>
+                              <div className="mt-4 border-t border-slate-50 pt-2 flex justify-between items-baseline">
+                                <span className="text-[10px] text-slate-400 font-mono italic">{b.quantity} un</span>
+                                <span className="text-xs font-black font-mono text-emerald-600">{formatCurrency(b.revenue)}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 flex flex-col justify-between">
+                        <div>
+                          <h4 className="text-[9px] font-black uppercase text-slate-400 tracking-widest leading-none mb-2">Desempenho no Catálogo</h4>
+                          <p className="text-xs font-medium text-slate-500 leading-relaxed">
+                            Este produto pertence à categoria <span className="font-black text-slate-800 tracking-wide">{(historyProduct.category || '').toUpperCase()}</span>, com markup médio de <span className="font-bold text-slate-800">{(calculateMarkup(historyProduct.costPrice, historyProduct.sellingPrice)).toFixed(0)}%</span> sobre o preço de custo.
+                          </p>
+                        </div>
+                        <div className="mt-4 pt-3 border-t border-slate-100 flex justify-between text-xs">
+                          <span className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Estoque Local:</span>
+                          <span className="font-black text-slate-900 font-mono italic">{historyProduct.totalStock || 0} UN</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Chronological Sales Audit Log Table */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-[9px] font-black uppercase text-slate-500 tracking-widest leading-none">
+                        Transações de Venda (Auditoria de SKU)
+                      </h4>
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                        {productSales.length} Registro(s) de Pedido
+                      </span>
+                    </div>
+
+                    <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-sm">
+                      <div className="overflow-x-auto max-h-[350px]">
+                        <table className="w-full text-left border-collapse min-w-[700px]">
+                          <thead>
+                            <tr className="bg-slate-50 border-b border-slate-100">
+                              <th className="px-6 py-3.5 text-[9px] uppercase font-black text-slate-400 tracking-widest">Data</th>
+                              <th className="px-6 py-3.5 text-[9px] uppercase font-black text-slate-400 tracking-widest">Pedido Ref</th>
+                              <th className="px-6 py-3.5 text-[9px] uppercase font-black text-slate-400 tracking-widest">Cliente</th>
+                              <th className="px-6 py-3.5 text-[9px] uppercase font-black text-slate-400 tracking-widest text-center">Tamanho/Cor</th>
+                              <th className="px-6 py-3.5 text-[9px] uppercase font-black text-slate-400 tracking-widest text-center">Quantidade</th>
+                              <th className="px-6 py-3.5 text-[9px] uppercase font-black text-slate-400 tracking-widest text-right">Preço Unit.</th>
+                              <th className="px-6 py-3.5 text-[9px] uppercase font-black text-slate-400 tracking-widest text-right">Método</th>
+                              <th className="px-6 py-3.5 text-[9px] uppercase font-black text-slate-400 tracking-widest text-center">Status</th>
+                              <th className="px-6 py-3.5 text-[9px] uppercase font-black text-slate-400 tracking-widest text-right">Subtotal SKU</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-50 text-xs">
+                            {productSales.length === 0 ? (
+                              <tr>
+                                <td colSpan={9} className="py-12 text-center text-slate-400 font-bold uppercase tracking-widest text-[10px] bg-slate-50/50">
+                                  Nenhum registro de venda consolidada encontrado no sistema de caixa para este produto.
+                                </td>
+                              </tr>
+                            ) : (
+                              productSales.map(sale => {
+                                const saleDateObj = sale.createdAt?.seconds 
+                                  ? new Date(sale.createdAt.seconds * 1000) 
+                                  : (sale.createdAt instanceof Date ? sale.createdAt : new Date());
+                                const dateStr = saleDateObj.toLocaleDateString('pt-BR');
+                                const refCode = `#${sale.id?.slice(-6).toUpperCase()}`;
+                                
+                                const itemsMatching = (sale.items || []).filter(item => item.productId === historyProduct.id);
+                                
+                                return itemsMatching.map((item, itemIdx) => {
+                                  const cleanedVar = cleanVariationName(item.variationName);
+                                  return (
+                                    <tr key={`${sale.id}-${itemIdx}`} className="hover:bg-slate-50/50 transition-colors">
+                                      <td className="px-6 py-4 text-slate-500 font-mono tracking-tight">{dateStr}</td>
+                                      <td className="px-6 py-4 font-semibold text-red-800 font-mono">{refCode}</td>
+                                      <td className="px-6 py-4 font-bold text-slate-800">{sale.customerName || 'Consumidor Final'}</td>
+                                      <td className="px-6 py-4 text-center">
+                                        <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-[9px] font-black uppercase rounded tracking-wider font-mono">
+                                          {cleanedVar || 'Grade Única'}
+                                        </span>
+                                      </td>
+                                      <td className="px-6 py-4 text-center font-black text-slate-900 font-mono italic tabular-nums">{item.quantity}</td>
+                                      <td className="px-6 py-4 text-right font-mono text-slate-500 tabular-nums">{formatCurrency(item.price || historyProduct.sellingPrice || 0)}</td>
+                                      <td className="px-6 py-4 text-right font-bold text-slate-500 uppercase tracking-wide text-[10px]">{sale.paymentMethod || 'Outro'}</td>
+                                      <td className="px-6 py-4 text-center">
+                                        <span className={cn(
+                                          "px-2 py-0.5 text-[8px] font-black uppercase rounded-[6px] tracking-widest leading-none bg-slate-50 text-slate-700",
+                                          sale.status === 'Concluída' ? "bg-emerald-50 text-emerald-700" :
+                                          sale.status === 'Pendente' ? "bg-amber-50 text-amber-700 font-bold" :
+                                          "bg-blue-50 text-blue-700"
+                                        )}>
+                                          {sale.status || 'Concluída'}
+                                        </span>
+                                      </td>
+                                      <td className="px-6 py-4 text-right font-black font-mono text-slate-900 tabular-nums italic">
+                                        {formatCurrency((item.price || historyProduct.sellingPrice || 0) * (item.quantity || 0))}
+                                      </td>
+                                    </tr>
+                                  );
+                                });
+                              })
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end">
+                  <button 
+                    onClick={() => setHistoryProduct(null)}
+                    className="px-10 py-3 bg-slate-900 hover:bg-red-800 text-white text-[11px] font-black uppercase rounded-xl transition-all shadow-lg shadow-slate-900/25 tracking-widest"
+                  >
+                    Fechar Histórico
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          );
+        })()}
       </AnimatePresence>
     </motion.div>
   );
