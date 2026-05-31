@@ -86,6 +86,7 @@ export default function Mural() {
 
   // Settings State
   const [logoFile, setLogoFile] = useState<string | null>(null);
+  const [logoScale, setLogoScale] = useState<number>(1.0);
   const [isSavingLogo, setIsSavingLogo] = useState(false);
   const [logoSuccessMsg, setLogoSuccessMsg] = useState(false);
 
@@ -128,6 +129,7 @@ export default function Mural() {
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           setLogoFile(docSnap.data().logoUrl || null);
+          setLogoScale(docSnap.data().logoScale ?? 1.0);
         }
       } catch (err) {
         console.error("Error reading logo configuration", err);
@@ -274,7 +276,7 @@ export default function Mural() {
       }
 
       // Fire a custom event to alert App.tsx that the global logo has updated
-      window.dispatchEvent(new CustomEvent('logo-updated', { detail: { logoUrl: base64Url } }));
+      window.dispatchEvent(new CustomEvent('logo-updated', { detail: { logoUrl: base64Url, logoScale } }));
 
       setLogoSuccessMsg(true);
       setTimeout(() => setLogoSuccessMsg(false), 4000);
@@ -294,14 +296,17 @@ export default function Mural() {
       const settingsRef = doc(db, 'settings', 'appearance');
       await setDoc(settingsRef, {
         logoUrl: '',
+        logoScale: 1.0,
         updatedAt: new Date()
       }, { merge: true });
 
       setLogoFile(null);
+      setLogoScale(1.0);
       localStorage.removeItem('erp-custom-logo');
+      localStorage.removeItem('erp-custom-logo-scale');
 
       // Dispatch event to put the default icon back
-      window.dispatchEvent(new CustomEvent('logo-updated', { detail: { logoUrl: '' } }));
+      window.dispatchEvent(new CustomEvent('logo-updated', { detail: { logoUrl: '', logoScale: 1.0 } }));
 
       // Reset favicon web icon back to standard or let it use browser default
       const favicon = document.querySelector("link[rel*='icon']");
@@ -400,9 +405,48 @@ export default function Mural() {
                       src={item.photoUrl} 
                       alt={item.customerName}
                       referrerPolicy="no-referrer"
-                      className="w-full h-full object-cover rounded-2xl group-hover:scale-105 transition-transform duration-500 ease-out"
+                      className="w-full h-full object-cover rounded-2xl transition-transform duration-300 ease-out"
+                      style={{ transform: `scale(${item.scale || 1.0})` }}
                     />
                     
+                    {/* Floating Zoom Controls for Photo Mural */}
+                    <div className="absolute bottom-3 left-3 right-3 bg-black/60 backdrop-blur-md rounded-xl p-1.5 flex items-center justify-between gap-1.5 border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10">
+                      <span className="text-[8px] font-black uppercase text-white/80 tracking-wider pl-1 font-sans">Zoom Foto</span>
+                      <div className="flex items-center gap-1">
+                        <button 
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            const nextScale = Math.max(1.0, (item.scale || 1.0) - 0.1);
+                            if (item.id) {
+                              await updateDoc(doc(db, 'customer_photos', item.id), { scale: nextScale });
+                            }
+                          }}
+                          className="size-5 rounded bg-white/15 flex items-center justify-center text-white text-xs hover:bg-white/30 transition-all font-black"
+                          type="button"
+                          title="Focar menos / Restringir"
+                        >
+                          -
+                        </button>
+                        <span className="text-[9px] font-mono font-black text-amber-500 min-w-[34px] text-center bg-white/5 py-0.5 rounded">
+                          {Math.round((item.scale || 1.0) * 100)}%
+                        </span>
+                        <button 
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            const nextScale = Math.min(3.0, (item.scale || 1.0) + 0.1);
+                            if (item.id) {
+                              await updateDoc(doc(db, 'customer_photos', item.id), { scale: nextScale });
+                            }
+                          }}
+                          className="size-5 rounded bg-white/15 flex items-center justify-center text-white text-xs hover:bg-white/30 transition-all font-black"
+                          type="button"
+                          title="Focar mais / Ampliar"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+
                     {/* Floating delete option */}
                     <button 
                       onClick={() => item.id && handleDeletePhoto(item.id)}
@@ -507,15 +551,52 @@ export default function Mural() {
                       <img 
                         src={logoFile} 
                         alt="Logo ERP" 
-                        className="w-full h-full object-cover rounded-2xl hover:scale-105 transition-transform duration-300" 
+                        style={{ transform: `scale(${logoScale})` }}
+                        className="w-full h-full object-cover rounded-2xl transition-transform duration-300" 
                         referrerPolicy="no-referrer" 
                       />
                     </div>
                     <div>
                       <p className="text-[10px] font-black text-slate-900 uppercase tracking-wider">Sua Logo Ativa</p>
+                      
+                      {/* Zoom Controls for Active Logo */}
+                      <div className="flex items-center justify-center gap-2 mt-2 bg-slate-100 p-1.5 rounded-xl border border-slate-200 w-36 mx-auto">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const nextScale = Math.max(1.0, logoScale - 0.1);
+                            setLogoScale(nextScale);
+                            const settingsRef = doc(db, 'settings', 'appearance');
+                            await setDoc(settingsRef, { logoScale: nextScale }, { merge: true });
+                            localStorage.setItem('erp-custom-logo-scale', nextScale.toString());
+                            window.dispatchEvent(new CustomEvent('logo-updated', { detail: { logoUrl: logoFile, logoScale: nextScale } }));
+                          }}
+                          className="size-6 bg-white hover:bg-slate-200 rounded-lg flex items-center justify-center text-slate-700 text-xs font-bold shadow-sm transition-all font-sans"
+                        >
+                          -
+                        </button>
+                        <span className="text-[9px] font-mono font-black text-red-800">
+                          {Math.round(logoScale * 100)}%
+                        </span>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const nextScale = Math.min(2.5, logoScale + 0.1);
+                            setLogoScale(nextScale);
+                            const settingsRef = doc(db, 'settings', 'appearance');
+                            await setDoc(settingsRef, { logoScale: nextScale }, { merge: true });
+                            localStorage.setItem('erp-custom-logo-scale', nextScale.toString());
+                            window.dispatchEvent(new CustomEvent('logo-updated', { detail: { logoUrl: logoFile, logoScale: nextScale } }));
+                          }}
+                          className="size-6 bg-white hover:bg-slate-200 rounded-lg flex items-center justify-center text-slate-700 text-xs font-bold shadow-sm transition-all font-sans"
+                        >
+                          +
+                        </button>
+                      </div>
+
                       <button 
                         onClick={handleResetLogo}
-                        className="text-[9px] font-bold text-red-600 uppercase tracking-widest mt-2 hover:underline hover:text-red-700 block mx-auto"
+                        className="text-[9px] font-bold text-red-600 uppercase tracking-widest mt-3.5 hover:underline hover:text-red-700 block mx-auto"
                       >
                         Remover e Voltar ao Padrão
                       </button>

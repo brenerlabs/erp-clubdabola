@@ -528,15 +528,15 @@ export default function Dashboard() {
       list.push({
         id: 'stock-alert',
         type: 'warning',
-        title: 'Estoque Mínimo Atingido',
-        desc: `${criticalStock.length} produto(s) (${pNames}${criticalStock.length > 3 ? ' e outros' : ''}) com estoque baixo ou zerado. Faça reposições para evitar perdas de vendas.`
+        title: '🚨 Alerta de Abastecimento: Estoque Crítico Detectado',
+        desc: `${criticalStock.length} produto(s) (${pNames}${criticalStock.length > 3 ? ' e outros' : ''}) estão com o estoque no nível crítico ou zerado. Planeje novas compras para evitar faltas.`
       });
     } else {
       list.push({
         id: 'stock-ok',
         type: 'success',
-        title: 'Estoque Saudável',
-        desc: 'Muito bem! Todos os seus produtos físicos ativos possuem níveis de estoque superiores ao mínimo configurado.'
+        title: '✅ Estoque Saudável: Níveis de Segurança Mantidos',
+        desc: 'Excelente! Todos os seus produtos físicos ativos estão acima do estoque mínimo de segurança.'
       });
     }
 
@@ -548,19 +548,19 @@ export default function Dashboard() {
     const debtorsCount = debtors.length;
     if (totalPendingFiado > 0) {
       const topDebtor = debtors.slice().sort((a,b) => (b.totalDebt || 0) - (a.totalDebt || 0))[0];
-      const debtorInfo = topDebtor ? ` O maior valor acumulado pertence a ${topDebtor.name} (${formatCurrency(topDebtor.totalDebt || 0)}) no controle consolidado de inadimplências.` : '';
+      const debtorInfo = topDebtor ? ` O maior saldo pertence a ${topDebtor.name} (${formatCurrency(topDebtor.totalDebt || 0)}).` : '';
       list.push({
         id: 'debtors-alert',
         type: 'warning',
-        title: 'Acompanhamento de Fiado',
-        desc: `Há um saldo pendente de ${formatCurrency(totalPendingFiado)} distribuído em ${debtorsCount} cliente(s).${debtorInfo} O valor pendente agora está visível diretamente por venda na tabela abaixo para facilitar cobranças cirúrgicas.`
+        title: '⚠️ Controle de Inadimplência: Vigilância de Fiado',
+        desc: `Há um montante de ${formatCurrency(totalPendingFiado)} pendente no fiado distribuído em ${debtorsCount} cliente(s).${debtorInfo} Monitore as cobranças pela tabela para garantir a liquidez.`
       });
     } else {
       list.push({
         id: 'debtors-ok',
         type: 'success',
-        title: 'Inadimplência Zerada',
-        desc: 'Excelente! Todos os fiados ativos foram liquidados com êxito. A saúde de crédito da loja está exemplar.'
+        title: '💎 Risco Mínimo: Inadimplência Zerada',
+        desc: 'Excelente! Todos os fiados estão completamente quitados. O risco de inadimplência ativa é nulo.'
       });
     }
 
@@ -571,15 +571,15 @@ export default function Dashboard() {
         list.push({
           id: 'margin-low',
           type: 'info',
-          title: 'Ajuste de Margens Recomendado',
-          desc: `Sua margem líquida consolidada é de ${marginPercentage.toFixed(1)}%. Despesas gerais (${formatCurrency(stats.totalExpenses)}) ou tributos retidos estão diluindo o retorno. Ajuste markups ou revise custos fixos.`
+          title: '📊 Alerta de Margem: Margem Operacional Estreita',
+          desc: `Sua margem consolidada é de ${marginPercentage.toFixed(1)}%. Despesas de ${formatCurrency(stats.totalExpenses)} ou custo aduaneiro estão consumindo sua receita. Reforce markups.`
         });
       } else {
         list.push({
           id: 'margin-healthy',
           type: 'success',
-          title: 'Eficiência de Margem Fantástica',
-          desc: `Sua taxa de lucro líquido real sobre o faturamento é de excelentes ${marginPercentage.toFixed(1)}%. Parabéns pela excelente dosagem de custos com produtos e despesas gerais!`
+          title: '🏆 Excelência Financeira: Alta Rentabilidade Líquida',
+          desc: `Sua taxa de lucro líquido real é de excepcionais ${marginPercentage.toFixed(1)}% sobre o faturamento. Você dominou a balança entre despesas gerais e markup comercial!`
         });
       }
     }
@@ -590,15 +590,15 @@ export default function Dashboard() {
         list.push({
           id: 'ticket-low',
           type: 'info',
-          title: 'Alavancagem de Ticket Médio',
-          desc: `Seu ticket médio é de ${formatCurrency(stats.avgTicket)}. Para aumentar este kpi, crie combos progressivos ou configure ofertas complementares (cross-selling) no PDV.`
+          title: '🛒 Alavancagem de Ticket: Otimização de Carrinho',
+          desc: `Seu ticket médio de compra por cliente está em ${formatCurrency(stats.avgTicket)}. Estimule vendas casadas no PDV ou dê descontos progressivos em múltiplos itens para expandir esse índice.`
         });
       } else {
         list.push({
           id: 'ticket-high',
           type: 'success',
-          title: 'Consumo Médio em Alta',
-          desc: `Seu ticket médio é de expressivos ${formatCurrency(stats.avgTicket)}. Isso significa que seus clientes estão comprando múltiplos itens ou itens de alto valor unitário.`
+          title: '⭐ Alto Desempenho: Carrinho de Compra Elevado',
+          desc: `Seu ticket médio de ${formatCurrency(stats.avgTicket)} é espetacular. Isso significa que seus clientes estão comprando itens de maior valor agregado ou compondo pacotes completos.`
         });
       }
     }
@@ -621,15 +621,15 @@ export default function Dashboard() {
           list.push({
             id: 'customer-concentration',
             type: 'warning',
-            title: 'Concentração de Faturamento',
-            desc: `Atenção: O cliente ${topCust.name} concentra sozinho ${custShare.toFixed(1)}% do seu faturamento histórico (${formatCurrency(topCust.total)}). Crie campanhas de fidelização de novos compradores para mitigar riscos de receita.`
+            title: '⚠️ Concentração de Risco: Alto Volume por Único Cliente',
+            desc: `O cliente ${topCust.name} representa sozinho ${custShare.toFixed(1)}% do seu faturamento (${formatCurrency(topCust.total)}). Diversifique abordagens para reduzir a dependência de um único cliente.`
           });
         } else {
           list.push({
             id: 'customer-diversity',
             type: 'success',
-            title: 'Distribuição Saudável de Carteira',
-            desc: `Excelente! Sua carteira é bem descentralizada. Seu principal comprador (${topCust.name}) representa apenas ${custShare.toFixed(1)}% das vendas totais, garantindo alta estabilidade de faturamento.`
+            title: '🌱 Carteira Diversificada: Distribuição Saudável de Compras',
+            desc: `Sua carteira comercial é bem diversificada! Seu comprador principal (${topCust.name}) representa apenas ${custShare.toFixed(1)}% do faturamento total da loja.`
           });
         }
       }
@@ -641,15 +641,15 @@ export default function Dashboard() {
         list.push({
           id: 'efficiency-alert',
           type: 'warning',
-          title: 'Eficiência de Fluxo de Caixa',
-          desc: `Seu índice de conversão de faturamento em caixa imediato é de ${stats.efficiencyRatio.toFixed(1)}% devido ao saldo pendente de fiados. Estabeleça travas preventivas no PDV para compras fiadas contínuas.`
+          title: '💸 Risco de Capital: Liquidez de Caixa Comprometida',
+          desc: `Seu índice de conversão de faturamento em caixa real está em ${stats.efficiencyRatio.toFixed(1)}%. Há muito fiado imobilizado. Acelere cobranças para garantir capital de giro fresco.`
         });
       } else {
         list.push({
           id: 'efficiency-ok',
           type: 'success',
-          title: 'Forte Conversão de Caixa',
-          desc: `Excepcional! Seu índice de liquidez imediata sob vendas realizadas é de excelentes ${stats.efficiencyRatio.toFixed(1)}%. Isso demonstra excelente perfil de adimplência do seu público.`
+          title: '⚡ Ciclo de Caixa Saudável: Liquidez Comercial Eficiente',
+          desc: `Excelente! Seu índice de liquidez líquida imediata sob as vendas é de ${stats.efficiencyRatio.toFixed(1)}%. Seu caixa flui rápido e com baixíssima perda financeira.`
         });
       }
     }
@@ -662,15 +662,15 @@ export default function Dashboard() {
         list.push({
           id: 'fiscal-heavy',
           type: 'warning',
-          title: 'Carga Fiscal Aduaneira Elevada',
-          desc: `O volume acumulado de taxas fiscais aduaneiras (${formatCurrency(totalTaxes)}) equivale a ${taxOnRevenue.toFixed(1)}% do faturamento líquido. Estude otimizações estruturais para amortizar o markup.`
+          title: '📈 Carga Tributária Elevada: Impacto de Taxas Alfandegárias',
+          desc: `Suas taxas aduaneiras acumuladas (${formatCurrency(totalTaxes)}) compõem ${taxOnRevenue.toFixed(1)}% das receitas líquidas. Verifique com fornecedores formas de atenuar taxas alfandegárias.`
         });
       } else {
         list.push({
           id: 'fiscal-light',
           type: 'success',
-          title: 'Impacto Aduaneiro sob Controle',
-          desc: `Excelente! O somatório geral de custos de taxas alfandegárias (${formatCurrency(totalTaxes)}) corresponde a saudáveis ${taxOnRevenue.toFixed(1)}% de suas receitas consolidadas.`
+          title: '🎯 Tributação sob Controle: Custos Sob Medida',
+          desc: `Muito bom! O impacto das taxas aduaneiras totais representa apenas ${taxOnRevenue.toFixed(1)}% do faturamento liquefeito da operação.`
         });
       }
     }
@@ -682,21 +682,73 @@ export default function Dashboard() {
         list.push({
           id: 'ds-heavy',
           type: 'info',
-          title: 'Foco em Operação Dropshipping',
-          desc: `${dsRatio.toFixed(1)}% das encomendas recentes operam na modalidade Dropshipping, permitindo manter um estoque físico leve e ágil sem imobilização de capital.`
+          title: '🔄 Eficiência de Estoque: Modelo de Dropshipping Ativo',
+          desc: `${dsRatio.toFixed(1)}% das encomendas operam via Dropshipping. Isso agiliza seu fluxo financeiro mantendo sua estrutura física com passivo zero de estoque.`
         });
       } else if (dsRatio > 0) {
         list.push({
           id: 'ds-hybrid',
           type: 'success',
-          title: 'Hibridismo Operacional de Estoque',
-          desc: `Modelo híbrido estável: ${dsRatio.toFixed(1)}% de suas vendas utilizam Dropshipping estratégico direto de fornecedores internacionais, enquanto a maior parte atende via estoque físico rápida-entrega.`
+          title: '⚖️ Flexibilidade Operacional: Modelo Híbrido Equilibrada',
+          desc: `Seu modelo híbrido une ${dsRatio.toFixed(1)}% de Dropshipping sob demanda a um estoque físico de giro rápido prontamente disponível.`
+        });
+      }
+    }
+
+    // NEW INSIGHT 9: Client Recurrence
+    if (customers.length > 0 && sales.length > 0) {
+      const purchaseCounts = customers.map(c => {
+        const cSales = sales.filter(s => s.customerId === c.id && s.status !== 'Pré-venda');
+        return cSales.length;
+      });
+      const loyalCustomers = purchaseCounts.filter(count => count > 1).length;
+      const loyaltyRate = (loyalCustomers / customers.length) * 100;
+
+      if (loyaltyRate > 25) {
+        list.push({
+          id: 'recurrence-high',
+          type: 'success',
+          title: '👥 Retenção de Clientes: Fidelidade e Consistência Elevada',
+          desc: `${loyaltyRate.toFixed(1)}% da sua carteira (${loyalCustomers} cliente(s)) é recorrente. Isso reduz o custo de aquisição e garante entradas futuras previsíveis.`
+        });
+      } else {
+        list.push({
+          id: 'recurrence-low',
+          type: 'info',
+          title: '✉️ Otimização de Clientes: Baixa Recorrência Ativa',
+          desc: `Apenas ${loyaltyRate.toFixed(1)}% dos seus clientes compraram mais de uma vez. Envie cupons de cashback ou promova ações no clube do WhatsApp para recuperá-los.`
+        });
+      }
+    }
+
+    // NEW INSIGHT 10: Logistics Resilience / Delivery times
+    const inTransitShipments = shipments.filter(s => s.status !== 'Entregue');
+    if (inTransitShipments.length > 0) {
+      list.push({
+        id: 'logistic-resilience',
+        type: 'info',
+        title: '📦 Logística Internacional: Trânsito e Desembaraço Ativo',
+        desc: `Existem ${inTransitShipments.length} lote(s) travessando portos e aduanas atualmente. Mantenha os clientes atualizados com o código de rastreamento para diminuir a ansiedade e manter a confiança.`
+      });
+    }
+
+    // NEW INSIGHT 11: Giro de Prateleira / SKU Variety
+    const activePhysicalProducts = products.filter(p => !p.isDropshipping && p.totalStock > 0);
+    const zeroStockProducts = products.filter(p => !p.isDropshipping && p.totalStock === 0);
+    if (zeroStockProducts.length > 0 && activePhysicalProducts.length > 0) {
+      const emptyRatio = (zeroStockProducts.length / products.length) * 100;
+      if (emptyRatio > 15) {
+        list.push({
+          id: 'skus-out-of-stock',
+          type: 'warning',
+          title: '🚨 Níveis Globais de SKU: Itens de Prateleira Esgotados',
+          desc: `${zeroStockProducts.length} produtos físicos (${emptyRatio.toFixed(1)}% do catálogo) estão com prateleiras vazias. Reabasteça antes que os concorrentes tomem a preferência.`
         });
       }
     }
 
     return list;
-  }, [products, sales, debtors, stats, getSaleBalance]);
+  }, [products, sales, debtors, stats, getSaleBalance, customers, shipments]);
   
   const supplierRanking = React.useMemo(() => {
     const ranking: Record<string, { 
@@ -901,14 +953,28 @@ export default function Dashboard() {
         <motion.div 
           initial={{ opacity: 0, scale: 0.98, y: 12 }}
           whileInView={{ opacity: 1, scale: 1, y: 0 }}
+          whileHover={{ scale: 1.03, y: -6, boxShadow: '0 25px 30px -5px rgba(16, 185, 129, 0.08), 0 10px 15px -6px rgba(16, 185, 129, 0.04)' }}
+          animate={{
+            boxShadow: ["0 1px 2px 0 rgba(0,0,0,0.05)", "0 10px 20px -3px rgba(16, 185, 129, 0.02)", "0 1px 2px 0 rgba(0,0,0,0.05)"]
+          }}
+          transition={{ 
+            boxShadow: { duration: 3, repeat: Infinity, ease: "easeInOut" },
+            scale: { duration: 0.2 },
+            y: { duration: 0.2 }
+          }}
           viewport={{ once: true }}
-          transition={{ duration: 0.4 }}
-          className="bg-white p-6 rounded-[28px] border border-slate-200 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col justify-between group h-full relative overflow-hidden"
+          className="bg-white p-6 rounded-[28px] border border-slate-200 shadow-sm transition-all flex flex-col justify-between group h-full relative overflow-hidden"
         >
           <div>
             <div className="flex justify-between items-center mb-4">
-              <span className="text-[9px] font-black tracking-widest uppercase text-slate-400">Financeiro Consolidado</span>
-              <div className="size-8 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center font-bold">
+              <div className="flex items-center gap-2">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-450 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+                <span className="text-[9px] font-black tracking-widest uppercase text-slate-400">Desempenho Comercial</span>
+              </div>
+              <div className="size-8 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center font-bold transition-transform group-hover:scale-110">
                 <TrendingUp size={16} />
               </div>
             </div>
@@ -921,18 +987,30 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="mt-6 pt-4 border-t border-slate-100/70 flex items-center justify-between">
-            <div>
-              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Lucro Líquido Real</span>
-              <span className="text-xs font-black text-emerald-600 font-mono tracking-tight tabular-nums">
-                {formatCurrency(stats.totalProfit)}
-              </span>
+          <div className="mt-5 space-y-3 pt-4 border-t border-slate-100/70">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Lucro Líquido Real</span>
+                <span className="text-xs font-black text-emerald-600 font-mono tracking-tight tabular-nums">
+                  {formatCurrency(stats.totalProfit)}
+                </span>
+              </div>
+              {stats.totalRevenue > 0 && (
+                <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 text-[10px] font-black rounded-lg uppercase tracking-wider font-mono">
+                  {((stats.totalProfit / stats.totalRevenue) * 100).toFixed(1)}% Margem
+                </span>
+              )}
             </div>
-            {stats.totalRevenue > 0 && (
-              <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 text-[10px] font-black rounded-lg uppercase tracking-wider font-mono">
-                {((stats.totalProfit / stats.totalRevenue) * 100).toFixed(1)}% Margem
-              </span>
-            )}
+
+            {/* Custom Profitability Progress Bar */}
+            <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+              <motion.div 
+                initial={{ width: 0 }}
+                animate={{ width: `${stats.totalRevenue > 0 ? Math.min(100, Math.max(0, (stats.totalProfit / stats.totalRevenue) * 100)) : 0}%` }}
+                transition={{ duration: 1, ease: 'easeOut' }}
+                className="h-full bg-emerald-500 rounded-full"
+              />
+            </div>
           </div>
         </motion.div>
 
@@ -940,16 +1018,36 @@ export default function Dashboard() {
         <motion.div 
           initial={{ opacity: 0, scale: 0.98, y: 12 }}
           whileInView={{ opacity: 1, scale: 1, y: 0 }}
+          whileHover={{ scale: 1.03, y: -6, boxShadow: '0 25px 30px -5px rgba(245, 158, 11, 0.08), 0 10px 15px -6px rgba(245, 158, 11, 0.04)' }}
+          animate={stats.totalDebt > 0 ? {
+            boxShadow: ["0 1px 2px 0 rgba(0,0,0,0.05)", "0 10px 20px -3px rgba(245, 158, 11, 0.04)", "0 1px 2px 0 rgba(0,0,0,0.05)"]
+          } : {}}
+          transition={{ 
+            boxShadow: { duration: 2.5, repeat: Infinity, ease: "easeInOut" },
+            scale: { duration: 0.2 },
+            y: { duration: 0.2 }
+          }}
           viewport={{ once: true }}
-          transition={{ duration: 0.4, delay: 0.05 }}
-          className="bg-white p-6 rounded-[28px] border border-slate-200 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col justify-between group h-full relative overflow-hidden"
+          className="bg-white p-6 rounded-[28px] border border-slate-200 shadow-sm transition-all flex flex-col justify-between group h-full relative overflow-hidden"
         >
           <div>
             <div className="flex justify-between items-center mb-4">
-              <span className="text-[9px] font-black tracking-widest uppercase text-slate-400">Crédito & Recebimentos</span>
+              <div className="flex items-center gap-2">
+                <span className="relative flex h-2 w-2">
+                  <span className={cn(
+                    "animate-ping absolute inline-flex h-full w-full rounded-full opacity-75",
+                    stats.totalDebt > 0 ? "bg-amber-400" : "bg-emerald-400"
+                  )}></span>
+                  <span className={cn(
+                    "relative inline-flex rounded-full h-2 w-2",
+                    stats.totalDebt > 0 ? "bg-amber-500" : "bg-emerald-500"
+                  )}></span>
+                </span>
+                <span className="text-[9px] font-black tracking-widest uppercase text-slate-400">Crédito & Liquidez</span>
+              </div>
               <div className={cn(
-                "size-8 rounded-xl flex items-center justify-center font-bold",
-                stats.totalDebt > 0 ? "bg-amber-50 text-amber-600 animate-pulse" : "bg-emerald-50 text-emerald-600"
+                "size-8 rounded-xl flex items-center justify-center font-bold transition-transform group-hover:scale-110",
+                stats.totalDebt > 0 ? "bg-amber-50 text-amber-600" : "bg-emerald-50 text-emerald-600"
               )}>
                 <Wallet size={16} />
               </div>
@@ -963,7 +1061,7 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="mt-5 pt-4 border-t border-slate-100/70 space-y-2">
+          <div className="mt-5 pt-4 border-t border-slate-100/70 space-y-3">
             <div className="flex items-center justify-between">
               <div>
                 <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Eficiência de Caixa</span>
@@ -978,13 +1076,14 @@ export default function Dashboard() {
                 {debtors.length} Contas
               </span>
             </div>
-            {/* Soft inline progress bar */}
-            <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+            {/* Soft inline progress bar with pulsating progress */}
+            <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden relative">
               <motion.div 
                 initial={{ width: 0 }}
                 animate={{ width: `${stats.efficiencyRatio}%` }}
+                transition={{ duration: 1.2, ease: 'easeOut' }}
                 className={cn(
-                  "h-full rounded-full",
+                  "h-full rounded-full relative",
                   stats.efficiencyRatio > 85 ? "bg-emerald-500" : "bg-amber-500"
                 )}
               />
@@ -996,14 +1095,28 @@ export default function Dashboard() {
         <motion.div 
           initial={{ opacity: 0, scale: 0.98, y: 12 }}
           whileInView={{ opacity: 1, scale: 1, y: 0 }}
+          whileHover={{ scale: 1.03, y: -6, boxShadow: '0 25px 30px -5px rgba(59, 130, 246, 0.08), 0 10px 15px -6px rgba(59, 130, 246, 0.04)' }}
+          animate={{
+            boxShadow: ["0 1px 2px 0 rgba(0,0,0,0.05)", "0 10px 20px -3px rgba(59, 130, 246, 0.02)", "0 1px 2px 0 rgba(0,0,0,0.05)"]
+          }}
+          transition={{ 
+            boxShadow: { duration: 3.2, repeat: Infinity, ease: "easeInOut" },
+            scale: { duration: 0.2 },
+            y: { duration: 0.2 }
+          }}
           viewport={{ once: true }}
-          transition={{ duration: 0.4, delay: 0.1 }}
-          className="bg-white p-6 rounded-[28px] border border-slate-200 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col justify-between group h-full relative overflow-hidden"
+          className="bg-white p-6 rounded-[28px] border border-slate-200 shadow-sm transition-all flex flex-col justify-between group h-full relative overflow-hidden"
         >
           <div>
             <div className="flex justify-between items-center mb-4">
-              <span className="text-[9px] font-black tracking-widest uppercase text-slate-400">Eficiência de Custos</span>
-              <div className="size-8 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center font-bold">
+              <div className="flex items-center gap-2">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                </span>
+                <span className="text-[9px] font-black tracking-widest uppercase text-slate-400">Controle Operacional</span>
+              </div>
+              <div className="size-8 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center font-bold transition-transform group-hover:scale-110">
                 <Activity size={16} />
               </div>
             </div>
@@ -1016,18 +1129,30 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="mt-6 pt-4 border-t border-slate-100/70 flex items-center justify-between">
-            <div>
-              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Despesas Operacionais</span>
-              <span className="text-xs font-black text-slate-700 font-mono tracking-tight tabular-nums animate-pulse">
-                {formatCurrency(stats.totalExpenses)}
-              </span>
+          <div className="mt-5 space-y-3 pt-4 border-t border-slate-100/70">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Despesas Operacionais</span>
+                <span className="text-xs font-black text-slate-700 font-mono tracking-tight tabular-nums">
+                  {formatCurrency(stats.totalExpenses)}
+                </span>
+              </div>
+              {stats.totalRevenue > 0 && (
+                <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-[10px] font-bold rounded-lg uppercase tracking-wider font-mono">
+                  {((stats.totalExpenses / stats.totalRevenue) * 100).toFixed(1)}% do Fatur.
+                </span>
+              )}
             </div>
-            {stats.totalRevenue > 0 && (
-              <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-[9px] font-bold rounded-lg uppercase tracking-wider">
-                {((stats.totalExpenses / stats.totalRevenue) * 100).toFixed(1)}% do Fatur.
-              </span>
-            )}
+
+            {/* Expenses vs Revenue Progress Bar */}
+            <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+              <motion.div 
+                initial={{ width: 0 }}
+                animate={{ width: `${stats.totalRevenue > 0 ? Math.min(100, Math.max(0, (stats.totalExpenses / stats.totalRevenue) * 100)) : 0}%` }}
+                transition={{ duration: 1, ease: 'easeOut' }}
+                className="h-full bg-blue-500 rounded-full"
+              />
+            </div>
           </div>
         </motion.div>
 
@@ -1035,38 +1160,64 @@ export default function Dashboard() {
         <motion.div 
           initial={{ opacity: 0, scale: 0.98, y: 12 }}
           whileInView={{ opacity: 1, scale: 1, y: 0 }}
+          whileHover={{ scale: 1.03, y: -6, boxShadow: '0 25px 30px -5px rgba(124, 58, 237, 0.08), 0 10px 15px -6px rgba(124, 58, 237, 0.04)' }}
+          animate={{
+            boxShadow: ["0 1px 2px 0 rgba(0,0,0,0.05)", "0 10px 20px -3px rgba(124, 58, 237, 0.02)", "0 1px 2px 0 rgba(0,0,0,0.05)"]
+          }}
+          transition={{ 
+            boxShadow: { duration: 3.5, repeat: Infinity, ease: "easeInOut" },
+            scale: { duration: 0.2 },
+            y: { duration: 0.2 }
+          }}
           viewport={{ once: true }}
-          transition={{ duration: 0.4, delay: 0.15 }}
-          className="bg-white p-6 rounded-[28px] border border-slate-200 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col justify-between group h-full relative overflow-hidden"
+          className="bg-white p-6 rounded-[28px] border border-slate-200 shadow-sm transition-all flex flex-col justify-between group h-full relative overflow-hidden"
         >
           <div>
             <div className="flex justify-between items-center mb-4">
-              <span className="text-[9px] font-black tracking-widest uppercase text-slate-400">Logística & Aduana</span>
-              <div className="size-8 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center font-bold">
+              <div className="flex items-center gap-2">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-purple-500"></span>
+                </span>
+                <span className="text-[9px] font-black tracking-widest uppercase text-slate-400">Importação & Logística</span>
+              </div>
+              <div className="size-8 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center font-bold transition-transform group-hover:scale-110">
                 <Truck size={16} />
               </div>
             </div>
             
             <div className="space-y-1">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Tributação de Importação</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Tributação Aduaneira Geral</span>
               <h3 className="text-2xl font-black text-slate-900 font-display tracking-tight leading-none uppercase tabular-nums">
                 {formatCurrency(stats.paidTaxes + stats.pendingTaxes)}
               </h3>
             </div>
           </div>
 
-          <div className="mt-6 pt-4 border-t border-slate-100/70 flex items-center justify-between">
-            <div>
-              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Logística Ativa</span>
-              <span className="text-xs font-black text-purple-750 font-mono tracking-tight">
-                {shipments.filter(s => s.status !== 'Entregue').length} Lotes Ativos
-              </span>
+          <div className="mt-5 space-y-3 pt-4 border-t border-slate-100/70">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Logística Ativa</span>
+                <span className="text-xs font-black text-purple-700 font-mono tracking-tight">
+                  {shipments.filter(s => s.status !== 'Entregue').length} Lotes Ativos
+                </span>
+              </div>
+              {stats.totalOrders > 0 && (
+                <span className="px-2 py-0.5 bg-purple-50 text-purple-700 text-[10px] font-black rounded-lg uppercase tracking-wider font-mono">
+                  {((stats.dropshippingOrders / stats.totalOrders) * 100).toFixed(1)}% Dropship
+                </span>
+              )}
             </div>
-            {stats.totalOrders > 0 && (
-              <span className="px-2 py-0.5 bg-purple-50 text-purple-700 text-[9px] font-black rounded-lg uppercase tracking-wider font-mono">
-                {((stats.dropshippingOrders / stats.totalOrders) * 100).toFixed(1)}% Dropship
-              </span>
-            )}
+
+            {/* Logistics Status Progress Bar */}
+            <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+              <motion.div 
+                initial={{ width: 0 }}
+                animate={{ width: `${stats.totalOrders > 0 ? Math.min(100, Math.max(0, (stats.dropshippingOrders / stats.totalOrders) * 100)) : 0}%` }}
+                transition={{ duration: 1, ease: 'easeOut' }}
+                className="h-full bg-purple-500 rounded-full"
+              />
+            </div>
           </div>
         </motion.div>
       </div>

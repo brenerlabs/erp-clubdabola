@@ -102,7 +102,7 @@ service cloud.firestore {
     }
 
     match /settings/{settingId} {
-      allow read: if isSignedIn();
+      allow read: if (settingId == 'appearance') || isSignedIn();
       allow write: if isAdmin();
     }
 

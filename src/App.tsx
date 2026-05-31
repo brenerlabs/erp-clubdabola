@@ -15,7 +15,7 @@ import {
   Truck,
   Camera
 } from 'lucide-react';
-import { auth, db } from './lib/firebase';
+import { auth, db, handleFirestoreError, OperationType } from './lib/firebase';
 import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'motion/react';
@@ -50,6 +50,7 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string>('');
+  const [logoScale, setLogoScale] = useState<number>(1.0);
 
   // Sync Global Settings & Logo
   useEffect(() => {
@@ -62,11 +63,20 @@ export default function App() {
       }
     }
 
+    const cachedScale = localStorage.getItem('erp-custom-logo-scale');
+    if (cachedScale) {
+      setLogoScale(parseFloat(cachedScale) || 1.0);
+    }
+
     const settingsRef = doc(db, 'settings', 'appearance');
     const unsubscribeLogo = onSnapshot(settingsRef, (docSnap) => {
       if (docSnap.exists()) {
         const url = docSnap.data().logoUrl || '';
+        const scale = docSnap.data().logoScale ?? 1.0;
         setLogoUrl(url);
+        setLogoScale(scale);
+        
+        localStorage.setItem('erp-custom-logo-scale', scale.toString());
         if (url) {
           localStorage.setItem('erp-custom-logo', url);
           const faviconLink = document.querySelector("link[rel*='icon']");
@@ -77,10 +87,13 @@ export default function App() {
           localStorage.removeItem('erp-custom-logo');
         }
       }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'settings/appearance');
     });
 
     const handleLogoUpdated = (e: any) => {
       setLogoUrl(e.detail?.logoUrl || '');
+      setLogoScale(e.detail?.logoScale ?? 1.0);
     };
     window.addEventListener('logo-updated', handleLogoUpdated);
 
@@ -161,8 +174,20 @@ export default function App() {
           <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-red-900 via-amber-600 to-red-900" />
           
           <div className="flex flex-col items-center justify-center gap-4 mb-10">
-            <div className="w-16 h-16 rounded-3xl flex items-center justify-center shadow-2xl border bg-red-800 border-red-700">
-              <LayoutDashboard size={32} className="text-white" />
+            <div className="w-16 h-16 rounded-3xl flex items-center justify-center shadow-2xl border bg-white border-slate-200 overflow-hidden relative">
+              {logoUrl ? (
+                <img 
+                  src={logoUrl} 
+                  alt="Logo" 
+                  className="w-full h-full object-cover rounded-3xl transition-transform duration-300" 
+                  style={{ transform: `scale(${logoScale})` }}
+                  referrerPolicy="no-referrer" 
+                />
+              ) : (
+                <div className="w-full h-full bg-red-800 flex items-center justify-center rounded-3xl">
+                  <LayoutDashboard size={32} className="text-white" />
+                </div>
+              )}
             </div>
             <div>
               <h1 className="text-3xl font-bold tracking-tight text-slate-900 font-display">
@@ -238,7 +263,13 @@ export default function App() {
               >
                 <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-white border border-slate-850 shadow-lg group-hover:scale-110 transition-transform overflow-hidden relative">
                   {logoUrl ? (
-                    <img src={logoUrl} alt="Logo ERP" className="w-full h-full object-cover rounded-lg" referrerPolicy="no-referrer" />
+                    <img 
+                      src={logoUrl} 
+                      alt="Logo ERP" 
+                      className="w-full h-full object-cover rounded-lg transition-transform duration-300" 
+                      style={{ transform: `scale(${logoScale})` }}
+                      referrerPolicy="no-referrer" 
+                    />
                   ) : (
                     <LayoutDashboard size={18} className="text-slate-900" />
                   )}
@@ -333,7 +364,13 @@ export default function App() {
                 <div className="flex items-center gap-2 group cursor-pointer" onClick={() => setActivePage('dashboard')}>
                   <div className="w-8 h-8 rounded-lg flex items-center justify-center shadow-lg transition-transform bg-transparent shadow-slate-200/30 overflow-hidden border border-slate-200/80 relative">
                     {logoUrl ? (
-                      <img src={logoUrl} alt="Logo" className="w-full h-full object-cover rounded-lg" referrerPolicy="no-referrer" />
+                      <img 
+                        src={logoUrl} 
+                        alt="Logo" 
+                        className="w-full h-full object-cover rounded-lg transition-transform duration-300" 
+                        style={{ transform: `scale(${logoScale})` }}
+                        referrerPolicy="no-referrer" 
+                      />
                     ) : (
                       <LayoutDashboard size={16} className="text-amber-600" />
                     )}
