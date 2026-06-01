@@ -309,11 +309,30 @@ export default function Customers() {
     doc.setTextColor(239, 68, 68); // Soft Red text
     doc.text('ERP SYSTEM • HISTÓRICO FINANCEIRO CONSOLIDADO', 14, 25);
 
+    const customLogoUrl = localStorage.getItem('erp-custom-logo');
+    let hasLogo = false;
+
+    if (customLogoUrl) {
+      try {
+        let format = 'PNG';
+        if (customLogoUrl.includes('image/jpeg') || customLogoUrl.includes('image/jpg')) {
+          format = 'JPEG';
+        } else if (customLogoUrl.includes('image/webp')) {
+          format = 'WEBP';
+        }
+        // Place the logo on the right side of the header
+        doc.addImage(customLogoUrl, format, 168, 4, 34, 34, undefined, 'FAST');
+        hasLogo = true;
+      } catch (imgError) {
+        console.error("Error drawing custom logo in PDF:", imgError);
+      }
+    }
+
     doc.setFont('Helvetica', 'normal');
     doc.setFontSize(10);
     doc.setTextColor(203, 213, 225); // slate-300
     doc.text(`EXTRATO DE AUDITORIA E COMPRAS`, 14, 32);
-    doc.text(`Gerado em: ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR')}`, 140, 32);
+    doc.text(`Gerado em: ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR')}`, hasLogo ? 105 : 140, 32);
 
     // Customer Identity Section
     doc.setDrawColor(226, 232, 240); // slate-200

@@ -51,6 +51,8 @@ export interface Sale {
   paymentMethod: 'Dinheiro' | 'Cartão' | 'Pix' | 'Fiado';
   status: 'Concluída' | 'Pendente' | 'Pré-venda';
   createdAt: any;
+  history?: any[];
+  debtAmount?: number;
 }
 
 export interface ShipmentItem {

@@ -189,10 +189,82 @@ export default function Finance() {
 
   const exportToPDF = () => {
     const doc = new jsPDF();
-    doc.text('Relatório Financeiro - ERP Club da Bola', 14, 15);
-    doc.text(`Faturamento: ${formatCurrency(totalInvoiced)}`, 14, 25);
-    doc.text(`Fluxo de Caixa: ${formatCurrency(cashFlow)}`, 14, 32);
-    doc.text(`Contas a Receber: ${formatCurrency(accountsReceivable)}`, 14, 39);
+    const now = new Date();
+
+    // 1. PDF Header (Slate Executive Theme)
+    doc.setFillColor(15, 23, 42); // slate-900 (Dark Slate Background for Header)
+    doc.rect(0, 0, 210, 42, 'F');
+
+    // Header Title
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(22);
+    doc.setTextColor(255, 255, 255);
+    doc.text('CLUB DA BOLA', 14, 18);
+
+    doc.setFontSize(9);
+    doc.setTextColor(239, 68, 68); // Soft Red text
+    doc.text('ERP SYSTEM • RELATÓRIO FINANCEIRO GERAL', 14, 25);
+
+    const customLogoUrl = localStorage.getItem('erp-custom-logo');
+    let hasLogo = false;
+
+    if (customLogoUrl) {
+      try {
+        let format = 'PNG';
+        if (customLogoUrl.includes('image/jpeg') || customLogoUrl.includes('image/jpg')) {
+          format = 'JPEG';
+        } else if (customLogoUrl.includes('image/webp')) {
+          format = 'WEBP';
+        }
+        // Place the logo on the right side of the header
+        doc.addImage(customLogoUrl, format, 168, 4, 34, 34, undefined, 'FAST');
+        hasLogo = true;
+      } catch (imgError) {
+        console.error("Error drawing custom logo in PDF:", imgError);
+      }
+    }
+
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(203, 213, 225); // slate-300
+    doc.text(`EXTRATO COMPLETO DE TRANSAÇÕES`, 14, 32);
+    doc.text(`Gerado em: ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR')}`, hasLogo ? 105 : 140, 32);
+
+    // Summary block (Slate style)
+    doc.setDrawColor(226, 232, 240); // slate-200
+    doc.setFillColor(248, 250, 252); // slate-50
+    doc.roundedRect(14, 50, 182, 38, 4, 4, 'FD');
+
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(15, 23, 42);
+    doc.text('RESUMO DO BALANÇO FINANCEIRO', 20, 58);
+
+    doc.setDrawColor(226, 232, 240);
+    doc.line(20, 62, 190, 62);
+
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(71, 85, 105);
+
+    doc.text(`Faturamento Total:`, 20, 68);
+    doc.setFont('Helvetica', 'bold');
+    doc.setTextColor(15, 23, 42);
+    doc.text(formatCurrency(totalInvoiced), 65, 68);
+
+    doc.setFont('Helvetica', 'normal');
+    doc.setTextColor(71, 85, 105);
+    doc.text(`Fluxo de Caixa Líquido:`, 20, 74);
+    doc.setFont('Helvetica', 'bold');
+    doc.setTextColor(15, 23, 42);
+    doc.text(formatCurrency(cashFlow), 65, 74);
+
+    doc.setFont('Helvetica', 'normal');
+    doc.setTextColor(71, 85, 105);
+    doc.text(`Total Contas a Receber:`, 20, 80);
+    doc.setFont('Helvetica', 'bold');
+    doc.setTextColor(15, 23, 42);
+    doc.text(formatCurrency(accountsReceivable), 65, 80);
 
     const tableData = transactions.filter(t => filter === 'all' || t.type === filter).map(t => [
       t.type === 'payment' ? 'Amortização' : 'Venda a Prazo',
@@ -201,7 +273,7 @@ export default function Finance() {
     ]);
 
     autoTable(doc, {
-      startY: 50,
+      startY: 94,
       head: [['Natureza', 'Data', 'Montante']],
       body: tableData,
     });
@@ -353,11 +425,30 @@ export default function Finance() {
     doc.setTextColor(239, 68, 68); // Soft Red text
     doc.text('ERP SYSTEM • AUDITORIA FINANCEIRA INTEGRADA', 14, 25);
 
+    const customLogoUrl = localStorage.getItem('erp-custom-logo');
+    let hasLogo = false;
+
+    if (customLogoUrl) {
+      try {
+        let format = 'PNG';
+        if (customLogoUrl.includes('image/jpeg') || customLogoUrl.includes('image/jpg')) {
+          format = 'JPEG';
+        } else if (customLogoUrl.includes('image/webp')) {
+          format = 'WEBP';
+        }
+        // Place the logo on the right side of the header
+        doc.addImage(customLogoUrl, format, 168, 4, 34, 34, undefined, 'FAST');
+        hasLogo = true;
+      } catch (imgError) {
+        console.error("Error drawing custom logo in PDF:", imgError);
+      }
+    }
+
     doc.setFont('Helvetica', 'normal');
     doc.setFontSize(10);
     doc.setTextColor(203, 213, 225); // slate-300
     doc.text(`RELATÓRIO DE FECHAMENTO MENSAL - ${formattedPeriod.toUpperCase()}`, 14, 32);
-    doc.text(`Gerado em: ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR')}`, 140, 32);
+    doc.text(`Gerado em: ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR')}`, hasLogo ? 105 : 140, 32);
 
     // Summary Box
     doc.setDrawColor(226, 232, 240); // slate-200

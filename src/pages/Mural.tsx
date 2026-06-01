@@ -564,7 +564,7 @@ export default function Mural() {
                         <button
                           type="button"
                           onClick={async () => {
-                            const nextScale = Math.max(1.0, logoScale - 0.1);
+                            const nextScale = Math.max(0.1, logoScale - 0.1);
                             setLogoScale(nextScale);
                             const settingsRef = doc(db, 'settings', 'appearance');
                             await setDoc(settingsRef, { logoScale: nextScale }, { merge: true });

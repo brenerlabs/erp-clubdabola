@@ -106,11 +106,30 @@ export default function Products() {
     doc.setTextColor(239, 68, 68); // Soft Red text
     doc.text('ERP SYSTEM • RELATÓRIO FINANCEIRO E DESEMPENHO DE PRODUTO', 14, 25);
 
+    const customLogoUrl = localStorage.getItem('erp-custom-logo');
+    let hasLogo = false;
+
+    if (customLogoUrl) {
+      try {
+        let format = 'PNG';
+        if (customLogoUrl.includes('image/jpeg') || customLogoUrl.includes('image/jpg')) {
+          format = 'JPEG';
+        } else if (customLogoUrl.includes('image/webp')) {
+          format = 'WEBP';
+        }
+        // Place the logo on the right side of the header
+        doc.addImage(customLogoUrl, format, 168, 4, 34, 34, undefined, 'FAST');
+        hasLogo = true;
+      } catch (imgError) {
+        console.error("Error drawing custom logo in PDF:", imgError);
+      }
+    }
+
     doc.setFont('Helvetica', 'normal');
     doc.setFontSize(10);
     doc.setTextColor(203, 213, 225); // slate-300
     doc.text(`DESEMPENHO COMERCIAL DE PRODUTO`, 14, 32);
-    doc.text(`Gerado em: ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR')}`, 140, 32);
+    doc.text(`Gerado em: ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR')}`, hasLogo ? 105 : 140, 32);
 
     // 2. Product Identity Section
     doc.setDrawColor(226, 232, 240); // slate-200
@@ -512,6 +531,51 @@ export default function Products() {
     };
   }, [products]);
 
+  const sizeAnalysis = React.useMemo(() => {
+    const counts: Record<string, { size: string; quantity: number; revenue: number }> = {};
+    sales.forEach(sale => {
+      if (sale.status === 'Pré-venda') return;
+      (sale.items || []).forEach(item => {
+        const cleaned = cleanVariationName(item.variationName);
+        if (!cleaned) return;
+        
+        const mainSize = cleaned.split('/')[0].trim();
+        if (!mainSize) return;
+        
+        if (!counts[mainSize]) {
+          counts[mainSize] = { size: mainSize, quantity: 0, revenue: 0 };
+        }
+        counts[mainSize].quantity += item.quantity;
+        counts[mainSize].revenue += (item.price * item.quantity);
+      });
+    });
+
+    const list = Object.values(counts);
+    list.sort((a, b) => b.quantity - a.quantity);
+    
+    const totalQty = list.reduce((sum, item) => sum + item.quantity, 0);
+    
+    let accumulated = 0;
+    return list.map((item, idx) => {
+      accumulated += item.quantity;
+      const pct = totalQty > 0 ? (item.quantity / totalQty) : 0;
+      const accPct = totalQty > 0 ? (accumulated / totalQty) : 0;
+      
+      let abcClass: 'A' | 'B' | 'C' = 'C';
+      if (accPct <= 0.70 || idx === 0) {
+        abcClass = 'A';
+      } else if (accPct <= 0.90 || idx === 1) {
+        abcClass = 'B';
+      }
+      
+      return {
+        ...item,
+        percentage: pct * 100,
+        class: abcClass
+      };
+    });
+  }, [sales]);
+
   const filtered = products.filter(p => {
     const searchTerm = search.toLowerCase();
     
@@ -673,6 +737,108 @@ export default function Products() {
            </div>
         </div>
       </div>
+
+      {sizeAnalysis.length > 0 && (
+        <motion.div 
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-gradient-to-br from-slate-900 to-slate-950 text-white rounded-[32px] p-6 sm:p-8 border border-white/5 shadow-xl relative overflow-hidden mb-6"
+        >
+          {/* Grid Pattern overlay */}
+          <div className="absolute inset-0 opacity-[0.02] pointer-events-none mix-blend-overlay bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:16px_16px]" />
+          
+          <div className="relative z-10 flex flex-col xl:flex-row gap-8 items-stretch font-sans">
+            {/* Left Block: Description with Smart Advice */}
+            <div className="flex-1 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="size-10 bg-red-800 rounded-xl flex items-center justify-center text-white shadow-lg shadow-red-900/20">
+                  <TrendingUp size={20} className="text-amber-500" />
+                </div>
+                <div>
+                  <span className="text-[9px] font-black tracking-widest text-amber-500 uppercase block leading-none">Grade de Estoque Inteligente</span>
+                  <h3 className="text-lg font-bold tracking-tight mt-1 uppercase font-display leading-tight">Curva ABC de Variações</h3>
+                </div>
+              </div>
+              
+              <p className="text-xs text-white/60 leading-relaxed">
+                Seu caixa registrou <span className="font-bold text-white">{sizeAnalysis.length} tamanhos/grades</span> distintas vendidas. Esta ferramenta analisa a frequência de liquidez para direcionar sua compra de mercadoria, evitando imobilizar capital em grades que ficam paradas no estoque.
+              </p>
+
+              {/* Automated AI insights box */}
+              {(() => {
+                const classA = sizeAnalysis.filter(s => s.class === 'A').map(s => s.size);
+                const classC = sizeAnalysis.filter(s => s.class === 'C').map(s => s.size);
+                return (
+                   <div className="bg-white/5 border border-white/5 rounded-2xl p-4 text-xs space-y-2">
+                     <p className="font-bold text-amber-400 uppercase tracking-widest text-[9px] leading-none">Insight do Algoritmo</p>
+                     <p className="text-white/85 leading-relaxed">
+                       {classA.length > 0 ? (
+                         <span>Seus tamanhos mais quentes e com maior frequência de venda são os da classe A (<span className="text-emerald-400 font-bold">{classA.join(', ')}</span>). Certifique-se de mantê-los sempre reabastecidos. </span>
+                       ) : null}
+                       {classC.length > 0 ? (
+                         <span>Por outro lado, as grades (<span className="text-rose-400 font-semibold">{classC.join(', ')}</span>) operam com liquidez reduzida (Classe C). Adquira em baixas frações para evitar encalhar estoque.</span>
+                       ) : null}
+                     </p>
+                   </div>
+                );
+              })()}
+            </div>
+
+            {/* Right Block: Interactive visual grid with Liquidity classes */}
+            <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3 min-w-0">
+              {sizeAnalysis.slice(0, 6).map((item) => {
+                const classColors = {
+                  A: "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-emerald-900/10",
+                  B: "bg-amber-500/10 border-amber-500/20 text-amber-400 shadow-amber-900/10",
+                  C: "bg-slate-800/10 border-white/5 text-slate-400 shadow-transparent"
+                };
+
+                const adviceLabel = {
+                  A: "Estocar Forte",
+                  B: "Manter Moderado",
+                  C: "Estoque Baixo"
+                };
+
+                return (
+                  <div 
+                    key={item.size}
+                    className={cn(
+                      "p-4 rounded-2xl border flex flex-col justify-between hover:scale-[1.02] transition-all/30 backdrop-blur-sm shadow-md",
+                      classColors[item.class]
+                    )}
+                  >
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <span className="text-[9px] font-black uppercase tracking-wider block opacity-70 leading-none">Tamanho</span>
+                        <span className="text-xl font-bold font-display italic tracking-tight block mt-1">{item.size}</span>
+                      </div>
+                      <span className={cn(
+                        "text-[8px] font-black px-2 py-1 rounded-md uppercase tracking-widest leading-none border",
+                        item.class === 'A' ? "bg-emerald-500 text-slate-950 border-emerald-400" :
+                        item.class === 'B' ? "bg-amber-500 text-slate-950 border-amber-400" :
+                        "bg-slate-800 border-white/10 text-white"
+                      )}>
+                        Classe {item.class}
+                      </span>
+                    </div>
+
+                    <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between">
+                      <div>
+                        <p className="text-[8px] font-bold uppercase tracking-wider opacity-60 leading-none">Vendidos</p>
+                        <p className="text-xs font-mono font-black italic mt-1 tabular-nums">{item.quantity} un <span className="opacity-40 font-normal text-[9px]">({item.percentage.toFixed(1)}%)</span></p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[8px] font-bold uppercase tracking-wider opacity-60 leading-none">Diretriz</p>
+                        <p className="text-[10px] font-black uppercase tracking-widest mt-1 italic">{adviceLabel[item.class]}</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </motion.div>
+      )}
 
       <div className="bg-white rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
         {/* Desktop Table View */}

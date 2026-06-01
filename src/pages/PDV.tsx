@@ -164,6 +164,119 @@ export default function PDV() {
     }
   };
 
+  const convertPreSaleToSaleDirect = async (preSale: Sale) => {
+    if (!confirm(`Deseja faturar e finalizar o Orçamento #${preSale.id?.slice(-6).toUpperCase()} diretamente agora? O estoque será atualizado.`)) return;
+
+    setIsFinishing(true);
+    try {
+      const batch = writeBatch(db);
+      const saleRef = doc(db, 'sales', preSale.id!);
+
+      const subtotal = preSale.subtotal;
+      const finalDiscount = preSale.discount;
+      const finalDownPayment = preSale.downPayment || 0;
+      const saleTotal = preSale.total;
+      const debtAmount = preSale.paymentMethod === 'Fiado' ? Math.max(0, saleTotal - finalDownPayment) : 0;
+      const finalStatus = preSale.paymentMethod === 'Fiado' && debtAmount > 0 ? 'Pendente' : 'Concluída';
+      const finalDate = new Date();
+
+      // 1. Update Sale Status & History
+      const updatedHistory = [
+        ...(preSale.history || []),
+        {
+          status: finalStatus,
+          updatedAt: finalDate,
+          notes: 'Orçamento faturado diretamente com um clique'
+        }
+      ];
+
+      batch.update(saleRef, cleanObject({
+        status: finalStatus,
+        history: updatedHistory,
+        createdAt: finalDate,
+        debtAmount
+      }));
+
+      // 2. Update Stock (Skip for dropshipping)
+      preSale.items.forEach(item => {
+        if (item.isDropshipping) return;
+
+        const product = products.find(p => p.id === item.productId);
+        if (product) {
+          const nextVariations = product.variations.map(v => 
+            v.id === item.variationId ? { ...v, stock: Math.max(0, v.stock - item.quantity) } : v
+          );
+          const nextTotalStock = nextVariations.reduce((acc, v) => acc + v.stock, 0);
+
+          batch.update(doc(db, 'products', item.productId), cleanObject({
+            variations: nextVariations,
+            totalStock: nextTotalStock,
+            updatedAt: serverTimestamp()
+          }));
+        }
+      });
+
+      // 3. Update Customer Debt & Transactions
+      if (preSale.customerId) {
+        const customer = customers.find(c => c.id === preSale.customerId);
+        if (customer) {
+          if (preSale.paymentMethod === 'Fiado') {
+            if (finalDownPayment > 0) {
+              const entryTransRef = doc(collection(db, 'transactions'));
+              batch.set(entryTransRef, cleanObject({
+                customerId: preSale.customerId,
+                amount: finalDownPayment,
+                type: 'payment',
+                paymentMethod: 'Dinheiro',
+                saleId: preSale.id,
+                createdAt: finalDate
+              }));
+            }
+
+            if (debtAmount > 0) {
+              batch.update(doc(db, 'customers', preSale.customerId), cleanObject({
+                totalDebt: Math.max(0, (customer.totalDebt || 0) + debtAmount),
+                updatedAt: serverTimestamp()
+              }));
+
+              const debtTransRef = doc(collection(db, 'transactions'));
+              batch.set(debtTransRef, cleanObject({
+                customerId: preSale.customerId,
+                amount: debtAmount,
+                type: 'debt',
+                saleId: preSale.id,
+                createdAt: finalDate
+              }));
+            }
+          } else {
+            const transRef = doc(collection(db, 'transactions'));
+            batch.set(transRef, cleanObject({
+              customerId: preSale.customerId,
+              amount: saleTotal,
+              type: 'payment',
+              paymentMethod: preSale.paymentMethod || 'Dinheiro',
+              saleId: preSale.id,
+              createdAt: finalDate
+            }));
+          }
+        }
+      }
+
+      await batch.commit();
+      alert(`Orçamento #${preSale.id?.slice(-6).toUpperCase()} faturado e finalizado com sucesso!`);
+      
+      if (loadedPreSaleId === preSale.id) {
+        setLoadedPreSaleId(null);
+        setCart([]);
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Erro ao faturar orçamento diretamente.");
+    } finally {
+      setIsFinishing(false);
+    }
+  };
+
   const finishSale = async (isPreSale = false) => {
     if (cart.length === 0) return;
     if (!isPreSale && paymentMethod === 'Fiado' && !selectedCustomer) {
@@ -464,11 +577,30 @@ export default function PDV() {
     doc.setTextColor(239, 68, 68); // Soft Red text
     doc.text('ERP SYSTEM • ORÇAMENTO DE PRODUTOS', 14, 25);
 
+    const customLogoUrl = localStorage.getItem('erp-custom-logo');
+    let hasLogo = false;
+
+    if (customLogoUrl) {
+      try {
+        let format = 'PNG';
+        if (customLogoUrl.includes('image/jpeg') || customLogoUrl.includes('image/jpg')) {
+          format = 'JPEG';
+        } else if (customLogoUrl.includes('image/webp')) {
+          format = 'WEBP';
+        }
+        // Place the logo on the right side of the header
+        doc.addImage(customLogoUrl, format, 168, 4, 34, 34, undefined, 'FAST');
+        hasLogo = true;
+      } catch (imgError) {
+        console.error("Error drawing custom logo in PDF:", imgError);
+      }
+    }
+
     doc.setFont('Helvetica', 'normal');
     doc.setFontSize(10);
     doc.setTextColor(203, 213, 225); // slate-300
     doc.text(`PROPOSTA COMERCIAL / PRÉ-VENDA COMERCIAL`, 14, 32);
-    doc.text(`Gerado em: ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR')}`, 140, 32);
+    doc.text(`Gerado em: ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR')}`, hasLogo ? 105 : 140, 32);
 
     // Club da Bola info section on header right or subheader
     // Let's make an organization details card
@@ -505,7 +637,7 @@ export default function PDV() {
     doc.text(`Emissor:`, 20, 80);
     doc.setFont('Helvetica', 'bold');
     doc.setTextColor(15, 23, 42);
-    doc.text(`Club da Bola Sports`, 60, 80);
+    doc.text(`Club da Bola`, 60, 80);
 
     // Contato Club da Bola block
     doc.setFillColor(254, 243, 199); // amber-50
@@ -1006,7 +1138,7 @@ export default function PDV() {
                 activeTab === 'prevendas' ? "bg-red-800 text-white shadow-lg" : "text-white/40 hover:text-white"
               )}
             >
-              Pré-Vendas
+              Orçamentos / Pré-Vendas
               {sales.filter(s => s.status === 'Pré-venda').length > 0 && (
                 <span className="absolute -top-1 -right-1 bg-amber-500 text-black text-[8px] font-black px-1.5 py-0.5 rounded-full animate-bounce">
                   {sales.filter(s => s.status === 'Pré-venda').length}
@@ -1303,7 +1435,7 @@ export default function PDV() {
               </>
             ) : (
               <div className="flex-1 flex flex-col min-h-0 relative">
-                <div className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-4 px-1">Pré-vendas Ativas ({sales.filter(s => s.status === 'Pré-venda').length})</div>
+                <div className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-4 px-1">Orçamentos e Pré-Vendas ({sales.filter(s => s.status === 'Pré-venda').length})</div>
                 
                 <div className="flex-1 overflow-y-auto pr-1 -mr-1 custom-scrollbar space-y-3 pb-6">
                   {sales.filter(s => s.status === 'Pré-venda').length === 0 ? (
@@ -1311,7 +1443,7 @@ export default function PDV() {
                       <div className="size-16 rounded-full border-2 border-dashed border-white flex items-center justify-center text-white/50 animate-pulse">
                         <ClipboardList size={28} />
                       </div>
-                      <p className="font-black text-xs tracking-widest uppercase text-slate-300">Nenhuma pré-venda salva</p>
+                      <p className="font-black text-xs tracking-widest uppercase text-slate-300">Nenhum orçamento disponível</p>
                     </div>
                   ) : (
                     sales.filter(s => s.status === 'Pré-venda').map(preSale => (
@@ -1341,22 +1473,33 @@ export default function PDV() {
                           ))}
                         </div>
 
-                        <div className="grid grid-cols-2 gap-2 pt-2">
+                        <div className="space-y-2 pt-2">
+                          <div className="grid grid-cols-2 gap-2">
+                            <button 
+                              onClick={() => {
+                                deletePreSale(preSale.id!);
+                              }}
+                              className="py-2 border border-red-500/20 text-red-400 hover:bg-red-500/10 hover:border-red-500 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all"
+                            >
+                              Apagar
+                            </button>
+                            <button 
+                              onClick={() => {
+                                loadPreSale(preSale);
+                              }}
+                              className="py-2 bg-amber-500 text-slate-950 hover:bg-amber-400 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all"
+                            >
+                              Carregar
+                            </button>
+                          </div>
                           <button 
+                            disabled={isFinishing}
                             onClick={() => {
-                              deletePreSale(preSale.id!);
+                              convertPreSaleToSaleDirect(preSale);
                             }}
-                            className="py-2 border border-red-500/20 text-red-400 hover:bg-red-500/10 hover:border-red-500 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all"
+                            className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-[9px] font-black uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-md shadow-emerald-950/20 disabled:opacity-50"
                           >
-                            Apagar
-                          </button>
-                          <button 
-                            onClick={() => {
-                              loadPreSale(preSale);
-                            }}
-                            className="py-2 bg-amber-500 text-slate-950 hover:bg-amber-400 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all"
-                          >
-                            Carregar
+                            <CheckCircle2 size={12} /> Faturar Orçamento (1-Clique)
                           </button>
                         </div>
                       </div>

@@ -26,8 +26,32 @@ export function calculateMargin(cost: number, sell: number) {
 
 export function cleanVariationName(name: string | null | undefined): string {
   if (!name) return '';
-  const parts = name.split('/').map(v => v.trim()).filter(v => v && v !== '' && v.toUpperCase() !== 'N/A' && v.toUpperCase() !== 'SEM VARIAÇÃO' && v.toUpperCase() !== 'SEM VARIACOES');
-  return parts.join(' / ');
+  
+  // Normalize spaces inside N / A or N/A patterns
+  let cleaned = name.replace(/\bN\s*\/\s*A\b/gi, 'N/A');
+  
+  const rawParts = cleaned.split('/');
+  const filteredParts: string[] = [];
+  
+  for (let i = 0; i < rawParts.length; i++) {
+    const p = rawParts[i].trim();
+    const upper = p.toUpperCase();
+    
+    // Skip empty, default, N/A, or generic placeholders
+    if (!p || upper === 'N/A' || upper === 'SEM VARIAÇÃO' || upper === 'SEM VARIACOES' || upper === 'NA') {
+      continue;
+    }
+    
+    // If this part is 'N' and next is 'A' (e.g. from split N / A), skip both
+    if (upper === 'N' && i + 1 < rawParts.length && rawParts[i + 1].trim().toUpperCase() === 'A') {
+      i++;
+      continue;
+    }
+    
+    filteredParts.push(p);
+  }
+  
+  return filteredParts.join(' / ');
 }
 
 export function cleanObject(obj: any): any {
