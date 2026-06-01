@@ -28,6 +28,7 @@ export default function Shipments() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingShipment, setEditingShipment] = useState<Shipment | null>(null);
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showTimelineId, setShowTimelineId] = useState<string | null>(null);
   const [editingTaxId, setEditingTaxId] = useState<string | null>(null);
@@ -398,12 +399,16 @@ export default function Shipments() {
     }
   };
 
-  const filtered = shipments.filter(s => 
-    s.trackingCode.toLowerCase().includes(search.toLowerCase()) ||
-    s.supplierName?.toLowerCase().includes(search.toLowerCase()) ||
-    s.items.some(i => i.customerName.toLowerCase().includes(search.toLowerCase())) ||
-    (search.toLowerCase() === 'dropshipping' && s.items.some(i => i.isDropshipping))
-  );
+  const filtered = shipments.filter(s => {
+    const matchesSearch = s.trackingCode.toLowerCase().includes(search.toLowerCase()) ||
+      s.supplierName?.toLowerCase().includes(search.toLowerCase()) ||
+      s.items.some(i => i.customerName.toLowerCase().includes(search.toLowerCase())) ||
+      (search.toLowerCase() === 'dropshipping' && s.items.some(i => i.isDropshipping));
+      
+    const matchesStatus = statusFilter === 'all' || s.status === statusFilter;
+    
+    return matchesSearch && matchesStatus;
+  });
 
   return (
     <motion.div 
@@ -485,6 +490,44 @@ export default function Shipments() {
               <p className="text-xl font-black text-rose-600 font-display tabular-nums leading-none">{formatCurrency(shipments.filter(s => s.hasTax && !s.taxPaid).reduce((acc, s) => acc + (s.taxAmount || 0), 0))}</p>
            </div>
         </div>
+      </div>
+
+      {/* Filtros de Status */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-2 -mb-2 custom-scrollbar">
+        <button
+          onClick={() => setStatusFilter('all')}
+          className={cn(
+            "px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider whitespace-nowrap transition-all border",
+            statusFilter === 'all' 
+              ? "bg-slate-900 text-white border-slate-900 shadow-sm"
+              : "bg-white text-slate-600 border-slate-100 hover:bg-slate-50 hover:text-slate-900"
+          )}
+        >
+          Todos ({shipments.length})
+        </button>
+        {SHIPMENT_STATUSES.map(st => {
+          const count = shipments.filter(s => s.status === st).length;
+          return (
+            <button
+              key={st}
+              onClick={() => setStatusFilter(st)}
+              className={cn(
+                "px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider whitespace-nowrap transition-all border flex items-center gap-2",
+                statusFilter === st 
+                  ? "bg-red-800 text-white border-red-800 shadow-sm shadow-red-900/10"
+                  : "bg-white text-slate-600 border-slate-100 hover:bg-slate-50 border-slate-200 text-slate-700"
+              )}
+            >
+              <span>{st}</span>
+              <span className={cn(
+                "px-1.5 py-0.5 rounded-md text-[9px] font-black",
+                statusFilter === st ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500"
+              )}>
+                {count}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

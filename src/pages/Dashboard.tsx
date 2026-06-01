@@ -28,7 +28,8 @@ import {
   Lightbulb,
   Sparkles,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  MessageCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -53,6 +54,14 @@ export default function Dashboard() {
   const [compAmount, setCompAmount] = useState('');
   const [compMethod, setCompMethod] = useState<'Dinheiro' | 'Cartão' | 'Pix'>('Pix');
   const [isCompensating, setIsCompensating] = useState(false);
+  const [showAmortizationSuccess, setShowAmortizationSuccess] = useState(false);
+  const [amortizationResult, setAmortizationResult] = useState<{
+    clientName: string;
+    clientContact: string;
+    amount: number;
+    clientRemainingDebt: number;
+    paymentMethod: string;
+  } | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [shipments, setShipments] = useState<Shipment[]>([]);
@@ -380,39 +389,49 @@ export default function Dashboard() {
       }
 
       await batch.commit();
-      alert('Compensação realizada com sucesso!');
+      
+      setAmortizationResult({
+        clientName: clientName || selectedSale.customerName || 'Consumidor Final',
+        clientContact: clientContact || '',
+        amount,
+        clientRemainingDebt,
+        paymentMethod: compMethod
+      });
+      setShowAmortizationSuccess(true);
+
       setSelectedSale(null);
       setCompAmount('');
-
-      // Auto-trigger WhatsApp if client data was fetched
-      if (clientName && clientContact) {
-        const heading = '⚽ *ERP CLUB DA BOLA - Comprovante de Pagamento* ⚽';
-        const message = `${heading}\n` +
-          `-------------------------------------------\n` +
-          `👤 *Cliente:* ${clientName}\n` +
-          `💵 *Valor Compensado:* ${formatCurrency(amount)}\n` +
-          `📝 *Saldo Devedor Restante:* ${formatCurrency(clientRemainingDebt)}\n` +
-          `-------------------------------------------\n` +
-          `Obrigado! Seu pagamento foi registrado e seu saldo foi atualizado.`;
-
-        const encoded = encodeURIComponent(message);
-        const phone = clientContact.replace(/\D/g, '');
-        let finalPhone = phone;
-        if (phone && phone.length <= 11) {
-          finalPhone = '55' + phone;
-        }
-
-        try {
-          window.open(`https://wa.me/${finalPhone}?text=${encoded}`, '_blank');
-        } catch (err) {
-          console.warn("WhatsApp blocked or auto-trigger failed:", err);
-        }
-      }
     } catch (err) {
       console.error(err);
       alert('Erro ao compensar.');
     } finally {
       setIsCompensating(false);
+    }
+  };
+
+  const shareAmortizationWhatsApp = (res: typeof amortizationResult) => {
+    if (!res) return;
+    const heading = '⚽ *ERP CLUB DA BOLA - Comprovante de Pagamento* ⚽';
+    const message = `${heading}\n` +
+      `-------------------------------------------\n` +
+      `👤 *Cliente:* ${res.clientName}\n` +
+      `💵 *Valor Compensado:* ${formatCurrency(res.amount)}\n` +
+      `📝 *Saldo Devedor Restante:* ${formatCurrency(res.clientRemainingDebt)}\n` +
+      `-------------------------------------------\n` +
+      `Obrigado! Seu pagamento foi registrado e seu saldo foi atualizado.`;
+
+    const encoded = encodeURIComponent(message);
+    const phone = res.clientContact.replace(/\D/g, '');
+    let finalPhone = phone;
+    if (phone && phone.length <= 11) {
+      finalPhone = '55' + phone;
+    }
+
+    try {
+      window.open(`https://wa.me/${finalPhone}?text=${encoded}`, '_blank');
+    } catch (err) {
+      console.warn("WhatsApp blocked or auto-trigger failed:", err);
+      alert("Não foi possível redirecionar para o WhatsApp.");
     }
   };
 
@@ -1932,6 +1951,78 @@ export default function Dashboard() {
                 >
                   {isCompensating ? 'PROCESSANDO...' : 'CONFIRMAR AMORTIZAÇÃO'}
                   {!isCompensating && <CheckCircle2 size={18} />}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Amortization Success Modal */}
+      <AnimatePresence>
+        {showAmortizationSuccess && amortizationResult && (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" 
+              onClick={() => setShowAmortizationSuccess(false)}
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="bg-white rounded-[32px] shadow-2xl relative z-[130] w-full max-w-md overflow-hidden border border-slate-200"
+            >
+              <div className="p-8 text-center bg-red-800 text-white relative">
+                <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
+                  <CheckCircle2 size={240} className="-translate-x-1/4 -translate-y-1/4 text-amber-500" />
+                </div>
+                <div className="size-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4 backdrop-blur-sm overflow-hidden p-3 border border-white/10">
+                   <CheckCircle2 size={40} className="text-amber-500" />
+                </div>
+                <h3 className="text-2xl font-black tracking-tight italic uppercase font-sans">Amortização Registrada!</h3>
+                <p className="text-white/60 font-bold opacity-80 mt-1 uppercase text-[10px] tracking-widest">O pagamento do cliente foi processado.</p>
+              </div>
+
+              <div className="p-8 space-y-6 font-sans">
+                <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100 text-center">
+                  <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2">Valor Recebido</p>
+                  <p className="text-4xl font-black text-slate-900 tracking-tighter font-display tabular-nums leading-none">{formatCurrency(amortizationResult.amount)}</p>
+                  <p className="text-[10px] font-black text-slate-500 mt-3 uppercase tracking-widest leading-none">Forma: {amortizationResult.paymentMethod} • {amortizationResult.clientName}</p>
+                  
+                  <div className="mt-4 pt-3 border-t border-slate-200 flex justify-center">
+                     <span className="text-slate-700 bg-slate-100 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-tight">
+                       Saldo Restante: {formatCurrency(amortizationResult.clientRemainingDebt)}
+                     </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 font-sans">
+                  <button 
+                    onClick={() => {
+                      setShowAmortizationSuccess(false);
+                    }}
+                    className="flex flex-col items-center justify-center gap-2 p-4 bg-slate-100 text-slate-800 rounded-2xl hover:bg-slate-200 transition-all group font-black"
+                  >
+                    <X size={24} className="group-hover:scale-110 transition-transform" />
+                    <span className="text-[10px] font-black uppercase tracking-widest">Fechar</span>
+                  </button>
+                  <button 
+                    onClick={() => shareAmortizationWhatsApp(amortizationResult)}
+                    className="flex flex-col items-center justify-center gap-2 p-4 bg-amber-50 text-amber-700 rounded-2xl hover:bg-amber-100 transition-all group font-black"
+                  >
+                    <MessageCircle size={24} className="group-hover:scale-110 transition-transform text-amber-600" />
+                    <span className="text-[10px] font-black uppercase tracking-widest">Enviar WhatsApp</span>
+                  </button>
+                </div>
+
+                <button 
+                  onClick={() => setShowAmortizationSuccess(false)}
+                  className="w-full py-4 bg-red-800 text-white font-black rounded-2xl uppercase tracking-widest text-xs hover:bg-black transition-all shadow-xl shadow-red-900/20 font-sans"
+                >
+                  Concluir e Voltar ao Painel
                 </button>
               </div>
             </motion.div>
