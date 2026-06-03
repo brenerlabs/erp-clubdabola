@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, query, onSnapshot, addDoc, updateDoc, doc, serverTimestamp, writeBatch, orderBy, deleteDoc } from 'firebase/firestore';
 import { Product, Customer, SaleItem, Variation, Sale } from '../types';
-import { Search, ShoppingCart, User, Plus, Minus, Trash2, CreditCard, Banknote, QrCode, ClipboardList, Send, X, CheckCircle2, MessageCircle, FileImage, Share2, Receipt, FileText } from 'lucide-react';
+import { Search, ShoppingCart, User, Plus, Minus, Trash2, CreditCard, Banknote, QrCode, ClipboardList, Send, X, CheckCircle2, MessageCircle, FileImage, Share2, Receipt, FileText, Sparkles, HelpCircle, Camera, TrendingUp } from 'lucide-react';
 import { formatCurrency, cn, cleanObject, cleanVariationName } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { SidebarContext } from '../App';
@@ -28,6 +28,7 @@ export default function PDV() {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showBudgetModal, setShowBudgetModal] = useState(false);
+  const [showSizeGuideModal, setShowSizeGuideModal] = useState(false);
   const [lastSale, setLastSale] = useState<any>(null);
   const [sendWhatsAppOnFinish, setSendWhatsAppOnFinish] = useState(true);
 
@@ -837,6 +838,37 @@ export default function PDV() {
                   </button>
                 </div>
 
+                {/* Insight 1: Alavancar Prova Social & WhatsApp Photo Booster */}
+                <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 space-y-2 text-left">
+                  <div className="flex items-center gap-1.5">
+                    <Sparkles size={14} className="shrink-0 animate-bounce text-amber-500" />
+                    <span className="text-[9px] font-black uppercase tracking-widest text-amber-600">Alavancar Prova Social (Insight #1)</span>
+                  </div>
+                  <p className="text-[10px] text-slate-600 leading-normal font-sans font-semibold">
+                    Colete fotos reais dos mantos no corpo para seu mural! Envie o roteiro de incentivo com cupom de desconto para elevar suas conversões em 40%.
+                  </p>
+                  
+                  {lastSale?.customerContact ? (
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        const custName = lastSale?.customerName || 'Campeão';
+                        const message = `Fala, *${custName}*! Tudo bem? ⚽\n\nPassando para agradecer a preferência no *Club da Bola*! Seu manto já chegou e aposto que ficou daquele jeito! 🤩\n\nPoderia fortalecer nossa opinião tirando uma foto irada vestindo a camisa para nosso Mural de Clientes? 📸\n\nPra te premiar, na sua próxima compra você ganha 10% de desconto ou Frete Grátis com o cupom: *DESCONTO10*. Que tal?\n\nForte abraço! Tamo junto! 🔥🤙`;
+                        const phone = lastSale.customerContact ? lastSale.customerContact.replace(/\D/g, '') : '';
+                        const finalPhone = phone && phone.length <= 11 ? '55' + phone : phone;
+                        window.open(`https://wa.me/${finalPhone}?text=${encodeURIComponent(message)}`, '_blank');
+                      }}
+                      className="w-full py-2.5 bg-slate-900 border border-slate-950 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-black transition-all flex items-center justify-center gap-1.5 hover:scale-[1.01]"
+                    >
+                      <Camera size={12} className="text-amber-400" /> Solicitar Foto do Manto no Whats 📸
+                    </button>
+                  ) : (
+                    <div className="p-2 bg-slate-100 rounded-xl text-center border border-slate-200">
+                      <p className="text-[8.5px] text-slate-500 uppercase font-black tracking-wider leading-none">Sem celular cadastrado para este cliente</p>
+                    </div>
+                  )}
+                </div>
+
                 <button 
                   onClick={() => setShowSuccessModal(false)}
                   className="w-full py-4 bg-red-800 text-white font-black rounded-2xl uppercase tracking-widest text-xs hover:bg-black transition-all shadow-xl shadow-red-900/20"
@@ -1030,6 +1062,140 @@ export default function PDV() {
         )}
       </AnimatePresence>
 
+      {/* Guia de Costuras / Inteligente Jogador vs Torcedor Modal */}
+      <AnimatePresence>
+        {showSizeGuideModal && (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }}
+              onClick={() => setShowSizeGuideModal(false)}
+              className="absolute inset-0 bg-slate-900/65 backdrop-blur-md" 
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="bg-white rounded-[32px] shadow-2xl relative z-10 w-full max-w-lg overflow-hidden border border-slate-200"
+            >
+              <div className="p-6 bg-slate-900 text-white relative">
+                <button 
+                  onClick={() => setShowSizeGuideModal(false)}
+                  className="absolute top-4 right-4 text-white/60 hover:text-white transition-colors p-1"
+                >
+                  <X size={18} />
+                </button>
+                <div className="flex items-center gap-2.5 mb-2">
+                  <span className="p-1.5 bg-amber-500/20 text-amber-400 rounded-lg">
+                    <Sparkles size={16} />
+                  </span>
+                  <p className="text-[9px] font-black uppercase text-amber-500 tracking-widest leading-none">Guia de Caimento Inteligente</p>
+                </div>
+                <h3 className="text-xl font-black uppercase tracking-tight">Jogador vs Torcedor</h3>
+                <p className="text-white/60 font-medium text-[10px] uppercase tracking-wide mt-1 leading-relaxed">
+                  Evite custos de Devolução e Frete Reverso orientando corretamente o cliente!
+                </p>
+              </div>
+
+              <div className="p-6 space-y-5 overflow-y-auto max-h-[75vh] custom-scrollbar">
+                
+                {/* Visual Explanation of Differences */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-4 rounded-2xl bg-amber-50/50 border border-amber-200/40 text-slate-800">
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <span className="text-[10px] font-black uppercase bg-amber-500 text-slate-950 px-2 py-0.5 rounded-full">Jogador</span>
+                      <span className="text-[8px] font-bold text-amber-800 uppercase tracking-widest">(Slim Fit)</span>
+                    </div>
+                    <ul className="text-[10px] space-y-1 text-slate-600 font-semibold leading-relaxed list-disc list-inside">
+                      <li>Modelagem <strong>confort/colada</strong></li>
+                      <li>Tecido de jogo texturizado</li>
+                      <li>Símbolos emborrachados/silk</li>
+                      <li><strong>Indicação:</strong> Comprar <strong>1 tamanho acima</strong></li>
+                    </ul>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/50 text-slate-800">
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <span className="text-[10px] font-black uppercase bg-slate-800 text-white px-2 py-0.5 rounded-full">Torcedor</span>
+                      <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">(Classic Fit)</span>
+                    </div>
+                    <ul className="text-[10px] space-y-1 text-slate-600 font-semibold leading-relaxed list-disc list-inside">
+                      <li>Modelagem <strong>padrão/folgada</strong></li>
+                      <li>Tecido de poliéster liso</li>
+                      <li>Símbolos e escudos bordados</li>
+                      <li><strong>Indicação:</strong> Comprar o <strong>tamanho de costume</strong></li>
+                    </ul>
+                  </div>
+                </div>
+
+                {/* Size Equivalence Table */}
+                <div className="border border-slate-150 rounded-2xl overflow-hidden shadow-sm">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                        <th className="p-3 font-black text-[9px] uppercase tracking-wider">Se o cliente usa (Torcedor):</th>
+                        <th className="p-3 font-black text-[9px] uppercase tracking-wider text-amber-700 font-bold">Ele deve comprar (Jogador):</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-[10px] text-slate-650 font-bold uppercase font-sans">
+                      <tr>
+                        <td className="p-3">Tamanho P</td>
+                        <td className="p-3 text-amber-600 font-extrabold">Tamanho M (Slim)</td>
+                      </tr>
+                      <tr className="bg-slate-50/50">
+                        <td className="p-3">Tamanho M</td>
+                        <td className="p-3 text-amber-600 font-extrabold">Tamanho G (Slim)</td>
+                      </tr>
+                      <tr>
+                        <td className="p-3">Tamanho G</td>
+                        <td className="p-3 text-amber-600 font-extrabold">Tamanho GG (Slim)</td>
+                      </tr>
+                      <tr className="bg-slate-50/50">
+                        <td className="p-3">Tamanho GG</td>
+                        <td className="p-3 text-amber-600 font-extrabold">Tamanho XG / GGG (Slim)</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Practical Tip card */}
+                <div className="p-3.5 bg-rose-50 border border-rose-100 rounded-2xl flex items-start gap-2.5">
+                  <span className="text-red-700 font-extrabold text-xs">💡</span>
+                  <div>
+                    <h4 className="text-[10px] font-black text-rose-800 uppercase tracking-widest mb-0.5">Dica de Arguição de Venda</h4>
+                    <p className="text-[10px] text-rose-750 font-medium leading-relaxed">
+                      Diga ao cliente: <em>"Como a versão Jogador é mais justa para atletas, sugerimos uma numeração a mais para que fique perfeita e confortável no corpo, mantendo o excelente caimento."</em>
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      const text = "A versão JOGADOR possui modelagem Slim (esportiva/justa). Como o corte é projetado para atletas, recomendamos levar +1 tamanho acima do que você costuma usar para garantir o máximo conforto! ⚽🔥";
+                      navigator.clipboard.writeText(text);
+                      alert("Script de vendas copiado para o teclado! Só colar no WhatsApp do cliente.");
+                    }}
+                    className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-black uppercase tracking-widest text-[9.5px] transition-all border border-slate-200 flex items-center justify-center gap-1.5"
+                  >
+                    <span>Copiar Script WhatsApp 💬</span>
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => setShowSizeGuideModal(false)}
+                    className="py-3 px-6 bg-slate-900 hover:bg-black text-white font-black rounded-xl transition-all uppercase tracking-widest text-[9.5px] shadow-md"
+                  >
+                    Fechar
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Search & Products Grid */}
       <div className={cn(
         "flex-1 flex flex-col gap-6 overflow-hidden transition-all duration-300",
@@ -1179,7 +1345,16 @@ export default function PDV() {
 
                   {/* Checkout Form (Top) */}
                   <div className="space-y-4 pb-6 border-b border-white/10">
-                    <div className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-2">Informações da Venda</div>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="text-[10px] font-black uppercase tracking-widest text-white/40">Informações da Venda</div>
+                      <button 
+                        type="button"
+                        onClick={() => setShowSizeGuideModal(true)}
+                        className="px-2 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all flex items-center gap-1"
+                      >
+                        <HelpCircle size={10} /> Guia de Costuras 📏
+                      </button>
+                    </div>
                     {/* Customer Selector */}
                     <div className="relative group">
                       <User className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 size-4 group-focus-within:text-amber-500" />
@@ -1314,6 +1489,22 @@ export default function PDV() {
                   {/* Cart Items List */}
                   <div className="space-y-3">
                     <div className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-2">Itens no Carrinho ({cart.length})</div>
+                    
+                    {cart.some(item => (item.name || '').toLowerCase().includes('jogador') || (item.variationName || '').toLowerCase().includes('jogador')) && (
+                      <motion.div 
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl space-y-1"
+                      >
+                        <div className="flex items-center gap-1.5 text-amber-400">
+                          <Sparkles size={12} className="animate-spin text-amber-500 shrink-0" />
+                          <span className="text-[9px] font-black uppercase tracking-widest leading-none">Corte Slim Jogador Detectado!</span>
+                        </div>
+                        <p className="text-[10px] text-slate-300 leading-normal font-sans">
+                          A versão <strong>Jogador</strong> possui caimento mais justo e atlético. Oriente o comprador a escolher <strong>+1 tamanho acima</strong> do usual para evitar trocas e taxas de frete reverso.
+                        </p>
+                      </motion.div>
+                    )}
                     {cart.length === 0 && (
                       <div className="py-12 flex flex-col items-center justify-center opacity-30 gap-4">
                         <div className="size-16 rounded-full border-2 border-dashed border-white flex items-center justify-center">

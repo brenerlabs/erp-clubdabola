@@ -117,6 +117,9 @@ export interface CustomerPhoto {
   saleItemsSummary?: string | null;
   photoUrl: string;
   description: string;
+  scale?: number;
+  offsetX?: number;
+  offsetY?: number;
   createdAt: any;
 }
 

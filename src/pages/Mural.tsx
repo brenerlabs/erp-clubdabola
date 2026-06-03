@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useContext } from 'react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, query, onSnapshot, addDoc, deleteDoc, doc, updateDoc, setDoc, getDoc, orderBy } from 'firebase/firestore';
 import { Customer, Sale, CustomerPhoto } from '../types';
-import { Plus, Search, Trash2, Camera, Upload, Image as ImageIcon, Sparkles, X, Settings, Check, HelpCircle, FileImage } from 'lucide-react';
+import { Plus, Search, Trash2, Camera, Upload, Image as ImageIcon, Sparkles, X, Settings, Check, HelpCircle, FileImage, Copy, Lightbulb, TrendingUp } from 'lucide-react';
 import { formatCurrency, cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { SidebarContext } from '../App';
@@ -75,6 +75,10 @@ export default function Mural() {
 
   // New photo modal state
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
+  const [editingPhotoId, setEditingPhotoId] = useState<string | null>(null);
+  const [photoScale, setPhotoScale] = useState<number>(1.0);
+  const [photoOffsetX, setPhotoOffsetX] = useState<number>(0);
+  const [photoOffsetY, setPhotoOffsetY] = useState<number>(0);
   const [uploadProgress, setUploadProgress] = useState(false);
   const [selectedPhotoFile, setSelectedPhotoFile] = useState<string | null>(null);
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
@@ -83,6 +87,19 @@ export default function Mural() {
   const [photoDescription, setPhotoDescription] = useState('');
   const [customerSearchQuery, setCustomerSearchQuery] = useState('');
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+
+  // States & Refs for real-time dragging (align/frame) on the feed cards and modal
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [isDraggingModalPhoto, setIsDraggingModalPhoto] = useState(false);
+  const [localOffsets, setLocalOffsets] = useState<{ [id: string]: { x: number; y: number } }>({});
+  const dragStartPos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const dragStartOffset = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  // Social Proof Insights panel states
+  const [showInsights, setShowInsights] = useState(false);
+  const [insightName, setInsightName] = useState('Campeão');
+  const [insightVoucher, setInsightVoucher] = useState('DESCONTO10');
+  const [isCopied, setIsCopied] = useState(false);
 
   // Settings State
   const [logoFile, setLogoFile] = useState<string | null>(null);
@@ -143,6 +160,14 @@ export default function Mural() {
       unsubSales();
     };
   }, []);
+
+  // Relative insights metrics calculations
+  const totalSalesCount = sales.length;
+  const salesWithPhotosCount = photos.filter(p => p.saleId).length;
+  const socialProofRatio = totalSalesCount > 0 ? ((salesWithPhotosCount / totalSalesCount) * 100).toFixed(0) : "0";
+  const totalCustomersWithPhotos = new Set(photos.map(p => p.customerId)).size;
+  const totalUniqueCustomersCount = customers.length;
+  const customerCoverageRatio = totalUniqueCustomersCount > 0 ? ((totalCustomersWithPhotos / totalUniqueCustomersCount) * 100).toFixed(0) : "0";
 
   // Filtered customers for dropdown autocomplete
   const filteredCustomers = customerSearchQuery
@@ -205,16 +230,38 @@ export default function Mural() {
         }
       }
 
-      await addDoc(collection(db, 'customer_photos'), {
-        customerId: selectedCustomerId,
-        customerName: selectedCustomerName,
-        saleId: selectedSaleId || null,
-        saleDate: saleDateStr,
-        saleItemsSummary: saleItemsStr,
-        photoUrl: selectedPhotoFile,
-        description: photoDescription,
-        createdAt: new Date(), // Local fallback or standard ServerTimestamp mock
-      });
+      if (editingPhotoId) {
+        // Edit existing publication
+        await updateDoc(doc(db, 'customer_photos', editingPhotoId), {
+          customerId: selectedCustomerId,
+          customerName: selectedCustomerName,
+          saleId: selectedSaleId || null,
+          saleDate: saleDateStr,
+          saleItemsSummary: saleItemsStr,
+          photoUrl: selectedPhotoFile,
+          description: photoDescription,
+          scale: photoScale,
+          offsetX: photoOffsetX,
+          offsetY: photoOffsetY,
+        });
+        alert("Publicação atualizada com sucesso!");
+      } else {
+        // Create new publication
+        await addDoc(collection(db, 'customer_photos'), {
+          customerId: selectedCustomerId,
+          customerName: selectedCustomerName,
+          saleId: selectedSaleId || null,
+          saleDate: saleDateStr,
+          saleItemsSummary: saleItemsStr,
+          photoUrl: selectedPhotoFile,
+          description: photoDescription,
+          scale: photoScale,
+          offsetX: photoOffsetX,
+          offsetY: photoOffsetY,
+          createdAt: new Date(), // Local fallback or standard ServerTimestamp mock
+        });
+        alert("Nova foto guardada com sucesso no mural!");
+      }
 
       // Clear form & close
       setSelectedPhotoFile(null);
@@ -223,6 +270,10 @@ export default function Mural() {
       setCustomerSearchQuery('');
       setSelectedSaleId('');
       setPhotoDescription('');
+      setPhotoScale(1.0);
+      setPhotoOffsetX(0);
+      setPhotoOffsetY(0);
+      setEditingPhotoId(null);
       setIsPhotoModalOpen(false);
 
     } catch (err) {
@@ -234,9 +285,10 @@ export default function Mural() {
   };
 
   const handleDeletePhoto = async (photoId: string) => {
-    if (!confirm("Tem certeza que deseja remover esta foto qualitativa do cliente do mural?")) return;
+    if (!confirm("Confirma a exclusão definitiva desta foto de cliente do mural? Esse processo removerá a publicação permanentemente.")) return;
     try {
       await deleteDoc(doc(db, 'customer_photos', photoId));
+      alert("Foto removida com sucesso do mural!");
     } catch (err) {
       console.error("Error removing customer photo:", err);
       alert("Erro ao remover foto do mural.");
@@ -309,11 +361,6 @@ export default function Mural() {
       window.dispatchEvent(new CustomEvent('logo-updated', { detail: { logoUrl: '', logoScale: 1.0 } }));
 
       // Reset favicon web icon back to standard or let it use browser default
-      const favicon = document.querySelector("link[rel*='icon']");
-      if (favicon) {
-        favicon.setAttribute('href', 'https://www.google.com/favicon.ico');
-      }
-
       setLogoSuccessMsg(true);
       setTimeout(() => setLogoSuccessMsg(false), 4000);
     } catch (err) {
@@ -322,6 +369,113 @@ export default function Mural() {
     } finally {
       setIsSavingLogo(false);
     }
+  };
+
+  // Drag handlers for feed cards and modal photos
+  const handleMouseDown = (e: React.MouseEvent, item: CustomerPhoto) => {
+    if (!item.id) return;
+    e.preventDefault();
+    setDraggingId(item.id);
+    dragStartPos.current = { x: e.clientX, y: e.clientY };
+    dragStartOffset.current = {
+      x: localOffsets[item.id]?.x ?? item.offsetX ?? 0,
+      y: localOffsets[item.id]?.y ?? item.offsetY ?? 0
+    };
+  };
+
+  const handleMouseMove = (e: React.MouseEvent, item: CustomerPhoto) => {
+    if (!item.id || draggingId !== item.id) return;
+    const deltaX = e.clientX - dragStartPos.current.x;
+    const deltaY = e.clientY - dragStartPos.current.y;
+    
+    const newX = dragStartOffset.current.x + Math.round(deltaX);
+    const newY = dragStartOffset.current.y + Math.round(deltaY);
+
+    setLocalOffsets(prev => ({
+      ...prev,
+      [item.id!]: { x: newX, y: newY }
+    }));
+  };
+
+  const handleMouseUpOrLeave = async (item: CustomerPhoto) => {
+    if (!item.id || draggingId !== item.id) return;
+    setDraggingId(null);
+    
+    const finalOffset = localOffsets[item.id];
+    if (finalOffset) {
+      try {
+        await updateDoc(doc(db, 'customer_photos', item.id), {
+          offsetX: finalOffset.x,
+          offsetY: finalOffset.y
+        });
+      } catch (err) {
+        console.error("Error saving framing offsets:", err);
+      }
+    }
+  };
+
+  const handleTouchStart = (e: React.TouchEvent, item: CustomerPhoto) => {
+    if (!item.id) return;
+    const touch = e.touches[0];
+    setDraggingId(item.id);
+    dragStartPos.current = { x: touch.clientX, y: touch.clientY };
+    dragStartOffset.current = {
+      x: localOffsets[item.id]?.x ?? item.offsetX ?? 0,
+      y: localOffsets[item.id]?.y ?? item.offsetY ?? 0
+    };
+  };
+
+  const handleTouchMove = (e: React.TouchEvent, item: CustomerPhoto) => {
+    if (!item.id || draggingId !== item.id) return;
+    const touch = e.touches[0];
+    const deltaX = touch.clientX - dragStartPos.current.x;
+    const deltaY = touch.clientY - dragStartPos.current.y;
+    
+    const newX = dragStartOffset.current.x + Math.round(deltaX);
+    const newY = dragStartOffset.current.y + Math.round(deltaY);
+
+    setLocalOffsets(prev => ({
+      ...prev,
+      [item.id!]: { x: newX, y: newY }
+    }));
+  };
+
+  // Drag handlers for the modal photo (before saving/uploading)
+  const handleModalPhotoMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsDraggingModalPhoto(true);
+    dragStartPos.current = { x: e.clientX, y: e.clientY };
+    dragStartOffset.current = { x: photoOffsetX, y: photoOffsetY };
+  };
+
+  const handleModalPhotoMouseMove = (e: React.MouseEvent) => {
+    if (!isDraggingModalPhoto) return;
+    const deltaX = e.clientX - dragStartPos.current.x;
+    const deltaY = e.clientY - dragStartPos.current.y;
+    
+    setPhotoOffsetX(dragStartOffset.current.x + Math.round(deltaX));
+    setPhotoOffsetY(dragStartOffset.current.y + Math.round(deltaY));
+  };
+
+  const handleModalPhotoMouseUpOrLeave = () => {
+    setIsDraggingModalPhoto(false);
+  };
+
+  const handleModalPhotoTouchStart = (e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    setIsDraggingModalPhoto(true);
+    dragStartPos.current = { x: touch.clientX, y: touch.clientY };
+    dragStartOffset.current = { x: photoOffsetX, y: photoOffsetY };
+  };
+
+  const handleModalPhotoTouchMove = (e: React.TouchEvent) => {
+    if (!isDraggingModalPhoto) return;
+    const touch = e.touches[0];
+    const deltaX = touch.clientX - dragStartPos.current.x;
+    const deltaY = touch.clientY - dragStartPos.current.y;
+    
+    setPhotoOffsetX(dragStartOffset.current.x + Math.round(deltaX));
+    setPhotoOffsetY(dragStartOffset.current.y + Math.round(deltaY));
   };
 
   return (
@@ -357,18 +511,193 @@ export default function Mural() {
       {activeSubTab === 'photos' && (
         <>
           {/* Action Header */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <h2 className="text-xs font-black uppercase text-slate-400 tracking-widest flex items-center gap-2">
-              <Sparkles size={16} className="text-amber-500 animate-pulse" /> Mural de Encomendas dos Clientes ({photos.length})
-            </h2>
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white rounded-[24px] p-4 border border-slate-200 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full sm:w-auto">
+              <h2 className="text-xs font-black uppercase text-slate-800 tracking-widest flex items-center gap-2">
+                <Sparkles size={16} className="text-amber-500 animate-pulse" /> Mural de Encomendas ({photos.length})
+              </h2>
+              <button
+                onClick={() => setShowInsights(!showInsights)}
+                className={cn(
+                  "px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 border self-start sm:self-center",
+                  showInsights 
+                    ? "bg-amber-50 text-amber-800 border-amber-200 shadow-inner" 
+                    : "bg-slate-100 text-slate-700 hover:bg-slate-200 hover:text-slate-900 border-slate-200 shadow-sm"
+                )}
+                type="button"
+              >
+                <Lightbulb size={12} className={cn(showInsights && "animate-bounce text-amber-600")} />
+                {showInsights ? 'Recolher Insights' : 'Ver Insights & Dicas do Clube'}
+              </button>
+            </div>
 
             <button 
-              onClick={() => setIsPhotoModalOpen(true)}
-              className="w-full sm:w-auto px-6 py-4 bg-red-800 hover:bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg hover:scale-[1.02] flex items-center justify-center gap-2"
+              onClick={() => {
+                setEditingPhotoId(null);
+                setSelectedPhotoFile(null);
+                setSelectedCustomerId('');
+                setSelectedCustomerName('');
+                setCustomerSearchQuery('');
+                setSelectedSaleId('');
+                setPhotoDescription('');
+                setPhotoScale(1.0);
+                setPhotoOffsetX(0);
+                setPhotoOffsetY(0);
+                setIsPhotoModalOpen(true);
+              }}
+              className="w-full sm:w-auto px-6 py-3.5 bg-red-800 hover:bg-slate-950 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shadow-md hover:scale-[1.01] flex items-center justify-center gap-2"
             >
-              <Upload size={14} /> Registrar Nova Foto de Cliente
+              <Plus size={14} /> Registrar Nova Foto de Cliente
             </button>
           </div>
+
+          {/* Social Proof & Qualitative Insights Bento-Layout Panel */}
+          <AnimatePresence>
+            {showInsights && (
+              <motion.div 
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-slate-50 border border-slate-200 rounded-[32px] p-6 mb-6">
+                  
+                  {/* Card 1: Cobertura de Prova Social */}
+                  <div className="bg-white border border-slate-200/60 rounded-2xl p-5 flex flex-col justify-between shadow-sm relative overflow-hidden">
+                    <div>
+                      <div className="flex items-center justify-between mb-4">
+                        <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">Poder de Prova Social</span>
+                        <div className="p-1.5 bg-rose-50 text-red-800 rounded-lg">
+                          <TrendingUp size={14} />
+                        </div>
+                      </div>
+                      <h4 className="text-[11px] font-black uppercase text-slate-800 tracking-wide mb-1">Métricas de Engajamento</h4>
+                      <p className="text-[11px] text-slate-400 leading-relaxed font-medium">As fotos geram até 40% mais cliques em campanhas e catálogos.</p>
+                      
+                      <div className="mt-5 space-y-3.5">
+                        <div className="flex items-center justify-between text-[10px] font-black uppercase text-slate-600">
+                          <span>Cobertura de Vendas</span>
+                          <span className="font-mono text-xs">{socialProofRatio}%</span>
+                        </div>
+                        <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200/30">
+                          <div 
+                            className="bg-red-800 h-full rounded-full transition-all duration-1000" 
+                            style={{ width: `${Math.min(100, Number(socialProofRatio))}%` }}
+                          />
+                        </div>
+                        <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest flex items-center gap-1.5 pt-1">
+                          <span>{salesWithPhotosCount} de {totalSalesCount} fotos cadastradas com vendas</span>
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-4 pt-3.5 border-t border-slate-100 text-[9px] text-slate-450 leading-relaxed bg-slate-50 p-2.5 rounded-xl border border-slate-100/10">
+                      <strong>Meta Saudável:</strong> Alcançar 30% de cobertura no ano para elevar a credibilidade geral do seu e-commerce.
+                    </div>
+                  </div>
+
+                  {/* Card 2: Caimento & Modelagem de Mantos */}
+                  <div className="bg-white border border-slate-200/60 rounded-2xl p-5 flex flex-col justify-between shadow-sm">
+                    <div>
+                      <div className="flex items-center justify-between mb-4">
+                        <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">Guia de Ajustes de Caimento</span>
+                        <div className="p-1.5 bg-emerald-50 text-emerald-700 rounded-lg">
+                          <Check size={14} />
+                        </div>
+                      </div>
+                      <h4 className="text-[11px] font-black uppercase text-slate-800 tracking-wide mb-1 flex items-center gap-1.5">
+                        <span>Jogador vs Torcedor</span>
+                      </h4>
+                      <p className="text-[11px] text-slate-400 leading-relaxed font-medium">Mapeamento qualitativo de tamanho e estrutura base de fardas.</p>
+                      
+                      <div className="mt-4 space-y-2.5 text-[10px] uppercase font-bold text-slate-600">
+                        <div className="flex items-center gap-2 bg-emerald-50/50 p-2 rounded-xl border border-emerald-100/50">
+                          <span className="text-emerald-600 text-xs font-sans">✓</span>
+                          <span><strong>Manto Torcedor:</strong> Caimento padrão e fiel ao tamanho nominal (96% precisão).</span>
+                        </div>
+                        <div className="flex items-center gap-2 bg-amber-50/50 p-2 rounded-xl border border-amber-100/50">
+                          <span className="text-amber-600 text-xs font-sans">⚠</span>
+                          <span><strong>Manto Jogador:</strong> Versão slim. Orientar compradores a solicitar +1 tamanho acima!</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-4 pt-3 border-t border-slate-100 text-[8.5px] text-slate-400 tracking-wider uppercase font-black flex items-center justify-between">
+                      <span>Evita Devoluções</span>
+                      <span className="text-red-800">Custo de Freite Reverso -95%</span>
+                    </div>
+                  </div>
+
+                  {/* Card 3: Gerador Copiador de Script Whatsapp */}
+                  <div className="bg-white border border-slate-200/60 rounded-2xl p-5 flex flex-col justify-between shadow-sm">
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">Captador de Prova Social</span>
+                        <div className="p-1.5 bg-blue-50 text-blue-600 rounded-lg">
+                          <Plus size={14} />
+                        </div>
+                      </div>
+                      <div>
+                        <h4 className="text-[11px] font-black uppercase text-slate-800 tracking-wide mb-1">Pedir Foto do Manto</h4>
+                        <p className="text-[11px] text-slate-400 mb-3 font-medium">Insira os dados para gerar mensagens personalizadas de incentivo.</p>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Nome Cliente</label>
+                          <input 
+                            type="text" 
+                            className="w-full text-xs font-bold px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg outline-none text-slate-750"
+                            value={insightName}
+                            onChange={(e) => setInsightName(e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Cupom Incentivo</label>
+                          <input 
+                            type="text" 
+                            className="w-full text-xs font-bold px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg outline-none text-slate-750"
+                            value={insightVoucher}
+                            onChange={(e) => setInsightVoucher(e.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Msg text preview */}
+                      <div className="bg-slate-55 text-[10px] text-slate-650 p-2.5 rounded-xl border border-slate-150 font-mono line-clamp-3 leading-relaxed relative bg-slate-50/50">
+                        <div className="absolute inset-0 bg-gradient-to-t from-white/95 via-white/40 to-transparent" />
+                        <span className="text-[8.5px] text-slate-400 block font-sans font-black uppercase tracking-wider mb-1">Prévia Whatsapp:</span>
+                        {`Fala, ${insightName}! ... Frete Grátis com cupom ${insightVoucher}`}
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const message = `Fala, *${insightName}*! Tudo bem? ⚽\n\nPassando para agradecer a preferência no *Club da Bola*! Seu manto já chegou e aposto que ficou daquele jeito! 🤩\n\nPoderia fortalecer sua opinião tirando uma foto irada vestindo a camisa para nosso Mural de Clientes? 📸\n\nPra te premiar, na sua próxima compra você ganha 10% de desconto ou Frete Grátis com o cupom: *${insightVoucher}*. Que tal?\n\nForte abraço! Tamo junto! 🔥🤙`;
+                        navigator.clipboard.writeText(message);
+                        setIsCopied(true);
+                        setTimeout(() => setIsCopied(false), 2000);
+                      }}
+                      className={cn(
+                        "w-full mt-4 py-3 rounded-xl text-[10px] uppercase font-black tracking-widest flex items-center justify-center gap-1.5 transition-all text-white",
+                        isCopied ? "bg-emerald-600" : "bg-slate-900 hover:bg-slate-950 shadow-sm"
+                      )}
+                    >
+                      {isCopied ? (
+                        <>
+                          <Check size={12} /> Copiado com Sucesso!
+                        </>
+                      ) : (
+                        <>
+                          <Copy size={12} /> Copiar Mensagem Pronta
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Photos Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
@@ -385,7 +714,17 @@ export default function Mural() {
                 <h3 className="text-sm font-black text-slate-700 uppercase tracking-wider mb-2">Seu Mural está vazio</h3>
                 <p className="text-xs text-slate-400 max-w-sm mb-6 leading-relaxed">Guarde fotos de qualidade dos seus clientes vestindo as camisas vendidas. Isso serve como excelente prova social e dado qualitativo de caimento dos mantos.</p>
                 <button 
-                  onClick={() => setIsPhotoModalOpen(true)}
+                  onClick={() => {
+                    setEditingPhotoId(null);
+                    setSelectedPhotoFile(null);
+                    setSelectedCustomerId('');
+                    setSelectedCustomerName('');
+                    setCustomerSearchQuery('');
+                    setSelectedSaleId('');
+                    setPhotoDescription('');
+                    setPhotoScale(1.0);
+                    setIsPhotoModalOpen(true);
+                  }}
                   className="px-6 py-3 bg-red-800 text-white rounded-xl text-[10px] uppercase font-black tracking-widest hover:bg-slate-900 transition-all font-sans"
                 >
                   Subir Primeira Foto
@@ -400,13 +739,25 @@ export default function Mural() {
                   className="bg-white border rounded-[28px] overflow-hidden shadow-sm group hover:shadow-xl transition-all duration-300 relative flex flex-col border-slate-200 p-4"
                 >
                   {/* Polaroid Frame Container */}
-                  <div className="aspect-square w-full rounded-2xl overflow-hidden bg-slate-950 relative border border-slate-100">
+                  <div 
+                    className="aspect-square w-full rounded-2xl overflow-hidden bg-slate-950 relative border border-slate-100 select-none"
+                    style={{ cursor: (item.scale || 1.0) > 1.0 ? 'grab' : 'default' }}
+                    onMouseDown={(e) => handleMouseDown(e, item)}
+                    onMouseMove={(e) => handleMouseMove(e, item)}
+                    onMouseUp={() => handleMouseUpOrLeave(item)}
+                    onMouseLeave={() => handleMouseUpOrLeave(item)}
+                    onTouchStart={(e) => handleTouchStart(e, item)}
+                    onTouchMove={(e) => handleTouchMove(e, item)}
+                    onTouchEnd={() => handleMouseUpOrLeave(item)}
+                  >
                     <img 
                       src={item.photoUrl} 
                       alt={item.customerName}
                       referrerPolicy="no-referrer"
-                      className="w-full h-full object-cover rounded-2xl transition-transform duration-300 ease-out"
-                      style={{ transform: `scale(${item.scale || 1.0})` }}
+                      className="w-full h-full object-cover rounded-2xl pointer-events-none transition-transform duration-75 ease-out origin-center"
+                      style={{ 
+                        transform: `scale(${item.scale || 1.0}) translate(${(localOffsets[item.id || '']?.x ?? item.offsetX ?? 0) / (item.scale || 1.0)}px, ${(localOffsets[item.id || '']?.y ?? item.offsetY ?? 0) / (item.scale || 1.0)}px)`
+                      }}
                     />
                     
                     {/* Floating Zoom Controls for Photo Mural */}
@@ -486,7 +837,38 @@ export default function Mural() {
                       )}
                     </div>
 
-                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[8px] font-bold text-slate-400 uppercase tracking-widest">
+                    {/* Actions Row */}
+                    <div className="mt-4 pt-3 border-t border-slate-150 flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          setEditingPhotoId(item.id || null);
+                          setSelectedPhotoFile(item.photoUrl);
+                          setSelectedCustomerId(item.customerId);
+                          
+                          const foundCust = customers.find(c => c.id === item.customerId);
+                          setSelectedCustomerName(foundCust?.name || item.customerName);
+                          setCustomerSearchQuery(foundCust?.name || item.customerName);
+                          setSelectedSaleId(item.saleId || '');
+                          setPhotoDescription(item.description || '');
+                          setPhotoScale(item.scale || 1.0);
+                          setPhotoOffsetX(item.offsetX || 0);
+                          setPhotoOffsetY(item.offsetY || 0);
+                          setIsPhotoModalOpen(true);
+                        }}
+                        className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 border border-slate-200/50"
+                      >
+                        <Settings size={12} className="text-slate-500" /> Editar Card
+                      </button>
+                      <button
+                        onClick={() => item.id && handleDeletePhoto(item.id)}
+                        className="p-2 border border-rose-200 hover:bg-rose-50 text-red-700 rounded-xl transition-all"
+                        title="Deletar foto"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+
+                    <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-[8px] font-bold text-slate-400 uppercase tracking-widest">
                        <span>Qualitativo</span>
                        <span>ERP CLUB DA BOLA</span>
                     </div>
@@ -668,13 +1050,16 @@ export default function Mural() {
                     <Camera size={14} className="text-white" />
                   </div>
                   <div>
-                    <h3 className="text-xs font-black text-rose-50 uppercase tracking-widest leading-none">Registrar Manto no Cliente</h3>
+                    <h3 className="text-xs font-black text-rose-50 uppercase tracking-widest leading-none">
+                      {editingPhotoId ? 'Editar Publicação de Manto' : 'Registrar Manto no Cliente'}
+                    </h3>
                     <p className="text-[9px] text-slate-400 uppercase font-bold tracking-widest mt-1">Conectar momento afetivo à base de vendas</p>
                   </div>
                 </div>
                 <button 
                   onClick={() => setIsPhotoModalOpen(false)}
                   className="p-2 text-slate-400 hover:text-white bg-white/5 rounded-lg transition-all"
+                  type="button"
                 >
                   <X size={16} />
                 </button>
@@ -686,15 +1071,64 @@ export default function Mural() {
                   <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Foto do Cliente vestindo o Manto</label>
                   
                   {selectedPhotoFile ? (
-                    <div className="relative aspect-video rounded-2xl overflow-hidden border border-slate-200 group bg-slate-950">
-                      <img src={selectedPhotoFile} alt="Preview" className="w-full h-full object-contain mx-auto" />
-                      <button 
-                        type="button"
-                        onClick={() => setSelectedPhotoFile(null)}
-                        className="absolute top-3 right-3 p-2 bg-black/60 text-white rounded-xl hover:bg-red-800 transition-all shadow-lg"
+                    <div className="space-y-4">
+                      <div 
+                        className="relative aspect-video rounded-2xl overflow-hidden border border-slate-200 group bg-slate-950 flex items-center justify-center select-none"
+                        style={{ cursor: photoScale > 1.0 ? 'grab' : 'default' }}
+                        onMouseDown={handleModalPhotoMouseDown}
+                        onMouseMove={handleModalPhotoMouseMove}
+                        onMouseUp={handleModalPhotoMouseUpOrLeave}
+                        onMouseLeave={handleModalPhotoMouseUpOrLeave}
+                        onTouchStart={handleModalPhotoTouchStart}
+                        onTouchMove={handleModalPhotoTouchMove}
+                        onTouchEnd={handleModalPhotoMouseUpOrLeave}
                       >
-                        <X size={14} />
-                      </button>
+                        <img 
+                          src={selectedPhotoFile} 
+                          alt="Preview" 
+                          className="w-full h-full object-cover transition-transform duration-75 ease-out pointer-events-none origin-center" 
+                          style={{ transform: `scale(${photoScale}) translate(${photoOffsetX / photoScale}px, ${photoOffsetY / photoScale}px)` }}
+                        />
+                        <button 
+                          type="button"
+                          onClick={() => {
+                            setSelectedPhotoFile(null);
+                            setPhotoScale(1.0);
+                            setPhotoOffsetX(0);
+                            setPhotoOffsetY(0);
+                          }}
+                          className="absolute top-3 right-3 p-2 bg-black/60 text-white rounded-xl hover:bg-red-800 transition-all shadow-lg z-10"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+
+                      {/* Zoom Controls inside Modal */}
+                      <div className="flex items-center justify-center gap-2 bg-slate-50 p-2 rounded-xl border border-slate-200 w-44 mx-auto">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const nextScale = Math.max(1.0, photoScale - 0.1);
+                            setPhotoScale(nextScale);
+                          }}
+                          className="size-7 bg-white hover:bg-slate-200 rounded-lg flex items-center justify-center text-slate-700 text-xs font-bold shadow-sm transition-all font-sans"
+                        >
+                          -
+                        </button>
+                        <span className="text-[10px] font-mono font-black text-slate-800 min-w-[50px] text-center">
+                          {Math.round(photoScale * 100)}%
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const nextScale = Math.min(3.0, photoScale + 0.1);
+                            setPhotoScale(nextScale);
+                          }}
+                          className="size-7 bg-white hover:bg-slate-200 rounded-lg flex items-center justify-center text-slate-700 text-xs font-bold shadow-sm transition-all font-sans"
+                        >
+                          +
+                        </button>
+                      </div>
                     </div>
                   ) : (
                     <div className="relative border-2 border-dashed border-slate-200 hover:border-slate-400 bg-slate-50/30 rounded-2xl p-8 flex flex-col items-center justify-center text-center cursor-pointer transition-all aspect-video">
@@ -819,7 +1253,17 @@ export default function Mural() {
                 <div className="bg-slate-50 border-t border-slate-100 -mx-8 -mb-8 p-6 flex justify-end gap-3 mt-8">
                   <button 
                     type="button" 
-                    onClick={() => setIsPhotoModalOpen(false)}
+                    onClick={() => {
+                      setEditingPhotoId(null);
+                      setSelectedPhotoFile(null);
+                      setSelectedCustomerId('');
+                      setSelectedCustomerName('');
+                      setCustomerSearchQuery('');
+                      setSelectedSaleId('');
+                      setPhotoDescription('');
+                      setPhotoScale(1.0);
+                      setIsPhotoModalOpen(false);
+                    }}
                     className="px-6 py-2.5 text-[10px] font-black uppercase text-slate-400 hover:text-slate-600 transition-all tracking-widest"
                   >
                     Descartar
@@ -829,7 +1273,7 @@ export default function Mural() {
                     disabled={uploadProgress || !selectedCustomerId}
                     className="px-10 py-3 bg-red-800 hover:bg-slate-950 text-white text-[10px] font-black uppercase rounded-xl transition-all shadow-lg tracking-widest disabled:opacity-40"
                   >
-                    Salvar no Mural
+                    {editingPhotoId ? 'Salvar Edição' : 'Salvar no Mural'}
                   </button>
                 </div>
               </form>

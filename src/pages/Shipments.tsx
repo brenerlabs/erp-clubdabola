@@ -33,6 +33,7 @@ export default function Shipments() {
   const [showTimelineId, setShowTimelineId] = useState<string | null>(null);
   const [editingTaxId, setEditingTaxId] = useState<string | null>(null);
   const [quickTaxAmount, setQuickTaxAmount] = useState('');
+  const [showDeliveredSection, setShowDeliveredSection] = useState(false);
 
   // Form State
   const [trackingCode, setTrackingCode] = useState('');
@@ -44,6 +45,7 @@ export default function Shipments() {
   const [taxPaid, setTaxPaid] = useState(false);
   const [notes, setNotes] = useState('');
   const [supplierName, setSupplierName] = useState('');
+  const [sendWhatsAppOnSave, setSendWhatsAppOnSave] = useState(true);
 
   // Item selection from Sales
   const [selectedSaleId, setSelectedSaleId] = useState('');
@@ -210,13 +212,19 @@ export default function Shipments() {
     });
 
     uniqueCustomers.forEach((contact, customerId) => {
+      const customer = customers.find(c => c.id === customerId);
+      const customerName = customer ? customer.name : '';
       const customerItems = shipment.items.filter(i => i.customerId === customerId);
-      const itemsList = customerItems.map(i => `- ${i.quantity}x ${i.productName}`).join('\\n');
+      const itemsList = customerItems.map(i => `- ${i.quantity}x ${i.productName}`).join('\n');
       
-      const message = `Olá! Seu pedido no ERP Club da Bola foi atualizado.\\n\\n*Status:* ${newStatus}\\n*Rastreio:* ${shipment.trackingCode}\\n\\n*Produtos:*\\n${itemsList}\\n\\nAcompanhe seu pedido!`;
+      let message = `Olá! Seu pedido no ERP Club da Bola foi atualizado.\n\n*Status:* ${newStatus}\n*Rastreio:* ${shipment.trackingCode}\n\n*Produtos:*\n${itemsList}\n\nAcompanhe seu pedido!`;
       
-      const cleanPhone = contact.replace(/\\D/g, '');
-      const url = `https://wa.me/55${cleanPhone}?text=${encodeURIComponent(message.replace(/\\\\n/g, '\n'))}`;
+      if (newStatus === 'Entregue') {
+        message = `Fala, *${customerName || 'campeão'}*! Tudo bem? ⚽\n\nVi aqui que sua encomenda com o rastreio *${shipment.trackingCode}* já foi entregue! Aposto que ficou daquele jeito! 🤩\n\nPoderia fortalecer nossa comunidade tirando uma foto irada vestindo a camisa para o nosso Mural de Clientes no site?\n\nPra te premiar, na sua próxima compra você ganha 10% de desconto ou Frete Grátis com o cupom: *DESCONTO10*. Que tal?\n\nForte abraço! Tamo junto! 🔥🤙`;
+      }
+      
+      const cleanPhone = contact.replace(/\D/g, '');
+      const url = `https://wa.me/55${cleanPhone}?text=${encodeURIComponent(message)}`;
       window.open(url, '_blank');
     });
   };
@@ -284,7 +292,7 @@ export default function Shipments() {
         });
         
         if (oldStatus !== status) {
-          if (confirm('Deseja enviar notificações via WhatsApp para os clientes deste grupo?')) {
+          if (sendWhatsAppOnSave) {
             sendNotification({ ...editingShipment, ...data }, status);
           }
         }
@@ -355,15 +363,7 @@ export default function Shipments() {
 
   const updateShipmentStatus = async (shipment: Shipment, newStatus: Shipment['status']) => {
     try {
-      const today = new Date().toISOString().split('T')[0];
-      const customDate = prompt(`Selecione a data da movimentação para "${newStatus}" (AAAA-MM-DD):`, today);
-      if (customDate === null) return;
-      
-      const finalDate = new Date(customDate + 'T12:00:00');
-      if (isNaN(finalDate.getTime())) {
-        alert('Data inválida. Use o formato AAAA-MM-DD');
-        return;
-      }
+      const finalDate = new Date();
 
       const history = [...(shipment.history || [])];
       history.push({
@@ -377,10 +377,6 @@ export default function Shipments() {
         updatedAt: serverTimestamp(),
         history
       });
-
-      if (confirm('Deseja notificar o cliente via WhatsApp sobre essa mudança?')) {
-        sendNotification(shipment, newStatus);
-      }
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, 'shipments');
     }
@@ -409,6 +405,239 @@ export default function Shipments() {
     
     return matchesSearch && matchesStatus;
   });
+
+  const inTransitFiltered = filtered.filter(s => s.status !== 'Entregue');
+  const deliveredFiltered = filtered.filter(s => s.status === 'Entregue');
+
+  const renderShipmentCard = (shipment: Shipment) => (
+    <motion.div 
+      layout
+      key={shipment.id} 
+      className={cn(
+        "bg-white rounded-2xl border transition-all p-4 flex flex-col group relative",
+        selectedIds.includes(shipment.id!) ? "border-amber-500 shadow-md" : "border-slate-100 shadow-sm hover:shadow-md"
+      )}
+    >
+      <button 
+        onClick={() => toggleSelect(shipment.id!)}
+        className="absolute -top-1.5 -left-1.5 z-10 size-6 bg-white border border-slate-200 rounded-lg flex items-center justify-center text-slate-300 hover:text-red-800 transition-all shadow-sm"
+      >
+        {selectedIds.includes(shipment.id!) ? <CheckSquare size={14} className="text-red-800" /> : <Square size={14} />}
+      </button>
+
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className={cn("size-9 rounded-xl flex items-center justify-center shrink-0", getStatusColor(shipment.status))}>
+            <Truck size={18} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h3 className="font-black text-slate-950 text-xs uppercase tracking-tight truncate font-sans">{shipment.trackingCode || 'S/ RASTREIO'}</h3>
+            <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+              <select 
+                value={shipment.status}
+                onChange={(e) => updateShipmentStatus(shipment, e.target.value as any)}
+                className={cn(
+                  "inline-flex px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest outline-none cursor-pointer border-none appearance-none",
+                  getStatusColor(shipment.status)
+                )}
+              >
+                {SHIPMENT_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+              {shipment.supplierName && (
+                <span className="text-[8px] font-bold text-slate-400 uppercase truncate max-w-[80px]">
+                  {shipment.supplierName}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+          <button onClick={() => setShowTimelineId(showTimelineId === shipment.id ? null : shipment.id!)} className="p-1.5 hover:bg-slate-100 rounded text-slate-400 hover:text-red-800"><History size={14} /></button>
+          <button onClick={() => openModal(shipment)} className="p-1.5 hover:bg-slate-100 rounded text-slate-400 hover:text-red-800"><Edit2 size={14} /></button>
+          <button onClick={() => deleteDoc(doc(db, 'shipments', shipment.id!))} className="p-1.5 hover:bg-rose-50 rounded text-slate-400 hover:text-rose-600"><Trash2 size={14} /></button>
+        </div>
+      </div>
+
+      <div className="space-y-2 flex-1">
+        <AnimatePresence mode="wait">
+          {showTimelineId === shipment.id ? (
+            <motion.div 
+              key="timeline"
+              initial={{ opacity: 0, x: -5 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 5 }}
+              className="space-y-2 pt-1"
+            >
+              <p className="text-[8px] font-black uppercase text-red-800 tracking-widest border-b border-red-50 pb-0.5">Log de Auditoria</p>
+              <div className="space-y-2 pl-2 border-l border-slate-100 h-32 overflow-y-auto custom-scrollbar">
+                {shipment.history?.slice().reverse().map((h, i) => (
+                  <div key={i} className="relative pb-1">
+                    <div className={cn("absolute -left-[11px] top-1 size-1.5 rounded-full border border-white", getStatusColor(h.status).replace('text-', 'bg-'))} />
+                    <p className="text-[9px] font-black text-slate-900 uppercase leading-none">{h.status}</p>
+                    <p className="text-[8px] text-slate-400 font-bold mt-0.5">{new Date(h.updatedAt?.seconds * 1000 || h.updatedAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</p>
+                  </div>
+                ))}
+              </div>
+              <button onClick={() => setShowTimelineId(null)} className="w-full py-1.5 text-[8px] font-black uppercase text-slate-400 hover:text-slate-600 bg-slate-50 rounded-lg">Retornar</button>
+            </motion.div>
+          ) : (
+            <motion.div 
+              key="items"
+              initial={{ opacity: 0, x: 5 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -5 }}
+              className="space-y-1.5"
+            >
+              <div className="flex justify-between items-center border-b border-slate-50 pb-0.5">
+                <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest">Grupos Consignados</p>
+                <span className="text-[8px] font-black text-slate-950 font-display tabular-nums">∑ {shipment.items.reduce((acc, i) => acc + i.quantity, 0)} UNIDADES</span>
+              </div>
+              <div className="space-y-1 max-h-32 overflow-y-auto custom-scrollbar pr-1">
+                {(Array.from(new Set(shipment.items.map(i => i.customerId))) as string[]).map(customerId => {
+                  const customerName = shipment.items.find(i => i.customerId === customerId)?.customerName;
+                  const customerItems = shipment.items.filter(i => i.customerId === customerId);
+                  const isExpanded = expandedGroups[shipment.id!]?.[customerId];
+
+                  return (
+                    <div key={customerId} className="space-y-1">
+                      <button 
+                        onClick={() => toggleExpand(shipment.id!, customerId)}
+                        className="w-full flex items-center justify-between text-[10px] bg-slate-50/50 p-1.5 rounded-lg border border-slate-100/50 hover:bg-slate-100/50 transition-colors"
+                      >
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <div className="size-4 bg-white rounded flex items-center justify-center text-slate-400 border border-slate-100 shadow-sm shrink-0">
+                            {isExpanded ? <X size={8} /> : <Plus size={8} />}
+                          </div>
+                          <span className="font-bold text-slate-900 truncate uppercase tracking-tight">{customerName}</span>
+                        </div>
+                        <span className="text-[8px] font-black text-red-800 bg-red-100 px-1 rounded ml-2 shrink-0">
+                          {customerItems.length}
+                        </span>
+                      </button>
+                      
+                      <AnimatePresence>
+                        {isExpanded && (
+                          <motion.div 
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            className="bg-slate-50/30 rounded-lg overflow-hidden ml-3 border-l border-slate-200"
+                          >
+                            {customerItems.map(item => (
+                              <div key={item.id} className="p-1.5 border-b border-slate-50/50 last:border-0 flex justify-between items-center text-[9px]">
+                                <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                                  <span className="text-slate-600 font-bold uppercase truncate tracking-tight">{item.productName}</span>
+                                  {item.isDropshipping && (
+                                    <span className="text-[6px] font-black bg-amber-500 text-white px-0.5 rounded italic leading-none">DS</span>
+                                  )}
+                                </div>
+                                <span className="font-black text-slate-950 ml-2 shrink-0 mr-1">x{item.quantity}</span>
+                              </div>
+                            ))}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  );
+                })}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      <div className="mt-4 pt-3 border-t border-slate-50 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          {shipment.hasTax ? (
+            <div className="flex items-center gap-1.5">
+              <div className="group/tax relative">
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const amountStr = prompt('Valor da taxa:', shipment.taxAmount.toString().replace('.', ','));
+                    if (amountStr !== null && amountStr.trim() !== '') {
+                      const normalized = amountStr.replace(',', '.').replace(/[^\d.]/g, '');
+                      const parsed = parseFloat(normalized);
+                      if (!isNaN(parsed) && parsed >= 0) {
+                        updateShipmentTax(shipment.id!, parsed, shipment.taxPaid);
+                      }
+                    }
+                  }}
+                  className="flex items-center gap-1 cursor-pointer hover:opacity-80 group"
+                >
+                  <Receipt size={12} className={shipment.taxPaid ? "text-emerald-500" : "text-rose-500"} />
+                  <span className={cn("text-[9px] font-black uppercase font-display tabular-nums leading-none tracking-tight", shipment.taxPaid ? "text-emerald-600" : "text-rose-600")}>
+                    {formatCurrency(shipment.taxAmount)}
+                  </span>
+                  <Calculator size={10} className="text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </button>
+                
+                <div className="absolute bottom-full left-0 mb-2 w-48 bg-slate-950 text-white rounded-xl p-2.5 shadow-2xl opacity-0 group-hover/tax:opacity-100 pointer-events-none transition-all z-20 border border-white/10">
+                  <p className="text-[7px] font-black uppercase tracking-[0.2em] text-slate-500 mb-1.5 border-b border-white/5 pb-1">Auditoria de Taxas / Pro-Rata</p>
+                  <div className="space-y-1">
+                    {calculateTaxBreakdown(shipment).map(item => (
+                      <div key={item.id} className="flex justify-between items-center text-[8px]">
+                        <span className="font-bold truncate max-w-[90px] uppercase opacity-70 tracking-tight">{item.name}</span>
+                        <span className="font-black text-emerald-400 font-display tabular-nums">{formatCurrency(item.tax)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <button 
+                onClick={() => updateShipmentTax(shipment.id!, shipment.taxAmount, !shipment.taxPaid)}
+                className={cn(
+                  "px-1.5 py-0.5 rounded text-[7px] font-black uppercase tracking-widest transition-all",
+                  shipment.taxPaid ? "bg-emerald-500 text-white" : "bg-rose-500 text-white"
+                )}
+              >
+                {shipment.taxPaid ? 'PAGO' : 'PAGAR'}
+              </button>
+            </div>
+          ) : (
+            editingTaxId === shipment.id ? (
+              <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-0.5" onClick={e => e.stopPropagation()}>
+                <input 
+                  autoFocus
+                  type="text"
+                  placeholder="0,00"
+                  value={quickTaxAmount}
+                  onChange={e => setQuickTaxAmount(e.target.value.replace(/[^0-9,]/g, ''))}
+                  className="w-12 px-1 py-0.5 text-[9px] font-bold outline-none"
+                />
+                <button 
+                  onClick={() => {
+                    const val = parseFloat(quickTaxAmount.replace(',', '.'));
+                    if (!isNaN(val)) {
+                      updateShipmentTax(shipment.id!, val, false);
+                      setEditingTaxId(null);
+                    }
+                  }}
+                  className="bg-indigo-600 text-white px-1.5 py-0.5 rounded text-[7px] font-black uppercase"
+                >
+                  OK
+                </button>
+                <button onClick={() => setEditingTaxId(null)} className="text-slate-400"><X size={8} /></button>
+              </div>
+            ) : (
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEditingTaxId(shipment.id!);
+                  setQuickTaxAmount('');
+                }}
+                className="flex items-center gap-1 text-[8px] font-black uppercase text-slate-400 hover:text-indigo-600 transition-colors border border-slate-100 px-1.5 py-1 rounded bg-slate-50/50"
+              >
+                <Plus size={8} /> ADD TAXA
+              </button>
+            )
+          )}
+        </div>
+        <button 
+          onClick={() => sendNotification(shipment, shipment.status)}
+          className="flex items-center gap-1 px-2 py-1 bg-slate-900 text-white rounded text-[8px] font-black uppercase tracking-widest hover:bg-red-800 transition-colors"
+        >
+          <MessageCircle size={10} /> NOTIFICAR
+        </button>
+      </div>
+    </motion.div>
+  );
 
   return (
     <motion.div 
@@ -530,237 +759,84 @@ export default function Shipments() {
         })}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filtered.map(shipment => (
-          <motion.div 
-            layout
-            key={shipment.id} 
-            className={cn(
-              "bg-white rounded-2xl border transition-all p-4 flex flex-col group relative",
-              selectedIds.includes(shipment.id!) ? "border-amber-500 shadow-md" : "border-slate-100 shadow-sm hover:shadow-md"
-            )}
-          >
-            <button 
-              onClick={() => toggleSelect(shipment.id!)}
-              className="absolute -top-1.5 -left-1.5 z-10 size-6 bg-white border border-slate-200 rounded-lg flex items-center justify-center text-slate-300 hover:text-red-800 transition-all shadow-sm"
-            >
-              {selectedIds.includes(shipment.id!) ? <CheckSquare size={14} className="text-red-800" /> : <Square size={14} />}
-            </button>
+      {statusFilter === 'all' ? (
+        <div className="space-y-6">
+          {/* Main Grid: Only In Transit/Pending */}
+          {inTransitFiltered.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {inTransitFiltered.map(shipment => renderShipmentCard(shipment))}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center p-12 bg-white/40 backdrop-blur-md rounded-3xl border border-white/60 shadow-inner text-center">
+              <CheckCircle2 size={36} className="text-emerald-500 mb-3" />
+              <p className="text-sm font-black text-slate-800 uppercase tracking-wider">Tudo em dia!</p>
+              <p className="text-xs text-slate-500 mt-1 max-w-md">Nenhuma encomenda nova está em processamento ou em trânsito no momento.</p>
+            </div>
+          )}
 
-            <div className="flex items-start justify-between mb-3">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className={cn("size-9 rounded-xl flex items-center justify-center shrink-0", getStatusColor(shipment.status))}>
-                  <Truck size={18} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <h3 className="font-black text-slate-950 text-xs uppercase tracking-tight truncate font-sans">{shipment.trackingCode || 'S/ RASTREIO'}</h3>
-                  <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
-                    <select 
-                      value={shipment.status}
-                      onChange={(e) => updateShipmentStatus(shipment, e.target.value as any)}
-                      className={cn(
-                        "inline-flex px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest outline-none cursor-pointer border-none appearance-none",
-                        getStatusColor(shipment.status)
-                      )}
-                    >
-                      {SHIPMENT_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                    {shipment.supplierName && (
-                      <span className="text-[8px] font-bold text-slate-400 uppercase truncate max-w-[80px]">
-                        {shipment.supplierName}
-                      </span>
-                    )}
+          {/* Hidden/Collapsed Delivered Section */}
+          {deliveredFiltered.length > 0 && (
+            <div className="mt-8 pt-6 border-t border-dashed border-slate-200">
+              <button
+                type="button"
+                onClick={() => setShowDeliveredSection(!showDeliveredSection)}
+                className="w-full flex items-center justify-between p-4 bg-white/60 hover:bg-slate-50 border border-slate-200/50 hover:border-slate-300 rounded-2xl shadow-sm transition-all group cursor-pointer"
+              >
+                <div className="flex items-center gap-3 text-slate-700">
+                  <CheckCircle2 size={18} className="text-emerald-600 shrink-0" />
+                  <div className="text-left">
+                    <p className="text-[10px] font-black uppercase text-slate-800 tracking-wider">
+                      Encomendas Entregues ({deliveredFiltered.length})
+                    </p>
+                    <p className="text-[9px] text-slate-400 font-medium leading-none mt-0.5">
+                      Arquivadas e ocultas para visualização limpa por padrão
+                    </p>
                   </div>
                 </div>
-              </div>
-              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                <button onClick={() => setShowTimelineId(showTimelineId === shipment.id ? null : shipment.id!)} className="p-1.5 hover:bg-slate-100 rounded text-slate-400 hover:text-red-800"><History size={14} /></button>
-                <button onClick={() => openModal(shipment)} className="p-1.5 hover:bg-slate-100 rounded text-slate-400 hover:text-red-800"><Edit2 size={14} /></button>
-                <button onClick={() => deleteDoc(doc(db, 'shipments', shipment.id!))} className="p-1.5 hover:bg-rose-50 rounded text-slate-400 hover:text-rose-600"><Trash2 size={14} /></button>
-              </div>
-            </div>
-
-            <div className="space-y-2 flex-1">
-              <AnimatePresence mode="wait">
-                {showTimelineId === shipment.id ? (
-                  <motion.div 
-                    key="timeline"
-                    initial={{ opacity: 0, x: -5 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 5 }}
-                    className="space-y-2 pt-1"
+                <div className="flex items-center gap-2">
+                  <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 group-hover:text-slate-600">
+                    {showDeliveredSection ? "Ocultar" : "Mostrar"}
+                  </span>
+                  <motion.div
+                    animate={{ rotate: showDeliveredSection ? 90 : 0 }}
+                    transition={{ type: "spring", stiffness: 300, damping: 20 }}
                   >
-                    <p className="text-[8px] font-black uppercase text-red-800 tracking-widest border-b border-red-50 pb-0.5">Log de Auditoria</p>
-                    <div className="space-y-2 pl-2 border-l border-slate-100 h-32 overflow-y-auto custom-scrollbar">
-                      {shipment.history?.slice().reverse().map((h, i) => (
-                        <div key={i} className="relative pb-1">
-                          <div className={cn("absolute -left-[11px] top-1 size-1.5 rounded-full border border-white", getStatusColor(h.status).replace('text-', 'bg-'))} />
-                          <p className="text-[9px] font-black text-slate-900 uppercase leading-none">{h.status}</p>
-                          <p className="text-[8px] text-slate-400 font-bold mt-0.5">{new Date(h.updatedAt?.seconds * 1000 || h.updatedAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</p>
-                        </div>
-                      ))}
-                    </div>
-                    <button onClick={() => setShowTimelineId(null)} className="w-full py-1.5 text-[8px] font-black uppercase text-slate-400 hover:text-slate-600 bg-slate-50 rounded-lg">Retornar</button>
+                    <ChevronRight size={16} className="text-slate-400 group-hover:text-slate-600" />
                   </motion.div>
-                ) : (
-                  <motion.div 
-                    key="items"
-                    initial={{ opacity: 0, x: 5 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -5 }}
-                    className="space-y-1.5"
-                  >
-                    <div className="flex justify-between items-center border-b border-slate-50 pb-0.5">
-                      <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest">Grupos Consignados</p>
-                      <span className="text-[8px] font-black text-slate-950 font-display tabular-nums">∑ {shipment.items.reduce((acc, i) => acc + i.quantity, 0)} UNIDADES</span>
-                    </div>
-                    <div className="space-y-1 max-h-32 overflow-y-auto custom-scrollbar pr-1">
-                      {(Array.from(new Set(shipment.items.map(i => i.customerId))) as string[]).map(customerId => {
-                        const customerName = shipment.items.find(i => i.customerId === customerId)?.customerName;
-                        const customerItems = shipment.items.filter(i => i.customerId === customerId);
-                        const isExpanded = expandedGroups[shipment.id!]?.[customerId];
+                </div>
+              </button>
 
-                        return (
-                          <div key={customerId} className="space-y-1">
-                            <button 
-                              onClick={() => toggleExpand(shipment.id!, customerId)}
-                              className="w-full flex items-center justify-between text-[10px] bg-slate-50/50 p-1.5 rounded-lg border border-slate-100/50 hover:bg-slate-100/50 transition-colors"
-                            >
-                              <div className="flex items-center gap-2 min-w-0 flex-1">
-                                <div className="size-4 bg-white rounded flex items-center justify-center text-slate-400 border border-slate-100 shadow-sm shrink-0">
-                                  {isExpanded ? <X size={8} /> : <Plus size={8} />}
-                                </div>
-                                <span className="font-bold text-slate-900 truncate uppercase tracking-tight">{customerName}</span>
-                              </div>
-                              <span className="text-[8px] font-black text-red-800 bg-red-100 px-1 rounded ml-2 shrink-0">
-                                {customerItems.length}
-                              </span>
-                            </button>
-                            
-                            <AnimatePresence>
-                              {isExpanded && (
-                                <motion.div 
-                                  initial={{ height: 0, opacity: 0 }}
-                                  animate={{ height: 'auto', opacity: 1 }}
-                                  exit={{ height: 0, opacity: 0 }}
-                                  className="bg-slate-50/30 rounded-lg overflow-hidden ml-3 border-l border-slate-200"
-                                >
-                                  {customerItems.map(item => (
-                                    <div key={item.id} className="p-1.5 border-b border-slate-50/50 last:border-0 flex justify-between items-center text-[9px]">
-                                      <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                                        <span className="text-slate-600 font-bold uppercase truncate tracking-tight">{item.productName}</span>
-                                        {item.isDropshipping && (
-                                          <span className="text-[6px] font-black bg-amber-500 text-white px-0.5 rounded italic leading-none">DS</span>
-                                        )}
-                                      </div>
-                                      <span className="font-black text-slate-950 ml-2 shrink-0 mr-1">x{item.quantity}</span>
-                                    </div>
-                                  ))}
-                                </motion.div>
-                              )}
-                            </AnimatePresence>
-                          </div>
-                        );
-                      })}
+              <AnimatePresence>
+                {showDeliveredSection && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-4">
+                      {deliveredFiltered.map(shipment => renderShipmentCard(shipment))}
                     </div>
                   </motion.div>
                 )}
               </AnimatePresence>
             </div>
-
-            <div className="mt-4 pt-3 border-t border-slate-50 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                {shipment.hasTax ? (
-                  <div className="flex items-center gap-1.5">
-                    <div className="group/tax relative">
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const amountStr = prompt('Valor da taxa:', shipment.taxAmount.toString().replace('.', ','));
-                          if (amountStr !== null && amountStr.trim() !== '') {
-                            const normalized = amountStr.replace(',', '.').replace(/[^\d.]/g, '');
-                            const parsed = parseFloat(normalized);
-                            if (!isNaN(parsed) && parsed >= 0) {
-                              updateShipmentTax(shipment.id!, parsed, shipment.taxPaid);
-                            }
-                          }
-                        }}
-                        className="flex items-center gap-1 cursor-pointer hover:opacity-80 group"
-                      >
-                        <Receipt size={12} className={shipment.taxPaid ? "text-emerald-500" : "text-rose-500"} />
-                        <span className={cn("text-[9px] font-black uppercase font-display tabular-nums leading-none tracking-tight", shipment.taxPaid ? "text-emerald-600" : "text-rose-600")}>
-                          {formatCurrency(shipment.taxAmount)}
-                        </span>
-                        <Calculator size={10} className="text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />
-                      </button>
-                      
-                      <div className="absolute bottom-full left-0 mb-2 w-48 bg-slate-950 text-white rounded-xl p-2.5 shadow-2xl opacity-0 group-hover/tax:opacity-100 pointer-events-none transition-all z-20 border border-white/10">
-                        <p className="text-[7px] font-black uppercase tracking-[0.2em] text-slate-500 mb-1.5 border-b border-white/5 pb-1">Auditoria de Taxas / Pro-Rata</p>
-                        <div className="space-y-1">
-                          {calculateTaxBreakdown(shipment).map(item => (
-                            <div key={item.id} className="flex justify-between items-center text-[8px]">
-                              <span className="font-bold truncate max-w-[90px] uppercase opacity-70 tracking-tight">{item.name}</span>
-                              <span className="font-black text-emerald-400 font-display tabular-nums">{formatCurrency(item.tax)}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                    <button 
-                      onClick={() => updateShipmentTax(shipment.id!, shipment.taxAmount, !shipment.taxPaid)}
-                      className={cn(
-                        "px-1.5 py-0.5 rounded text-[7px] font-black uppercase tracking-widest transition-all",
-                        shipment.taxPaid ? "bg-emerald-500 text-white" : "bg-rose-500 text-white"
-                      )}
-                    >
-                      {shipment.taxPaid ? 'PAGO' : 'PAGAR'}
-                    </button>
-                  </div>
-                ) : (
-                  editingTaxId === shipment.id ? (
-                    <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-0.5" onClick={e => e.stopPropagation()}>
-                      <input 
-                        autoFocus
-                        type="text"
-                        placeholder="0,00"
-                        value={quickTaxAmount}
-                        onChange={e => setQuickTaxAmount(e.target.value.replace(/[^0-9,]/g, ''))}
-                        className="w-12 px-1 py-0.5 text-[9px] font-bold outline-none"
-                      />
-                      <button 
-                        onClick={() => {
-                          const val = parseFloat(quickTaxAmount.replace(',', '.'));
-                          if (!isNaN(val)) {
-                            updateShipmentTax(shipment.id!, val, false);
-                            setEditingTaxId(null);
-                          }
-                        }}
-                        className="bg-indigo-600 text-white px-1.5 py-0.5 rounded text-[7px] font-black uppercase"
-                      >
-                        OK
-                      </button>
-                      <button onClick={() => setEditingTaxId(null)} className="text-slate-400"><X size={8} /></button>
-                    </div>
-                  ) : (
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setEditingTaxId(shipment.id!);
-                        setQuickTaxAmount('');
-                      }}
-                      className="flex items-center gap-1 text-[8px] font-black uppercase text-slate-400 hover:text-indigo-600 transition-colors border border-slate-100 px-1.5 py-1 rounded bg-slate-50/50"
-                    >
-                      <Plus size={8} /> ADD TAXA
-                    </button>
-                  )
-                )}
-              </div>
-              <button 
-                onClick={() => sendNotification(shipment, shipment.status)}
-                className="flex items-center gap-1 px-2 py-1 bg-slate-900 text-white rounded text-[8px] font-black uppercase tracking-widest hover:bg-red-800 transition-colors"
-              >
-                <MessageCircle size={10} /> NOTIFICAR
-              </button>
-            </div>
-          </motion.div>
-        ))}
-      </div>
+          )}
+        </div>
+      ) : (
+        /* Explicit status filter grid */
+        filtered.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filtered.map(shipment => renderShipmentCard(shipment))}
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center p-12 bg-white/40 backdrop-blur-md rounded-3xl border border-white/60 shadow-inner text-center">
+            <AlertCircle size={36} className="text-slate-400 mb-3" />
+            <p className="text-sm font-black text-slate-800 uppercase tracking-wider">Nenhum resultado</p>
+            <p className="text-xs text-slate-500 mt-1">Nenhuma encomenda encontrada com o status selecionado ou filtro de busca atual.</p>
+          </div>
+        )
+      )}
 
       {/* Shipment Modal */}
       <AnimatePresence>
@@ -994,6 +1070,24 @@ export default function Shipments() {
                     )}
                   </AnimatePresence>
                 </div>
+
+                {editingShipment && (
+                  <div className="flex items-center gap-3 p-4 bg-slate-50 border border-slate-200/60 rounded-2xl">
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        className="sr-only peer" 
+                        checked={sendWhatsAppOnSave} 
+                        onChange={e => setSendWhatsAppOnSave(e.target.checked)} 
+                      />
+                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                    </label>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-black uppercase text-slate-800 tracking-wider">Notificar por WhatsApp ao salvar</p>
+                      <p className="text-[9px] text-slate-400 font-medium leading-none mt-0.5">Se o status for alterado, o WhatsApp abrirá automaticamente para notificar.</p>
+                    </div>
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Observações Internas</label>
