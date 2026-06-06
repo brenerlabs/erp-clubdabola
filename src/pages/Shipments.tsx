@@ -6,7 +6,8 @@ import {
   Package, Search, Plus, Trash2, Edit2, Truck, 
   CheckCircle2, Clock, AlertCircle, MapPin, 
   MessageCircle, DollarSign, X, Receipt,
-  ChevronRight, ArrowRight, ShoppingBag, Box, History, CheckSquare, Square, Calculator
+  ChevronRight, ArrowRight, ShoppingBag, Box, History, CheckSquare, Square, Calculator,
+  Sparkles, TrendingUp, Activity
 } from 'lucide-react';
 import { formatCurrency, cn, cleanVariationName } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -126,6 +127,7 @@ export default function Shipments() {
   const [showTimelineId, setShowTimelineId] = useState<string | null>(null);
   const [editingTaxId, setEditingTaxId] = useState<string | null>(null);
   const [quickTaxAmount, setQuickTaxAmount] = useState('');
+  const [showInsights, setShowInsights] = useState(true);
   const [showDeliveredSection, setShowDeliveredSection] = useState(false);
   const [activeStatusMenuId, setActiveStatusMenuId] = useState<string | null>(null);
   const [pendingWhatsAppNotify, setPendingWhatsAppNotify] = useState<{ shipment: Shipment, newStatus: string } | null>(null);
@@ -289,6 +291,7 @@ export default function Shipments() {
 
   const availableSales = sales.filter(sale => 
     sale.status !== 'Pré-venda' &&
+    sale.status !== 'Cancelada' &&
     sale.items.some(item => !shippedItemKeys.has(`${sale.id}-${item.productId}-${item.variationId}`))
   );
 
@@ -503,6 +506,77 @@ export default function Shipments() {
 
   const inTransitFiltered = filtered.filter(s => s.status !== 'Entregue');
   const deliveredFiltered = filtered.filter(s => s.status === 'Entregue');
+
+  // --- COMPUTE ADVANCED OPERATIONAL INTELLIGENCE METRICS ---
+  const totalShipmentsCount = shipments.length;
+  const shippedShipments = shipments.filter(s => s.status !== 'Processando');
+  const taxedCount = shippedShipments.filter(s => s.hasTax).length;
+  const taxationRate = shippedShipments.length > 0 ? Math.round((taxedCount / shippedShipments.length) * 100) : 0;
+  
+  // Average transit time from "Postado" -> "Entregue" using real history logs
+  const deliveredShipments = shipments.filter(s => s.status === 'Entregue');
+  let totalTransitDays = 0;
+  let deliveredWithTransitCount = 0;
+  deliveredShipments.forEach(s => {
+    if (s.history) {
+      const postadoLog = s.history.find(h => h.status === 'Postado');
+      const entregueLog = s.history.find(h => h.status === 'Entregue');
+      if (postadoLog && entregueLog) {
+        const postadoDate = postadoLog.updatedAt?.seconds 
+          ? new Date(postadoLog.updatedAt.seconds * 1000) 
+          : new Date(postadoLog.updatedAt);
+        const entregueDate = entregueLog.updatedAt?.seconds 
+          ? new Date(entregueLog.updatedAt.seconds * 1000) 
+          : new Date(entregueLog.updatedAt);
+        
+        const diffTime = entregueDate.getTime() - postadoDate.getTime();
+        if (diffTime > 0) {
+          const diffDays = diffTime / (1000 * 60 * 60 * 24);
+          totalTransitDays += diffDays;
+          deliveredWithTransitCount++;
+        }
+      }
+    }
+  });
+  const avgTransitTime = deliveredWithTransitCount > 0 ? (totalTransitDays / deliveredWithTransitCount).toFixed(1) : null;
+
+  // Search active customs hold bottleneck (Fiscalização)
+  const fiscalizacaoAlerts = shipments.filter(s => s.status === 'Fiscalização').map(s => {
+    const fiscalLog = s.history?.find(h => h.status === 'Fiscalização');
+    let daysInFiscal = 0;
+    if (fiscalLog) {
+      const date = fiscalLog.updatedAt?.seconds 
+        ? new Date(fiscalLog.updatedAt.seconds * 1000) 
+        : new Date(fiscalLog.updatedAt);
+      const diffTime = new Date().getTime() - date.getTime();
+      daysInFiscal = Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)));
+    }
+    return {
+      id: s.id,
+      trackingCode: s.trackingCode,
+      days: daysInFiscal,
+      hasTax: s.hasTax,
+      taxPaid: s.taxPaid,
+      taxAmount: s.taxAmount
+    };
+  }).sort((a, b) => b.days - a.days);
+
+  // Supplier counts and leading supplier
+  const supplierBreakdown = shipments.reduce((acc, s) => {
+    if (s.supplierName && s.supplierName.trim()) {
+      const name = s.supplierName.trim().toUpperCase();
+      acc[name] = (acc[name] || 0) + 1;
+    }
+    return acc;
+  }, {} as Record<string, number>);
+  const topSupplierName = (Object.entries(supplierBreakdown) as [string, number][])
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 1)[0]?.[0] || 'NÃO CONFIGURADO';
+
+  // Dropshipping share metrics
+  const totalItemsCount = shipments.reduce((acc, s) => acc + s.items.reduce((sum, i) => sum + i.quantity, 0), 0);
+  const totalDropshippingItemsCount = shipments.reduce((acc, s) => acc + s.items.filter(i => i.isDropshipping).reduce((sum, i) => sum + i.quantity, 0), 0);
+  const dropshippingPercentage = totalItemsCount > 0 ? Math.round((totalDropshippingItemsCount / totalItemsCount) * 100) : 0;
 
   const renderShipmentCard = (shipment: Shipment) => {
     const statusConfig = getStatusConfig(shipment.status);
@@ -908,10 +982,24 @@ export default function Shipments() {
             </div>
           )}
           <button 
-            onClick={() => openModal()}
-            className="bg-red-800 hover:bg-black text-white font-bold py-3 px-6 rounded-xl transition-all shadow-md flex items-center gap-2 active:scale-95 shadow-red-900/20"
+            type="button"
+            onClick={() => setShowInsights(!showInsights)}
+            className={cn(
+              "font-bold py-3 px-5 rounded-xl transition-all border flex items-center gap-2 active:scale-95 shadow-sm text-xs cursor-pointer select-none",
+              showInsights 
+                ? "bg-slate-900 border-slate-950 text-white hover:bg-slate-800" 
+                : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300"
+            )}
           >
-            <Plus size={20} /> Deploy Lote
+            <Sparkles size={15} className={cn("text-amber-500 transition-transform duration-300", showInsights ? "fill-amber-400 rotate-[15deg] scale-110" : "")} />
+            <span>{showInsights ? 'Ocultar Insights' : 'Ver Insights'}</span>
+          </button>
+
+          <button 
+            onClick={() => openModal()}
+            className="bg-red-800 hover:bg-black text-white font-bold py-3 px-6 rounded-xl transition-all shadow-md flex items-center gap-2 active:scale-95 shadow-red-900/20 text-xs"
+          >
+            <Plus size={16} /> Deploy Lote
           </button>
         </div>
       </div>
@@ -942,6 +1030,147 @@ export default function Shipments() {
            </div>
         </div>
       </div>
+
+      <AnimatePresence>
+        {showInsights && (
+          <motion.div
+            initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+            animate={{ opacity: 1, height: 'auto', marginBottom: 16 }}
+            exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+            className="overflow-hidden mt-4"
+          >
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-1">
+              {/* Card 1: Taxation index */}
+              <div className="bg-white hover:border-slate-300 transition-all border border-slate-200 p-5 rounded-3xl shadow-sm flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest leading-none">Índice de Tributação</span>
+                    <div className="size-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-100/50">
+                      <TrendingUp size={14} />
+                    </div>
+                  </div>
+                  <div className="flex items-baseline gap-1.5">
+                    <p className="text-2xl font-black text-slate-900 font-display tabular-nums leading-none">
+                      {taxationRate}%
+                    </p>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase">taxado</span>
+                  </div>
+                  <p className="text-[10px] text-slate-500 font-semibold mt-2.5 leading-relaxed">
+                    Média de <span className="font-bold text-slate-800">{formatCurrency(taxedCount > 0 ? (shippedShipments.filter(s => s.hasTax).reduce((acc, s) => acc + (s.taxAmount || 0), 0) / taxedCount) : 0)}</span> de tributo por lote fiscalizado.
+                  </p>
+                </div>
+                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[8px] font-black uppercase">
+                  <span className="text-slate-400">Eficiência Fiscal</span>
+                  <span className={cn(
+                    "px-1.5 py-0.5 rounded-md tracking-wider font-extrabold",
+                    taxationRate > 40 ? "bg-rose-50 text-rose-600 border border-rose-100" : "bg-emerald-50 text-emerald-600 border border-emerald-100"
+                  )}>
+                    {taxationRate > 40 ? 'ALTO ENCARGO' : 'SOB CONTROLE'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Card 2: Transit Metrics */}
+              <div className="bg-white hover:border-slate-300 transition-all border border-slate-200 p-5 rounded-3xl shadow-sm flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest leading-none">Tempo de Trânsito</span>
+                    <div className="size-8 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center border border-sky-100/50">
+                      <Clock size={14} />
+                    </div>
+                  </div>
+                  <div className="flex items-baseline gap-1.5">
+                    <p className="text-2xl font-black text-slate-900 font-display tabular-nums leading-none">
+                      {avgTransitTime ? `${avgTransitTime} dias` : 'S/ dados'}
+                    </p>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase">médio</span>
+                  </div>
+                  <p className="text-[10px] text-slate-500 font-semibold mt-2.5 leading-relaxed">
+                    Tempo médio decorrido desde o status <span className="font-bold text-slate-700">Postado</span> até a chegada registrada no <span className="font-bold text-slate-700">Entregue</span>.
+                  </p>
+                </div>
+                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[8px] font-black uppercase">
+                  <span className="text-slate-400">Status da Linha</span>
+                  <span className="text-[9px] font-extrabold text-slate-700 flex items-center gap-1">
+                    Fluxo Ativo <Activity size={10} className="text-emerald-500 animate-pulse" />
+                  </span>
+                </div>
+              </div>
+
+              {/* Card 3: Top Suppliers */}
+              <div className="bg-white hover:border-slate-300 transition-all border border-slate-200 p-5 rounded-3xl shadow-sm flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest leading-none">Fornecedor Líder</span>
+                    <div className="size-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100/50">
+                      <Package size={14} />
+                    </div>
+                  </div>
+                  <p className="text-[11px] font-black text-slate-800 uppercase truncate leading-none mb-1 tracking-tight">
+                    {topSupplierName}
+                  </p>
+                  <p className="text-[10px] text-slate-500 font-semibold mt-2.5 leading-relaxed">
+                    Canal com maior volume de lotes ativos, dividindo operações entre Dropshipping e atacado local.
+                  </p>
+                </div>
+                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[8px] font-black uppercase">
+                  <span className="text-slate-400">Operador dropshipping</span>
+                  <span className="text-[8px] font-black bg-indigo-50/80 text-indigo-700 border border-indigo-100/50 px-1.5 py-0.5 rounded-md">
+                    {dropshippingPercentage}% itens DS
+                  </span>
+                </div>
+              </div>
+
+              {/* Card 4: Bottleneck Alert */}
+              <div className="bg-white hover:border-slate-300 transition-all border border-slate-200 p-5 rounded-3xl shadow-sm flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest leading-none">Retenção Aduaneira</span>
+                    <div className={cn(
+                      "size-8 rounded-xl flex items-center justify-center border",
+                      fiscalizacaoAlerts.length > 0 
+                        ? "bg-rose-50 border-rose-100 text-rose-600 animate-pulse" 
+                        : "bg-emerald-50 border-emerald-100 text-emerald-600"
+                    )}>
+                      <AlertCircle size={14} />
+                    </div>
+                  </div>
+
+                  {fiscalizacaoAlerts.length > 0 ? (
+                    <div className="space-y-1 max-h-16 overflow-y-auto custom-scrollbar pr-1">
+                      {fiscalizacaoAlerts.slice(0, 2).map(alert => (
+                        <div key={alert.id} className="text-[10px] flex items-center justify-between font-bold bg-rose-50/40 p-1 px-2 rounded-lg border border-rose-100/30">
+                          <span className="font-mono text-rose-700 tracking-tight select-all">{alert.trackingCode}</span>
+                          <span className="text-[8px] bg-rose-100 text-rose-800 px-1.5 py-0.2 rounded-md font-black">
+                            {alert.days}d retido
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div>
+                      <p className="text-xl font-black text-emerald-600 font-display leading-none">Canal Verde</p>
+                      <p className="text-[10px] text-slate-500 font-semibold mt-2 leading-relaxed">
+                        Excelente! Nenhum pacote pendente de pagamento ou sob exame físico na fiscalização.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[8px] font-black uppercase">
+                  <span className="text-slate-400">Total Retido</span>
+                  <span className={cn(
+                    "px-1.5 py-0.5 rounded-md",
+                    fiscalizacaoAlerts.length > 0 ? "bg-rose-500 text-white font-extrabold animate-pulse" : "bg-emerald-50 text-emerald-600"
+                  )}>
+                    {fiscalizacaoAlerts.length} LOTES
+                  </span>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Filtros de Status */}
       <div className="flex items-center gap-2 overflow-x-auto pb-2 -mb-2 custom-scrollbar">

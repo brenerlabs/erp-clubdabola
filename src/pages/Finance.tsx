@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../lib/firebase';
-import { collection, query, onSnapshot, orderBy, writeBatch, doc, getDocs, serverTimestamp, addDoc, deleteDoc } from 'firebase/firestore';
+import { collection, query, onSnapshot, orderBy, writeBatch, doc, getDocs, serverTimestamp, addDoc, deleteDoc, getDoc, where } from 'firebase/firestore';
 import { Transaction, Sale, Shipment, Customer, Product, Expense } from '../types';
 import { 
   ArrowDownCircle, 
@@ -20,7 +20,15 @@ import {
   AlertTriangle,
   Plus,
   Tag,
-  AlertCircle
+  AlertCircle,
+  Search,
+  ChevronDown,
+  ChevronUp,
+  X,
+  XCircle,
+  RotateCcw,
+  CheckCircle,
+  Sparkles
 } from 'lucide-react';
 import { formatCurrency, cn } from '../lib/utils';
 import { motion } from 'motion/react';
@@ -36,6 +44,27 @@ export default function Finance() {
   const [products, setProducts] = useState<Product[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [filter, setFilter] = useState<'all' | 'payment' | 'debt'>('all');
+
+  const [salesSearch, setSalesSearch] = useState('');
+  const [expandedSaleId, setExpandedSaleId] = useState<string | null>(null);
+  const [isCancellingSale, setIsCancellingSale] = useState<string | null>(null);
+  const [auditTab, setAuditTab] = useState<'sales' | 'transactions'>('sales');
+
+  // Unified dynamic transaction filters
+  const [periodFilter, setPeriodFilter] = useState<'all' | 'today' | '7days' | 'month' | 'custom'>('all');
+  const [startDateFilter, setStartDateFilter] = useState('');
+  const [endDateFilter, setEndDateFilter] = useState('');
+  const [paymentTypeFilter, setPaymentTypeFilter] = useState<'all' | 'Dinheiro' | 'Pix' | 'Cartão' | 'Fiado'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'Concluída' | 'Pendente' | 'Cancelada' | 'Pré-venda'>('all');
+
+  const getParsedDate = (el: any) => {
+    if (!el?.createdAt) return null;
+    if (typeof el.createdAt.seconds === 'number') return new Date(el.createdAt.seconds * 1000);
+    if (el.createdAt instanceof Date) return el.createdAt;
+    if (typeof el.createdAt.toDate === 'function') return el.createdAt.toDate();
+    if (typeof el.createdAt === 'string') return new Date(el.createdAt);
+    return null;
+  };
 
   useEffect(() => {
     const unsubSales = onSnapshot(query(collection(db, 'sales'), orderBy('createdAt', 'desc')), (snapshot) => {
@@ -85,7 +114,7 @@ export default function Finance() {
     }
 
     const custSales = sales
-      .filter(s => s.customerId === sale.customerId && s.paymentMethod === 'Fiado' && s.status !== 'Pré-venda')
+      .filter(s => s.customerId === sale.customerId && s.paymentMethod === 'Fiado' && s.status !== 'Pré-venda' && s.status !== 'Cancelada')
       .sort((a, b) => {
         const tA = a.createdAt?.seconds || (typeof a.createdAt === 'object' && a.createdAt?.getTime ? a.createdAt.getTime() / 1000 : 0);
         const tB = b.createdAt?.seconds || (typeof b.createdAt === 'object' && b.createdAt?.getTime ? b.createdAt.getTime() / 1000 : 0);
@@ -103,7 +132,7 @@ export default function Finance() {
     return 0;
   };
 
-  const totalInvoiced = sales.filter(s => s.status !== 'Pré-venda').reduce((acc, s) => acc + s.total, 0);
+  const totalInvoiced = sales.filter(s => s.status !== 'Pré-venda' && s.status !== 'Cancelada').reduce((acc, s) => acc + s.total, 0);
   const totalReceived = transactions.filter(t => t.type === 'payment').reduce((acc, t) => acc + t.amount, 0);
   const totalPaidTaxes = shipments.filter(s => s.taxPaid).reduce((acc, s) => acc + (s.taxAmount || 0), 0);
   const totalExpenses = expenses.reduce((acc, e) => acc + e.amount, 0);
@@ -118,7 +147,7 @@ export default function Finance() {
   
   const cashFlow = totalReceived - totalPaidTaxes - totalExpenses;
 
-  const totalCostOfGoods = sales.filter(s => s.status !== 'Pré-venda').reduce((acc, s) => {
+  const totalCostOfGoods = sales.filter(s => s.status !== 'Pré-venda' && s.status !== 'Cancelada').reduce((acc, s) => {
     return acc + s.items.reduce((itemAcc, item) => {
       const product = products.find(p => p.id === item.productId);
       return itemAcc + ((product?.costPrice || 0) * item.quantity);
@@ -172,6 +201,104 @@ export default function Finance() {
       alert("Não foi possível salvar a despesa no Firestore.");
     } finally {
       setIsSavingExpense(false);
+    }
+  };
+
+  const handleCancelSale = async (sale: Sale) => {
+    if (!sale.id) return;
+    if (sale.status === 'Cancelada') {
+      alert("Esta venda já está cancelada!");
+      return;
+    }
+
+    if (!confirm(`⚠️ CANCELAMENTO DE VENDA #${sale.id.slice(-5).toUpperCase()} ⚠️\n\nTem certeza de que deseja realizar o cancelamento completo e estornar esta venda?\n\nIsso irá:\n1. Devolver os produtos de estoque nas grades respectivas.\n2. Estornar débitos criados se for Fiado (${formatCurrency(sale.debtAmount || 0)}).\n3. Deletar os lançamentos financeiros vinculados.\n4. Remover faturamento logístico ativo.\n\nEsta operação é definitiva e altera o faturamento do ERP.`)) {
+      return;
+    }
+
+    try {
+      setIsCancellingSale(sale.id);
+      const batch = writeBatch(db);
+
+      // 1. Return stock of products (skip if pre-sale or if is dropshipping)
+      if (sale.status !== 'Pré-venda') {
+        for (const item of sale.items) {
+          if (item.isDropshipping || !item.productId || !item.variationId) continue;
+          
+          // Fetch current product to avoid overwriting newer stock
+          const prodRef = doc(db, 'products', item.productId);
+          const prodSnap = await getDoc(prodRef);
+          if (prodSnap.exists()) {
+            const productData = { id: prodSnap.id, ...prodSnap.data() } as Product;
+            const updatedVariations = productData.variations.map(v => {
+              if (v.id === item.variationId) {
+                return { ...v, stock: v.stock + item.quantity };
+              }
+              return v;
+            });
+            const updatedTotalStock = updatedVariations.reduce((acc, v) => acc + v.stock, 0);
+
+            batch.update(prodRef, {
+              variations: updatedVariations,
+              totalStock: updatedTotalStock,
+              updatedAt: serverTimestamp()
+            });
+          }
+        }
+      }
+
+      // 2. Revert customer debt in Firestore if Fiado
+      if (sale.customerId && sale.paymentMethod === 'Fiado' && sale.status !== 'Pré-venda') {
+        const custRef = doc(db, 'customers', sale.customerId);
+        const custSnap = await getDoc(custRef);
+        if (custSnap.exists()) {
+          const customerData = custSnap.data() as Customer;
+          const rollbackDebt = sale.debtAmount || 0;
+          const nextDebt = Math.max(0, (customerData.totalDebt || 0) - rollbackDebt);
+          
+          batch.update(custRef, {
+            totalDebt: nextDebt,
+            updatedAt: serverTimestamp()
+          });
+        }
+      }
+
+      // 3. Delete related shipments in Firestore (using local state to figure out which shipments are linked)
+      const relatedShipments = shipments.filter(ship => ship.items?.some(i => i.saleId === sale.id));
+      relatedShipments.forEach(ship => {
+        if (ship.id) {
+          batch.delete(doc(db, 'shipments', ship.id));
+        }
+      });
+
+      // 4. Delete related transactions in Firestore
+      const transactionsRef = collection(db, 'transactions');
+      const qTrans = query(transactionsRef, where('saleId', '==', sale.id));
+      const transSnap = await getDocs(qTrans);
+      transSnap.forEach(tDoc => {
+        batch.delete(doc(db, 'transactions', tDoc.id));
+      });
+
+      // 5. Update sale status to 'Cancelada'
+      const saleRef = doc(db, 'sales', sale.id);
+      batch.update(saleRef, {
+        status: 'Cancelada',
+        history: [
+          ...(sale.history || []),
+          {
+            status: 'Cancelada',
+            updatedAt: new Date(),
+            notes: 'Venda cancelada com estorno de estoque e devolução de valores'
+          }
+        ]
+      });
+
+      await batch.commit();
+      alert(`✅ Sucesso! A venda #${sale.id.slice(-5).toUpperCase()} foi cancelada. O estoque foi devolvido e o balanço financeiro recalculado.`);
+    } catch (err) {
+      console.error("Erro ao cancelar venda no Firestore:", err);
+      alert("Não foi possível prosseguir com o cancelamento da venda. Tente novamente.");
+    } finally {
+      setIsCancellingSale(null);
     }
   };
 
@@ -266,15 +393,22 @@ export default function Finance() {
     doc.setTextColor(15, 23, 42);
     doc.text(formatCurrency(accountsReceivable), 65, 80);
 
-    const tableData = transactions.filter(t => filter === 'all' || t.type === filter).map(t => [
-      t.type === 'payment' ? 'Amortização' : 'Venda a Prazo',
-      new Date(t.createdAt?.seconds * 1000).toLocaleDateString('pt-BR'),
-      formatCurrency(t.amount)
-    ]);
+    const tableData = transactions.filter(t => filter === 'all' || t.type === filter).map(t => {
+      const parsedDate = getParsedDate(t);
+      const dateStr = parsedDate ? parsedDate.toLocaleDateString('pt-BR') : 'Sem data';
+      const cust = customers.find(c => c.id === t.customerId);
+      const clientName = cust ? `${cust.name}${cust.contact ? ` (${cust.contact})` : ''}` : 'Consumidor Final';
+      return [
+        t.type === 'payment' ? 'Amortização' : 'Venda a Prazo',
+        clientName,
+        dateStr,
+        formatCurrency(t.amount)
+      ];
+    });
 
     autoTable(doc, {
       startY: 94,
-      head: [['Natureza', 'Data', 'Montante']],
+      head: [['Natureza', 'Cliente', 'Data', 'Montante']],
       body: tableData,
     });
 
@@ -340,12 +474,19 @@ export default function Finance() {
   };
 
   const exportToExcel = () => {
-    const data = transactions.filter(t => filter === 'all' || t.type === filter).map(t => ({
-      Natureza: t.type === 'payment' ? 'Amortização' : 'Venda a Prazo',
-      Data: new Date(t.createdAt?.seconds * 1000).toLocaleDateString('pt-BR'),
-      Valor: t.amount,
-      Método: t.paymentMethod || 'N/A'
-    }));
+    const data = transactions.filter(t => filter === 'all' || t.type === filter).map(t => {
+      const parsedDate = getParsedDate(t);
+      const dateStr = parsedDate ? parsedDate.toLocaleDateString('pt-BR') : 'Sem data';
+      const cust = customers.find(c => c.id === t.customerId);
+      return {
+        Natureza: t.type === 'payment' ? 'Amortização' : 'Venda a Prazo',
+        Cliente: cust?.name || 'Consumidor Final',
+        Contato: cust?.contact || 'Sem Contato',
+        Data: dateStr,
+        Valor: t.amount,
+        Método: t.paymentMethod || 'N/A'
+      };
+    });
 
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
@@ -376,7 +517,7 @@ export default function Finance() {
     // Filter sales of the current month
     const monthlySales = sales.filter(s => {
       const d = getElementDate(s);
-      return s.status !== 'Pré-venda' && d && d.getFullYear() === currentYear && d.getMonth() === currentMonth;
+      return s.status !== 'Pré-venda' && s.status !== 'Cancelada' && d && d.getFullYear() === currentYear && d.getMonth() === currentMonth;
     });
 
     // Filter shipments of the current month
@@ -532,7 +673,8 @@ export default function Finance() {
         : 'S/D';
       
       const natureStr = t.type === 'payment' ? 'Amortização de Fiado' : 'Venda a Prazo';
-      const involved = getCustomerName(t.customerId);
+      const cust = customers.find(c => c.id === t.customerId);
+      const involved = cust ? `${cust.name}${cust.contact ? ` (${cust.contact})` : ''}` : 'Consumidor Final';
       const methodStr = t.paymentMethod || 'Aberto';
       const amountStr = t.type === 'payment' ? `+ ${formatCurrency(t.amount)}` : `- ${formatCurrency(t.amount)}`;
 
@@ -556,6 +698,47 @@ export default function Finance() {
       },
       columnStyles: {
         4: { halign: 'right', fontStyle: 'bold' }
+      }
+    });
+
+    // Section 3: Clientes Devedores / Contas a Receber (Fiado Ativo)
+    const finalY = (doc as any).lastAutoTable.finalY + 12;
+    let startYDebtors = finalY;
+    if (startYDebtors > 230) {
+      doc.addPage();
+      startYDebtors = 20;
+    }
+
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(15, 23, 42);
+    doc.text(`SITUAÇÃO DE CONTAS A RECEBER (FIADO ATIVO POR CLIENTE)`, 14, startYDebtors);
+
+    const debtorsData = customers
+      .filter(c => c.totalDebt > 0)
+      .map(c => [
+        c.name,
+        c.contact || 'Sem Contato',
+        formatCurrency(c.totalDebt)
+      ]);
+
+    autoTable(doc, {
+      startY: startYDebtors + 5,
+      head: [['Nome do Cliente', 'Contato / Telefone', 'Total Fiado Pendente (Dívida)']],
+      body: debtorsData.length > 0 ? debtorsData : [['Nenhum cliente possui saldo devedor ativo atualmente.', '', '']],
+      theme: 'grid',
+      headStyles: {
+        fillColor: [30, 41, 59], // Slate 800
+        textColor: [255, 255, 255],
+        fontSize: 9,
+        fontStyle: 'bold'
+      },
+      styles: {
+        fontSize: 8,
+        font: 'Helvetica'
+      },
+      columnStyles: {
+        2: { halign: 'right', fontStyle: 'bold' }
       }
     });
 
@@ -627,106 +810,485 @@ export default function Finance() {
           </div>
         </div>
 
-        {/* Transactions List */}
-        <div className="xl:col-span-2 bg-white rounded-[32px] border border-slate-200 shadow-sm overflow-hidden flex flex-col h-[650px]">
-          <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-50/30">
-            <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
-               <Receipt size={16} className="text-red-800" />
-               Extrato de auditoria
-            </h4>
-            <div className="flex bg-slate-100 p-1.5 rounded-xl shadow-inner border border-slate-200">
-              <button 
-                onClick={() => setFilter('all')}
-                className={cn("px-6 py-2 text-[10px] font-black rounded-lg uppercase tracking-widest transition-all", filter === 'all' ? "bg-slate-950 text-white shadow-md" : "text-slate-400 hover:text-slate-600")}
+        {/* Transactions & Sales List */}
+        <div className="xl:col-span-2 bg-white rounded-[32px] border border-slate-200 shadow-sm overflow-hidden flex flex-col h-[750px]">
+          <div className="p-8 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50/30 pb-5">
+            {/* Master Tab switcher */}
+            <div className="flex bg-slate-100 p-1 rounded-2xl border border-slate-200/50 shadow-inner">
+              <button
+                onClick={() => setAuditTab('sales')}
+                className={cn(
+                  "px-5 py-2 text-[10px] font-black rounded-xl uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5",
+                  auditTab === 'sales'
+                    ? "bg-slate-900 text-white shadow-md font-extrabold"
+                    : "text-slate-500 hover:text-slate-800"
+                )}
               >
-                Tudo
+                <TableIcon size={12} />
+                Histórico de Vendas
               </button>
-              <button 
-                onClick={() => setFilter('payment')}
-                className={cn("px-6 py-2 text-[10px] font-black rounded-lg uppercase tracking-widest transition-all", filter === 'payment' ? "bg-slate-950 text-white shadow-md" : "text-slate-400 hover:text-slate-600")}
+              <button
+                onClick={() => setAuditTab('transactions')}
+                className={cn(
+                  "px-5 py-2 text-[10px] font-black rounded-xl uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5",
+                  auditTab === 'transactions'
+                    ? "bg-slate-900 text-white shadow-md font-extrabold"
+                    : "text-slate-500 hover:text-slate-800"
+                )}
               >
-                Liquidação
+                <Receipt size={12} />
+                Lançamentos Gerais
               </button>
             </div>
+
+            {/* General client & ticket search filter */}
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Pesquisar ID, cliente..."
+                  value={salesSearch}
+                  onChange={(e) => setSalesSearch(e.target.value)}
+                  className="pl-9 pr-4 py-2 bg-white border border-slate-250 rounded-xl text-[10px] font-bold text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-805 shadow-sm w-44"
+                />
+                {salesSearch && (
+                  <button onClick={() => setSalesSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
+
+          {/* Advanced Dynamic Filters Section */}
+          <div className="p-6 border-b border-slate-100 bg-slate-50/20 grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {/* Period filter selection */}
+            <div className="space-y-1.5">
+              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block font-sans">Período</span>
+              <select
+                value={periodFilter}
+                onChange={(e) => setPeriodFilter(e.target.value as any)}
+                className="w-full px-3 py-2 bg-white border border-slate-205 rounded-xl text-[10px] font-extrabold text-slate-700 focus:outline-none focus:ring-2 focus:ring-red-800 shadow-sm transition-all"
+              >
+                <option value="all">Todo Histórico</option>
+                <option value="today">Hoje</option>
+                <option value="7days">Últimos 7 dias</option>
+                <option value="month">Este Mês</option>
+                <option value="custom">Personalizado (De / Até)</option>
+              </select>
+              {periodFilter === 'custom' && (
+                <div className="grid grid-cols-2 gap-2 mt-2 animate-fadeIn animate-duration-300">
+                  <div>
+                    <span className="text-[8px] font-black text-slate-400 uppercase block mb-1">De</span>
+                    <input
+                      type="date"
+                      value={startDateFilter}
+                      onChange={(e) => setStartDateFilter(e.target.value)}
+                      className="w-full px-2 py-1 border border-slate-200 rounded-lg text-[9px] text-slate-700 font-bold focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <span className="text-[8px] font-black text-slate-400 uppercase block mb-1">Até</span>
+                    <input
+                      type="date"
+                      value={endDateFilter}
+                      onChange={(e) => setEndDateFilter(e.target.value)}
+                      className="w-full px-2 py-1 border border-slate-200 rounded-lg text-[9px] text-slate-700 font-bold focus:outline-none"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Type/Method filter selection */}
+            <div className="space-y-1.5">
+              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block font-sans">Tipo / Mét. Pagamento</span>
+              <select
+                value={paymentTypeFilter}
+                onChange={(e) => setPaymentTypeFilter(e.target.value as any)}
+                className="w-full px-3 py-2 bg-white border border-slate-205 rounded-xl text-[10px] font-extrabold text-slate-700 focus:outline-none focus:ring-2 focus:ring-red-800 shadow-sm transition-all"
+              >
+                <option value="all">Todos Métodos</option>
+                <option value="Dinheiro">Dinheiro</option>
+                <option value="Pix">Pix</option>
+                <option value="Cartão">Cartão</option>
+                <option value="Fiado">Fiado</option>
+              </select>
+            </div>
+
+            {/* Status filter selection */}
+            <div className="space-y-1.5">
+              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block font-sans">Status da Operação</span>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as any)}
+                className="w-full px-3 py-2 bg-white border border-slate-205 rounded-xl text-[10px] font-extrabold text-slate-700 focus:outline-none focus:ring-2 focus:ring-red-800 shadow-sm transition-all"
+              >
+                <option value="all">Todos os Status</option>
+                <option value="Concluída">Paga / Concluída</option>
+                <option value="Pendente">Fiado (Em aberto)</option>
+                <option value="Cancelada">Cancelada / Estornada</option>
+                <option value="Pré-venda">Pré-Venda</option>
+              </select>
+            </div>
+          </div>
+
           <div className="flex-1 overflow-y-auto custom-scrollbar">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left min-w-[800px]">
-              <thead className="sticky top-0 bg-slate-50/80 backdrop-blur-md border-b border-slate-100 z-10">
-                <tr>
-                  <th className="px-8 py-4 text-[10px] uppercase font-black text-slate-400 tracking-widest">Natureza</th>
-                  <th className="px-8 py-4 text-[10px] uppercase font-black text-slate-400 tracking-widest">Envolvido</th>
-                  <th className="px-8 py-4 text-[10px] uppercase font-black text-slate-400 tracking-widest">Status Logístico</th>
-                  <th className="px-8 py-4 text-[10px] uppercase font-black text-slate-400 tracking-widest">Temporalidade</th>
-                  <th className="px-8 py-4 text-[10px] uppercase font-black text-slate-400 tracking-widest text-right">Montante</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {transactions.filter(t => filter === 'all' || t.type === filter).map(t => (
-                  <tr key={t.id} className="hover:bg-slate-50/80 transition-colors group">
-                    <td className="px-8 py-5">
-                      <div className="flex items-center gap-4">
-                        <div className={cn(
-                          "size-10 rounded-xl flex items-center justify-center shadow-inner", 
-                          t.type === 'payment' ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
-                        )}>
-                          {t.type === 'payment' ? <ArrowDownCircle size={18} /> : <ArrowUpCircle size={18} />}
-                        </div>
-                        <div>
-                          <p className="text-[11px] font-black text-slate-950 uppercase tracking-tight italic">{t.type === 'payment' ? 'Amortização Fiado' : 'Venda a Prazo'}</p>
-                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-0.5">Sincronização Fiscal</p>
-                        </div>
+            {auditTab === 'sales' ? (
+              <div className="p-6 space-y-4">
+                {(() => {
+                  const filteredSales = sales.filter(s => {
+                    // 1. Search filter
+                    const term = salesSearch.toLowerCase().trim();
+                    const matchesSearch = !term || 
+                      (s.customerName || 'Consumidor Final').toLowerCase().includes(term) ||
+                      (s.id || '').toLowerCase().includes(term);
+
+                    if (!matchesSearch) return false;
+
+                    // 2. Status Filter
+                    if (statusFilter !== 'all') {
+                      if (statusFilter === 'Pendente') {
+                        if (s.status !== 'Concluída' || s.paymentMethod !== 'Fiado' || getSaleBalance(s) === 0) return false;
+                      } else {
+                        if (s.status !== statusFilter) return false;
+                      }
+                    }
+
+                    // 3. Payment Method (Type) Filter
+                    if (paymentTypeFilter !== 'all' && s.paymentMethod !== paymentTypeFilter) return false;
+
+                    // 4. Period Filter
+                    const sDate = getParsedDate(s);
+                    if (periodFilter !== 'all') {
+                      if (!sDate) return false;
+                      const nowObj = new Date();
+                      
+                      if (periodFilter === 'today') {
+                        const todayStart = new Date(nowObj.getFullYear(), nowObj.getMonth(), nowObj.getDate());
+                        if (sDate < todayStart) return false;
+                      } else if (periodFilter === '7days') {
+                        const sevenDaysAgo = new Date(nowObj.getTime() - 7 * 24 * 60 * 60 * 1000);
+                        if (sDate < sevenDaysAgo) return false;
+                      } else if (periodFilter === 'month') {
+                        const monthStart = new Date(nowObj.getFullYear(), nowObj.getMonth(), 1);
+                        if (sDate < monthStart) return false;
+                      } else if (periodFilter === 'custom') {
+                        if (startDateFilter) {
+                          const startLimit = new Date(startDateFilter + 'T00:00:00');
+                          if (sDate < startLimit) return false;
+                        }
+                        if (endDateFilter) {
+                          const endLimit = new Date(endDateFilter + 'T23:59:59');
+                          if (sDate > endLimit) return false;
+                        }
+                      }
+                    }
+
+                    return true;
+                  });
+
+                  if (filteredSales.length === 0) {
+                    return (
+                      <div className="flex flex-col items-center justify-center p-12 text-center text-slate-400 space-y-2">
+                        <XCircle size={28} className="text-slate-300 animate-pulse" />
+                        <p className="text-[10px] font-black uppercase tracking-widest mt-2">Nenhuma venda encontrada</p>
+                        <p className="text-[9px] uppercase tracking-widest text-slate-300 font-bold font-sans">Experimente usar termos mais genéricos nos filtros</p>
                       </div>
-                    </td>
-                    <td className="px-8 py-5">
-                      <div className="flex items-center gap-2">
-                        <div className="size-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 border border-white shadow-sm">
-                          <User size={14} />
-                        </div>
-                        <span className="text-[11px] font-black text-slate-700 uppercase tracking-tight italic underline decoration-red-200 decoration-2 underline-offset-2">{getCustomerName(t.customerId)}</span>
-                      </div>
-                    </td>
-                    <td className="px-8 py-5">
-                      {getShipmentForSale(t.saleId) ? (
-                        <div className="space-y-1.5">
-                          <div className="flex items-center gap-2">
-                            <Truck size={14} className="text-indigo-500" />
-                            <span className="text-[10px] font-black uppercase text-indigo-600 tracking-tighter">
-                              {getShipmentForSale(t.saleId)?.trackingCode || 'Sem Rastreio'}
-                            </span>
+                    );
+                  }
+
+                  return filteredSales.map(sale => {
+                    const isExpanded = expandedSaleId === sale.id;
+                    const balance = getSaleBalance(sale);
+                    const isCancelled = sale.status === 'Cancelada';
+                    
+                    return (
+                      <div 
+                        key={sale.id} 
+                        className={cn(
+                          "border rounded-2xl transition-all overflow-hidden bg-white hover:border-slate-300",
+                          isCancelled ? "border-slate-150 opacity-65 bg-slate-50/50" : "border-slate-150 shadow-sm"
+                        )}
+                      >
+                        {/* Accordion Row */}
+                        <div 
+                          onClick={() => setExpandedSaleId(isExpanded ? null : sale.id!)}
+                          className="p-5 flex flex-wrap items-center justify-between gap-4 cursor-pointer hover:bg-slate-50/50 transition-colors select-none"
+                        >
+                          <div className="flex items-center gap-4">
+                            <div className={cn(
+                              "size-9 rounded-xl flex items-center justify-center font-mono text-[10px] font-black",
+                              isCancelled 
+                                ? "bg-slate-100 text-slate-400 line-through" 
+                                : (sale.paymentMethod === 'Fiado' ? "bg-amber-50 text-amber-600 border border-amber-100" : "bg-red-50 text-red-800 border border-red-100")
+                            )}>
+                              #{sale.id?.slice(-5).toUpperCase()}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <h5 className={cn("text-[11px] font-black uppercase tracking-tight text-slate-900", isCancelled && "line-through text-slate-400")}>
+                                  {sale.customerName || 'Consumidor Final'}
+                                </h5>
+                                <span className={cn(
+                                  "px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider",
+                                  isCancelled 
+                                    ? "bg-slate-200 text-slate-500" 
+                                    : (sale.paymentMethod === 'Fiado' 
+                                        ? (balance === 0 ? "bg-emerald-50 text-emerald-600 border border-emerald-100/50" : "bg-amber-50 text-amber-600 border border-amber-100/50 animate-pulse") 
+                                        : "bg-slate-905 bg-slate-900 text-white")
+                                )}>
+                                  {isCancelled ? 'CANCELADA' : (sale.paymentMethod === 'Fiado' ? (balance === 0 ? 'Fiado Pago' : 'Fiado') : sale.paymentMethod)}
+                                </span>
+                              </div>
+                              <p className="text-[9px] text-slate-400 font-bold uppercase mt-1">
+                                {sale.createdAt?.seconds 
+                                  ? new Date(sale.createdAt.seconds * 1000).toLocaleString('pt-BR') 
+                                  : sale.createdAt ? new Date(sale.createdAt).toLocaleString('pt-BR') : 'Sem data'}
+                              </p>
+                            </div>
                           </div>
-                          <div className="px-2 py-0.5 bg-indigo-50 rounded-lg text-[8px] font-black text-indigo-600 inline-block uppercase tracking-widest border border-indigo-100">
-                            {getShipmentForSale(t.saleId)?.status}
+
+                          <div className="flex items-center gap-6 ml-auto">
+                            <div className="text-right">
+                              <p className="text-[8px] font-black uppercase text-slate-400 tracking-wider">Valor total</p>
+                              <p className={cn(
+                                "text-xs font-black text-slate-950 font-display tabular-nums tracking-tight",
+                                isCancelled && "line-through text-slate-400 italic"
+                              )}>
+                                {formatCurrency(sale.total)}
+                              </p>
+                            </div>
+                            
+                            {sale.paymentMethod === 'Fiado' && !isCancelled && (
+                              <div className="text-right">
+                                <p className="text-[8px] font-black uppercase text-amber-600 tracking-wider">Pendente</p>
+                                <p className={cn(
+                                  "text-xs font-black font-display tabular-nums tracking-tight",
+                                  balance > 0 ? "text-amber-600" : "text-emerald-700"
+                                )}>
+                                  {formatCurrency(balance)}
+                                </p>
+                              </div>
+                            )}
+
+                            {/* Accordion Row Action Button - Quick Action Cancel Sale */}
+                            <div className="flex items-center gap-3">
+                              {!isCancelled && sale.status !== 'Pré-venda' && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleCancelSale(sale);
+                                  }}
+                                  disabled={isCancellingSale === sale.id}
+                                  title="Estorno e cancelamento rápido"
+                                  className="px-3 py-1.5 bg-rose-50 hover:bg-rose-600 hover:text-white border border-rose-150 transition-all rounded-xl select-none active:scale-95 disabled:opacity-50 flex items-center gap-1.5 cursor-pointer text-rose-700 font-black uppercase text-[8px]"
+                                >
+                                  {isCancellingSale === sale.id ? (
+                                    <RotateCcw className="animate-spin" size={10} />
+                                  ) : (
+                                    <XCircle size={10} />
+                                  )}
+                                  Cancelar
+                                </button>
+                              )}
+
+                              <div className="text-slate-400 transition-colors">
+                                {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                              </div>
+                            </div>
                           </div>
                         </div>
-                      ) : (
-                        <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest italic opacity-40">N/A</span>
-                      )}
-                    </td>
-                    <td className="px-8 py-5">
-                      <div className="text-[11px] font-black text-slate-600 italic font-sans uppercase">
-                        {new Date(t.createdAt?.seconds * 1000).toLocaleDateString('pt-BR')} 
-                        <span className="text-[9px] text-slate-400 ml-2 font-black uppercase block tracking-widest not-italic">
-                          {new Date(t.createdAt?.seconds * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                        </span>
+
+                        {/* Collapsible content */}
+                        {isExpanded && (
+                          <div className="border-t border-slate-100 bg-slate-50/20 p-5 space-y-4">
+                            <div className="space-y-2">
+                              <p className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">Itens da Compra</p>
+                              <div className="divide-y divide-slate-100 border border-slate-150 rounded-xl bg-white overflow-hidden shadow-inner">
+                                {sale.items.map((item, idx) => (
+                                  <div key={idx} className="p-3.5 flex items-center justify-between text-xs hover:bg-slate-50/40 transition-colors">
+                                    <div>
+                                      <p className="font-bold text-slate-800 uppercase tracking-tight">{item.productName || item.name}</p>
+                                      <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Grade: <span className="text-slate-700 font-sans">{item.variationName || item.name?.split(' - ')[1] || 'Única'}</span> {item.isDropshipping && '• Dropshipping'}</p>
+                                    </div>
+                                    <div className="flex items-center gap-6 font-semibold">
+                                      <div className="text-right">
+                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Qtd</p>
+                                        <p className="text-[11px] text-slate-850 font-bold tabular-nums">x{item.quantity}</p>
+                                      </div>
+                                      <div className="text-right">
+                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Unidade</p>
+                                        <p className="text-[11px] text-slate-850 font-bold tabular-nums">{formatCurrency(item.price)}</p>
+                                      </div>
+                                      <div className="text-right">
+                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Subtotal</p>
+                                        <p className="text-[11px] text-slate-950 font-black tabular-nums">{formatCurrency(item.price * item.quantity)}</p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* Logistics details if available */}
+                            {getShipmentForSale(sale.id) && (
+                              <div className="p-3.5 bg-indigo-50/30 border border-indigo-100/50 rounded-xl flex items-center justify-between font-sans shadow-inner">
+                                <div>
+                                  <span className="text-[8px] font-black bg-indigo-600 text-white uppercase px-1.5 py-0.5 rounded tracking-wide mr-2">Encomenda vinculada</span>
+                                  <span className="text-[10px] font-mono font-bold text-indigo-700 select-all">{getShipmentForSale(sale.id)?.trackingCode}</span>
+                                </div>
+                                <span className="text-[9px] font-black bg-white text-indigo-700 border border-indigo-100 px-2.5 py-0.5 rounded-lg uppercase tracking-wider shadow-sm">{getShipmentForSale(sale.id)?.status}</span>
+                              </div>
+                            )}
+
+                            {/* Audit details block */}
+                            <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+                              <div className="text-[9px] text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1">
+                                {sale.discount > 0 && <span>Desconto: -{formatCurrency(sale.discount)} • </span>}
+                                {sale.downPayment > 0 && <span>Entrada: {formatCurrency(sale.downPayment)} • </span>}
+                                <span>Subtotal: {formatCurrency(sale.subtotal)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    </td>
-                    <td className="px-8 py-5 text-right">
-                      <span className={cn(
-                        "text-lg font-bold tracking-tight font-display tabular-nums",
-                        t.type === 'payment' ? "text-emerald-600" : "text-rose-500"
-                      )}>
-                        {t.type === 'payment' ? '+' : '-'}{formatCurrency(t.amount)}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    );
+                  });
+                })()}
+              </div>
+            ) : (
+              /* Transaction/Lançamentos log list */
+              <div className="overflow-x-auto">
+                {(() => {
+                  const filteredTransactions = transactions.filter(t => {
+                    // 1. Natureza filter
+                    if (filter !== 'all' && t.type !== filter) return false;
+
+                    // 2. Search match (customer or transaction id)
+                    const term = salesSearch.toLowerCase().trim();
+                    const customerNameVal = getCustomerName(t.customerId).toLowerCase();
+                    const matchesSearch = !term || customerNameVal.includes(term) || (t.id || '').toLowerCase().includes(term);
+                    if (!matchesSearch) return false;
+
+                    // 3. Payment Method (Type) Filter
+                    if (paymentTypeFilter !== 'all' && t.paymentMethod !== paymentTypeFilter) return false;
+
+                    // 4. Period Filter
+                    const transDate = getParsedDate(t);
+                    if (periodFilter !== 'all') {
+                      if (!transDate) return false;
+                      const nowObj = new Date();
+                      
+                      if (periodFilter === 'today') {
+                        const todayStart = new Date(nowObj.getFullYear(), nowObj.getMonth(), nowObj.getDate());
+                        if (transDate < todayStart) return false;
+                      } else if (periodFilter === '7days') {
+                        const sevenDaysAgo = new Date(nowObj.getTime() - 7 * 24 * 60 * 60 * 1000);
+                        if (transDate < sevenDaysAgo) return false;
+                      } else if (periodFilter === 'month') {
+                        const monthStart = new Date(nowObj.getFullYear(), nowObj.getMonth(), 1);
+                        if (transDate < monthStart) return false;
+                      } else if (periodFilter === 'custom') {
+                        if (startDateFilter) {
+                          const startLimit = new Date(startDateFilter + 'T00:00:00');
+                          if (transDate < startLimit) return false;
+                        }
+                        if (endDateFilter) {
+                          const endLimit = new Date(endDateFilter + 'T23:59:59');
+                          if (transDate > endLimit) return false;
+                        }
+                      }
+                    }
+
+                    return true;
+                  });
+
+                  if (filteredTransactions.length === 0) {
+                    return (
+                      <div className="flex flex-col items-center justify-center p-12 text-center text-slate-400 space-y-2">
+                        <XCircle size={28} className="text-slate-300 animate-pulse" />
+                        <p className="text-[10px] font-black uppercase tracking-widest mt-2">Nenhum lançamento encontrado</p>
+                        <p className="text-[9px] uppercase tracking-widest text-slate-300 font-bold font-sans">Ajuste os filtros ou selecione outra aba</p>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <table className="w-full text-left min-w-[800px]">
+                      <thead className="sticky top-0 bg-slate-50/80 backdrop-blur-md border-b border-slate-100 z-10 animate-fadeIn">
+                        <tr>
+                          <th className="px-8 py-4 text-[10px] uppercase font-black text-slate-400 tracking-widest">Natureza</th>
+                          <th className="px-8 py-4 text-[10px] uppercase font-black text-slate-400 tracking-widest">Envolvido</th>
+                          <th className="px-8 py-4 text-[10px] uppercase font-black text-slate-400 tracking-widest">Canal Pagamento</th>
+                          <th className="px-8 py-4 text-[10px] uppercase font-black text-slate-400 tracking-widest text-center">Temporalidade</th>
+                          <th className="px-8 py-4 text-[10px] uppercase font-black text-slate-400 tracking-widest text-right">Montante</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50">
+                        {filteredTransactions.map(t => (
+                          <tr key={t.id} className="hover:bg-slate-50/80 transition-colors group">
+                            <td className="px-8 py-5">
+                              <div className="flex items-center gap-4">
+                                <div className={cn(
+                                  "size-10 rounded-xl flex items-center justify-center shadow-inner", 
+                                  t.type === 'payment' ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
+                                )}>
+                                  {t.type === 'payment' ? <ArrowDownCircle size={18} /> : <ArrowUpCircle size={18} />}
+                                </div>
+                                <div>
+                                  <p className="text-[11px] font-black text-slate-950 uppercase tracking-tight italic">{t.type === 'payment' ? 'Amortização Fiado' : 'Venda a Prazo'}</p>
+                                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-0.5">Sincronização Fiscal</p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-8 py-5">
+                              <div className="flex items-center gap-2">
+                                <div className="size-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 border border-white shadow-sm">
+                                  <User size={14} />
+                                </div>
+                                <span className="text-[11px] font-black text-slate-700 uppercase tracking-tight italic underline decoration-red-200 decoration-2 underline-offset-2">{getCustomerName(t.customerId)}</span>
+                              </div>
+                            </td>
+                            <td className="px-8 py-5">
+                              <div className="flex items-center gap-1.5">
+                                <span className="px-2.5 py-1 bg-slate-100 border border-slate-200 text-slate-700 rounded-lg text-[9px] font-black uppercase tracking-wider block w-fit">
+                                  {t.paymentMethod || 'Não especif.'}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="px-8 py-5 text-center">
+                              <div className="text-[11px] font-black text-slate-600 italic font-sans uppercase">
+                                {t.createdAt?.seconds 
+                                  ? new Date(t.createdAt.seconds * 1000).toLocaleDateString('pt-BR') 
+                                  : t.createdAt ? new Date(t.createdAt).toLocaleDateString('pt-BR') : 'Sem data'} 
+                                <span className="text-[9px] text-slate-400 ml-2 font-black uppercase block tracking-widest not-italic">
+                                  {t.createdAt?.seconds 
+                                    ? new Date(t.createdAt.seconds * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) 
+                                    : t.createdAt ? new Date(t.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : ''}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="px-8 py-5 text-right">
+                              <span className={cn(
+                                "text-xs font-bold tracking-tight font-display tabular-nums",
+                                t.type === 'payment' ? "text-emerald-600" : "text-rose-500"
+                              )}>
+                                {t.type === 'payment' ? '+' : '-'}{formatCurrency(t.amount)}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  );
+                })()}
+              </div>
+            )}
           </div>
         </div>
         </div>
-      </div>
 
       {/* Gestão de Despesas e Custos Fixos */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 mt-8">

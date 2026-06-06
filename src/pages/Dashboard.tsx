@@ -134,7 +134,7 @@ export default function Dashboard() {
   // Dynamic Filtering
   const filteredSales = React.useMemo(() => {
     return sales.filter(sale => {
-      if (sale.status === 'Pré-venda') return false;
+      if (sale.status === 'Pré-venda' || sale.status === 'Cancelada') return false;
       
       const matchesCustomer = customerFilter === 'all' || sale.customerId === customerFilter;
       const matchesProduct = productFilter === 'all' || sale.items.some(item => item.productId === productFilter);
@@ -219,7 +219,7 @@ export default function Dashboard() {
     }
 
     const custSales = sales
-      .filter(s => s.customerId === sale.customerId && s.paymentMethod === 'Fiado' && s.status !== 'Pré-venda')
+      .filter(s => s.customerId === sale.customerId && s.paymentMethod === 'Fiado' && s.status !== 'Pré-venda' && s.status !== 'Cancelada')
       .sort((a, b) => {
         const tA = a.createdAt?.seconds || (typeof a.createdAt === 'object' && a.createdAt?.getTime ? a.createdAt.getTime() / 1000 : 0);
         const tB = b.createdAt?.seconds || (typeof b.createdAt === 'object' && b.createdAt?.getTime ? b.createdAt.getTime() / 1000 : 0);
@@ -523,7 +523,7 @@ export default function Dashboard() {
   const customerRanking = React.useMemo(() => {
     const ranking: Record<string, { name: string, total: number, count: number }> = {};
     
-    sales.filter(s => s.status !== 'Pré-venda').forEach(sale => {
+    sales.filter(s => s.status !== 'Pré-venda' && s.status !== 'Cancelada').forEach(sale => {
       if (!sale.customerId) return;
       if (!ranking[sale.customerId]) {
         ranking[sale.customerId] = { name: sale.customerName || 'Cliente sem nome', total: 0, count: 0 };
@@ -625,7 +625,7 @@ export default function Dashboard() {
     // 5. Customer Concentration Insight
     if (sales.length > 0 && stats.totalRevenue > 0) {
       const ranking: Record<string, { name: string, total: number }> = {};
-      sales.filter(s => s.status !== 'Pré-venda').forEach(sale => {
+      sales.filter(s => s.status !== 'Pré-venda' && s.status !== 'Cancelada').forEach(sale => {
         if (!sale.customerId) return;
         if (!ranking[sale.customerId]) {
           ranking[sale.customerId] = { name: sale.customerName || 'Cliente', total: 0 };
@@ -717,7 +717,7 @@ export default function Dashboard() {
     // NEW INSIGHT 9: Client Recurrence
     if (customers.length > 0 && sales.length > 0) {
       const purchaseCounts = customers.map(c => {
-        const cSales = sales.filter(s => s.customerId === c.id && s.status !== 'Pré-venda');
+        const cSales = sales.filter(s => s.customerId === c.id && s.status !== 'Pré-venda' && s.status !== 'Cancelada');
         return cSales.length;
       });
       const loyalCustomers = purchaseCounts.filter(count => count > 1).length;
