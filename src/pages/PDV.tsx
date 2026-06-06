@@ -3,7 +3,7 @@ import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, query, onSnapshot, addDoc, updateDoc, doc, serverTimestamp, writeBatch, orderBy, deleteDoc } from 'firebase/firestore';
 import { Product, Customer, SaleItem, Variation, Sale } from '../types';
 import { Search, ShoppingCart, User, Plus, Minus, Trash2, CreditCard, Banknote, QrCode, ClipboardList, Send, X, CheckCircle2, MessageCircle, FileImage, Share2, Receipt, FileText, Sparkles, HelpCircle, Camera, TrendingUp } from 'lucide-react';
-import { formatCurrency, cn, cleanObject, cleanVariationName } from '../lib/utils';
+import { formatCurrency, cn, cleanObject, cleanVariationName, cleanProductNameWithVariation, formatVariationWithGender, formatProductNameWithGender } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { SidebarContext } from '../App';
 import jsPDF from 'jspdf';
@@ -76,7 +76,8 @@ export default function PDV() {
         variationName: formattedVariation,
         quantity: 1,
         price: product.sellingPrice || 0,
-        isDropshipping: product.isDropshipping || false
+        isDropshipping: product.isDropshipping || false,
+        gender: product.gender || 'Ambos'
       }]);
     }
   };
@@ -322,7 +323,8 @@ export default function PDV() {
           variationName: item.variationName || '',
           quantity: item.quantity || 0,
           price: item.price || 0,
-          isDropshipping: !!item.isDropshipping
+          isDropshipping: !!item.isDropshipping,
+          gender: item.gender || null
         })),
         subtotal,
         discount: finalDiscount,
@@ -470,9 +472,8 @@ export default function PDV() {
     if (!sale) return;
     
     const itemsText = sale.items.map((i: any) => {
-      const cleaned = cleanVariationName(i.variationName);
-      const varSuffix = cleaned ? ` (${cleaned})` : '';
-      return `- ${i.name}${varSuffix} x ${i.quantity}: ${formatCurrency(i.price * i.quantity)}`;
+      const itemGender = i.gender || products.find(p => p.id === i.productId || p.name === i.name)?.gender || 'Ambos';
+      return `- ${formatProductNameWithGender(i.name, itemGender)} x ${i.quantity}: ${formatCurrency(i.price * i.quantity)}`;
     }).join('\n');
 
     const isPre = sale.status === 'Pré-venda';
@@ -520,9 +521,8 @@ export default function PDV() {
     const discountValue = safeFloat(discountVal);
 
     const textItems = cart.map((i: any) => {
-      const cleaned = cleanVariationName(i.variationName);
-      const varStr = cleaned ? ` (${cleaned})` : '';
-      return `- ${i.name}${varStr} x${i.quantity}: ${formatCurrency(i.price * i.quantity)}`;
+      const itemGender = i.gender || products.find(p => p.id === i.productId || p.name === i.name)?.gender || 'Ambos';
+      return `- ${formatProductNameWithGender(i.name, itemGender)} x${i.quantity}: ${formatCurrency(i.price * i.quantity)}`;
     }).join('\n');
 
     const whatsappText = `⚽ *CLUB DA BOLA - Orçamento* ⚽\n` +
@@ -697,12 +697,13 @@ export default function PDV() {
 
     const tableRows = cart.map((item, idx) => {
       const pIdx = idx + 1;
-      const variationName = cleanVariationName(item.variationName) || 'Grade Única';
+      const itemGender = item.gender || products.find(p => p.id === item.productId || p.name === item.name)?.gender || 'Ambos';
+      const variationName = formatVariationWithGender(item.variationName, itemGender) || 'Grade Única';
       const unitPriceStr = formatCurrency(item.price);
       const qtyStr = `${item.quantity} UN`;
       const subtotalItemStr = formatCurrency(item.price * item.quantity);
 
-      return [pIdx, item.name, variationName, qtyStr, unitPriceStr, subtotalItemStr];
+      return [pIdx, cleanProductNameWithVariation(item.name), variationName, qtyStr, unitPriceStr, subtotalItemStr];
     });
 
     autoTable(doc, {
@@ -936,17 +937,20 @@ export default function PDV() {
                 <div className="space-y-4">
                   <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest pl-2 border-l-2 border-amber-500">Itens do Pedido</p>
                   <div className="space-y-2">
-                    {lastSale.items.map((item: any, idx: number) => (
-                      <div key={idx} className="flex justify-between items-center p-4 bg-white rounded-3xl border border-slate-100 shadow-sm">
-                         <div>
-                            <p className="text-sm font-black text-slate-900 uppercase tracking-tight">{item.name}</p>
-                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">
-                              {cleanVariationName(item.variationName) ? `${cleanVariationName(item.variationName)} x ${item.quantity}` : `x ${item.quantity}`}
-                            </p>
-                         </div>
-                         <p className="text-sm font-black text-red-800">{formatCurrency(item.price * item.quantity)}</p>
-                      </div>
-                    ))}
+                    {lastSale.items.map((item: any, idx: number) => {
+                      const itemGender = item.gender || products.find(p => p.id === item.productId || p.name === item.name)?.gender || 'Ambos';
+                      return (
+                        <div key={idx} className="flex justify-between items-center p-4 bg-white rounded-3xl border border-slate-100 shadow-sm">
+                           <div>
+                              <p className="text-sm font-black text-slate-900 uppercase tracking-tight">{formatProductNameWithGender(item.name, itemGender)}</p>
+                              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">
+                                {`x ${item.quantity}`}
+                              </p>
+                           </div>
+                           <p className="text-sm font-black text-red-800">{formatCurrency(item.price * item.quantity)}</p>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -1529,13 +1533,13 @@ export default function PDV() {
                           <div className="flex justify-between items-start mb-2">
                             <div className="flex-1">
                               <div className="flex items-center gap-2">
-                                 <p className="font-black text-xs leading-tight text-white uppercase group-hover/item:text-amber-400 transition-colors">{item.name}</p>
+                                 <p className="font-black text-xs leading-tight text-white uppercase group-hover/item:text-amber-400 transition-colors">{cleanProductNameWithVariation(item.name)}</p>
                                  {item.isDropshipping && (
                                    <span className="text-[7px] font-black bg-amber-500 text-white px-1.5 py-0.5 rounded italic animate-pulse">DS</span>
                                  )}
                               </div>
-                              {cleanVariationName(item.variationName) && (
-                                <p className="text-[8px] font-black text-white/30 mt-1 uppercase tracking-widest">{cleanVariationName(item.variationName)}</p>
+                              {formatVariationWithGender(item.variationName, item.gender) && (
+                                <p className="text-[8px] font-black text-white/30 mt-1 uppercase tracking-widest">{formatVariationWithGender(item.variationName, item.gender)}</p>
                               )}
                             </div>
                             <p className="font-black text-sm ml-2 text-white tabular-nums tracking-tighter">{formatCurrency(item.price * item.quantity)}</p>

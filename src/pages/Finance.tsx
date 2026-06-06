@@ -30,7 +30,7 @@ import {
   CheckCircle,
   Sparkles
 } from 'lucide-react';
-import { formatCurrency, cn } from '../lib/utils';
+import { formatCurrency, cn, cleanVariationName, cleanProductNameWithVariation, formatVariationWithGender, formatProductNameWithGender } from '../lib/utils';
 import { motion } from 'motion/react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -1091,12 +1091,15 @@ export default function Finance() {
                             <div className="space-y-2">
                               <p className="text-[9px] font-black uppercase text-slate-400 tracking-wider block">Itens da Compra</p>
                               <div className="divide-y divide-slate-100 border border-slate-150 rounded-xl bg-white overflow-hidden shadow-inner">
-                                {sale.items.map((item, idx) => (
-                                  <div key={idx} className="p-3.5 flex items-center justify-between text-xs hover:bg-slate-50/40 transition-colors">
-                                    <div>
-                                      <p className="font-bold text-slate-800 uppercase tracking-tight">{item.productName || item.name}</p>
-                                      <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Grade: <span className="text-slate-700 font-sans">{item.variationName || item.name?.split(' - ')[1] || 'Única'}</span> {item.isDropshipping && '• Dropshipping'}</p>
-                                    </div>
+                                {sale.items.map((item, idx) => {
+                                  const itemGender = item.gender || products.find(p => p.id === item.productId || p.name === item.name)?.gender || 'Ambos';
+                                  const formattedVar = formatVariationWithGender(item.variationName, itemGender) || 'Única';
+                                  return (
+                                    <div key={idx} className="p-3.5 flex items-center justify-between text-xs hover:bg-slate-50/40 transition-colors">
+                                      <div>
+                                        <p className="font-bold text-slate-800 uppercase tracking-tight">{cleanProductNameWithVariation(item.productName || item.name)}</p>
+                                        <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Grade: <span className="text-slate-700 font-sans">{formattedVar}</span> {item.isDropshipping && '• Dropshipping'}</p>
+                                      </div>
                                     <div className="flex items-center gap-6 font-semibold">
                                       <div className="text-right">
                                         <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Qtd</p>
@@ -1112,7 +1115,8 @@ export default function Finance() {
                                       </div>
                                     </div>
                                   </div>
-                                ))}
+                                  );
+                                })}
                               </div>
                             </div>
 

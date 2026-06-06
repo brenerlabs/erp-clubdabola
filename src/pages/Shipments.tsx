@@ -7,16 +7,18 @@ import {
   CheckCircle2, Clock, AlertCircle, MapPin, 
   MessageCircle, DollarSign, X, Receipt,
   ChevronRight, ArrowRight, ShoppingBag, Box, History, CheckSquare, Square, Calculator,
-  Sparkles, TrendingUp, Activity
+  Sparkles, TrendingUp, Activity, Plane, Globe
 } from 'lucide-react';
-import { formatCurrency, cn, cleanVariationName } from '../lib/utils';
+import { formatCurrency, cn, cleanVariationName, cleanProductNameWithVariation, formatVariationWithGender, formatProductNameWithGender } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 
 const SHIPMENT_STATUSES = [
   'Processando',
   'Postado',
   'Em Trânsito',
+  'Chegou no Brasil',
   'Fiscalização',
+  'Em trânsito para o destino final',
   'Recebido',
   'Entregue'
 ] as const;
@@ -50,6 +52,15 @@ const getStatusConfig = (s: Shipment['status']) => {
         iconBg: 'bg-amber-100 text-amber-600',
         dot: 'bg-amber-500'
       };
+    case 'Chegou no Brasil':
+      return {
+        bg: 'bg-emerald-50 border-emerald-100',
+        text: 'text-emerald-700 font-extrabold',
+        border: 'border-emerald-200',
+        badge: 'bg-emerald-50 border-emerald-100 text-emerald-700 hover:bg-emerald-100/70',
+        iconBg: 'bg-emerald-100 text-emerald-600',
+        dot: 'bg-emerald-600'
+      };
     case 'Fiscalização':
       return {
         bg: 'bg-rose-50 border-rose-100',
@@ -58,6 +69,15 @@ const getStatusConfig = (s: Shipment['status']) => {
         badge: 'bg-rose-100/80 border-rose-200 text-rose-600 hover:bg-rose-200/70 animate-pulse',
         iconBg: 'bg-rose-100 text-rose-600',
         dot: 'bg-rose-600'
+      };
+    case 'Em trânsito para o destino final':
+      return {
+        bg: 'bg-indigo-50 border-indigo-100',
+        text: 'text-indigo-700 font-extrabold',
+        border: 'border-indigo-200',
+        badge: 'bg-indigo-50 border-indigo-100 text-indigo-700 hover:bg-indigo-100/70',
+        iconBg: 'bg-indigo-100 text-indigo-600',
+        dot: 'bg-indigo-600'
       };
     case 'Recebido':
       return {
@@ -93,8 +113,10 @@ const getStatusIcon = (status: Shipment['status'], size = 18) => {
   switch (status) {
     case 'Processando': return <Clock size={size} />;
     case 'Postado': return <Package size={size} />;
-    case 'Em Trânsito': return <Truck size={size} />;
+    case 'Em Trânsito': return <Plane size={size} />;
+    case 'Chegou no Brasil': return <Globe size={size} />;
     case 'Fiscalização': return <AlertCircle size={size} />;
+    case 'Em trânsito para o destino final': return <Truck size={size} />;
     case 'Recebido': return <MapPin size={size} />;
     case 'Entregue': return <CheckCircle2 size={size} />;
     default: return <Package size={size} />;
@@ -107,7 +129,9 @@ const getSelectedTabStyle = (s: string) => {
     case 'Processando': return 'bg-slate-600 text-white border-slate-600 shadow-sm shadow-slate-600/10';
     case 'Postado': return 'bg-sky-600 text-white border-sky-600 shadow-sm shadow-sky-600/10';
     case 'Em Trânsito': return 'bg-amber-600 text-white border-amber-600 shadow-sm shadow-amber-600/10';
+    case 'Chegou no Brasil': return 'bg-emerald-600 text-white border-emerald-600 shadow-sm shadow-emerald-500/10';
     case 'Fiscalização': return 'bg-rose-600 text-white border-rose-600 shadow-sm shadow-rose-600/10 animate-pulse';
+    case 'Em trânsito para o destino final': return 'bg-indigo-600 text-white border-indigo-600 shadow-sm shadow-indigo-500/10';
     case 'Recebido': return 'bg-emerald-600 text-white border-emerald-600 shadow-sm shadow-emerald-500/10';
     case 'Entregue': return 'bg-indigo-600 text-white border-indigo-600 shadow-sm shadow-indigo-600/10';
     default: return 'bg-red-800 text-white border-red-800 shadow-sm';
@@ -131,6 +155,8 @@ export default function Shipments() {
   const [showDeliveredSection, setShowDeliveredSection] = useState(false);
   const [activeStatusMenuId, setActiveStatusMenuId] = useState<string | null>(null);
   const [pendingWhatsAppNotify, setPendingWhatsAppNotify] = useState<{ shipment: Shipment, newStatus: string } | null>(null);
+  const [notifyModalData, setNotifyModalData] = useState<{ shipment: Shipment, status: string } | null>(null);
+  const [notifiedCustomers, setNotifiedCustomers] = useState<string[]>([]);
 
   // Form State
   const [trackingCode, setTrackingCode] = useState('');
@@ -238,8 +264,9 @@ export default function Shipments() {
   ]);
 
   const addSingleSaleItem = (sale: Sale, item: SaleItem) => {
-    const cleanedVar = cleanVariationName(item.variationName);
-    const pName = `${item.name}${cleanedVar ? ` (${cleanedVar})` : ''}`;
+    const pGender = item.gender || products.find(p => p.id === item.productId)?.gender || 'Ambos';
+    const formattedVar = formatVariationWithGender(item.variationName, pGender);
+    const pName = `${item.name}${formattedVar ? ` (${formattedVar})` : ''}`;
     const cId = sale.customerId || 'final-consumer';
     const cName = sale.customerName || 'Consumidor Final';
     
@@ -253,7 +280,8 @@ export default function Shipments() {
       productName: pName,
       quantity: item.quantity,
       price: item.price,
-      isDropshipping: item.isDropshipping || false
+      isDropshipping: item.isDropshipping || false,
+      gender: pGender
     }]);
   };
 
@@ -267,8 +295,9 @@ export default function Shipments() {
       const itemKey = `${sale.id}-${item.productId}-${item.variationId}`;
       if (shippedItemKeys.has(itemKey)) return; 
 
-      const cleanedVar = cleanVariationName(item.variationName);
-      const pName = `${item.name}${cleanedVar ? ` (${cleanedVar})` : ''}`;
+      const pGender = item.gender || products.find(p => p.id === item.productId)?.gender || 'Ambos';
+      const formattedVar = formatVariationWithGender(item.variationName, pGender);
+      const pName = `${item.name}${formattedVar ? ` (${formattedVar})` : ''}`;
       const cId = sale.customerId || 'final-consumer';
       const cName = sale.customerName || 'Consumidor Final';
       
@@ -282,7 +311,8 @@ export default function Shipments() {
         productName: pName,
         quantity: item.quantity,
         price: item.price,
-        isDropshipping: item.isDropshipping || false
+        isDropshipping: item.isDropshipping || false,
+        gender: pGender
       });
     });
 
@@ -299,32 +329,51 @@ export default function Shipments() {
     setItems(items.filter(i => i.id !== id));
   };
 
-  const sendNotification = (shipment: Shipment, newStatus: string) => {
-    // Group unique customers
-    const uniqueCustomers = new Map<string, string>();
-    shipment.items.forEach(item => {
-      const customer = customers.find(c => c.id === item.customerId);
-      if (customer && customer.contact) {
-        uniqueCustomers.set(customer.id!, customer.contact);
-      }
-    });
+  const getCustomerWhatsAppMessage = (shipment: Shipment, customerId: string, newStatus: string) => {
+    const customer = customers.find(c => c.id === customerId);
+    const customerName = customer ? customer.name : 'campeão';
+    const customerItems = shipment.items.filter(i => i.customerId === customerId);
+    const itemsList = customerItems.map(i => {
+      const itemGender = i.gender || products.find(p => p.id === i.productId)?.gender || 'Ambos';
+      return `- ${i.quantity}x ${formatProductNameWithGender(i.productName, itemGender)}`;
+    }).join('\n');
 
-    uniqueCustomers.forEach((contact, customerId) => {
-      const customer = customers.find(c => c.id === customerId);
-      const customerName = customer ? customer.name : '';
-      const customerItems = shipment.items.filter(i => i.customerId === customerId);
-      const itemsList = customerItems.map(i => `- ${i.quantity}x ${i.productName}`).join('\n');
-      
-      let message = `Olá! Seu pedido no ERP Club da Bola foi atualizado.\n\n*Status:* ${newStatus}\n*Rastreio:* ${shipment.trackingCode}\n\n*Produtos:*\n${itemsList}\n\nAcompanhe seu pedido!`;
-      
-      if (newStatus === 'Entregue') {
-        message = `Fala, *${customerName || 'campeão'}*! Tudo bem? ⚽\n\nVi aqui que sua encomenda com o rastreio *${shipment.trackingCode}* já foi entregue! Aposto que ficou daquele jeito! 🤩\n\nPoderia fortalecer nossa comunidade tirando uma foto irada vestindo a camisa para o nosso Mural de Clientes no site?\n\nPra te premiar, na sua próxima compra você ganha 10% de desconto ou Frete Grátis com o cupom: *DESCONTO10*. Que tal?\n\nForte abraço! Tamo junto! 🔥🤙`;
+    let message = `Olá! Seu pedido no ERP Club da Bola foi atualizado.\n\n*Status:* ${newStatus}\n*Rastreio:* ${shipment.trackingCode}\n\n*Produtos:*\n${itemsList}\n\nAcompanhe seu pedido!`;
+
+    if (newStatus === 'Recebido') {
+      message = `Fala, *${customerName}*! Tudo bem? ⚽\n\nSua encomenda com o rastreio *${shipment.trackingCode}* foi recebida pela nossa equipe! 🎉\n\n📌 *PRODUTO(S) DISPONÍVEL PARA RETIRADA!*\n\n*Produtos:*\n${itemsList}\n\nEntre em contato para agendar ou venha retirar! Tamo junto! 🔥🤙`;
+    } else if (newStatus === 'Entregue') {
+      const historyEntry = shipment.history?.find(h => h.status === 'Entregue');
+      let deliveryDateStr = '';
+      if (historyEntry && historyEntry.updatedAt) {
+        const d = historyEntry.updatedAt.seconds 
+          ? new Date(historyEntry.updatedAt.seconds * 1000) 
+          : (historyEntry.updatedAt instanceof Date ? historyEntry.updatedAt : new Date());
+        deliveryDateStr = d.toLocaleDateString('pt-BR');
+      } else {
+        deliveryDateStr = new Date().toLocaleDateString('pt-BR');
       }
-      
-      const cleanPhone = contact.replace(/\D/g, '');
-      const url = `https://wa.me/55${cleanPhone}?text=${encodeURIComponent(message)}`;
-      window.open(url, '_blank');
-    });
+      message = `Fala, *${customerName}*! Tudo bem? ⚽\n\nVi aqui que sua encomenda com o rastreio *${shipment.trackingCode}* foi entregue em *${deliveryDateStr}*! Aposto que ficou daquele jeito! 🤩\n\nPoderia fortalecer nossa comunidade tirando uma foto irada vestindo a camisa para o nosso Mural de Clientes no site?\n\nPra te premiar, na sua próxima compra você ganha 10% de desconto ou Frete Grátis com o cupom: *DESCONTO10*. Que tal?\n\nForte abraço! Tamo junto! 🔥🤙`;
+    } else if (newStatus === 'Postado') {
+      message = `Fala, *${customerName}*! Excelente notícia! ⚽🚀\n\nSeu pedido foi postado nos Correios ou transportadora!\n\n*Status:* Postado\n*Código de Rastreio:* *${shipment.trackingCode}*\n\n*Produtos:*\n${itemsList}\n\nVocê já pode acompanhar o envio com o código acima. Tamo junto! 🔥🤙`;
+    } else if (newStatus === 'Em Trânsito') {
+      message = `Fala, *${customerName}*! Sua encomenda está a caminho! ⚽🚚\n\n*Status:* Em Trânsito\n*Rastreio:* *${shipment.trackingCode}*\n\n*Produtos:*\n${itemsList}\n\nSua entrega está se aproximando! Excelente semana e tamo junto! 🔥🤙`;
+    } else if (newStatus === 'Chegou no Brasil') {
+      message = `Fala, *${customerName}*! Excelente atualização de rastreio! 🇧🇷⚽\n\nSua encomenda com o rastreio *${shipment.trackingCode}* acabou de chegar no Brasil!\n\n*Status:* Chegou no Brasil 🇧🇷\n*Rastreio:* *${shipment.trackingCode}*\n\n*Produtos:*\n${itemsList}\n\nAgora o próximo passo é passar pela fiscalização aduaneira. Estamos acompanhando tudo prontamente! Tamo junto! 🔥🤙`;
+    } else if (newStatus === 'Fiscalização') {
+      message = `Olá, *${customerName}*. Temos uma atualização sobre o seu pedido. ⚽⚠️\n\n*Status:* Retido para Fiscalização\n*Rastreio:* *${shipment.trackingCode}*\n\n*Produtos:*\n${itemsList}\n\nNossa equipe já está acompanhando os trâmites fiscais da importação para liberação o quanto antes. Qualquer dúvida, estamos por aqui!`;
+    } else if (newStatus === 'Em trânsito para o destino final') {
+      message = `Fala, *${customerName}*! Novidades da logística! ⚽🚚💨\n\nSua encomenda foi liberada da fiscalização e já está em trânsito para o nosso centro de distribuição final!\n\n*Status:* Em trânsito para o destino final 🚀\n*Rastreio:* *${shipment.trackingCode}*\n\n*Produtos:*\n${itemsList}\n\nFalta muito pouco para a sua encomenda chegar. Assim que estiver em mãos, te avisamos! Tamo junto! 🔥🤙`;
+    } else if (newStatus === 'Processando') {
+      message = `Fala, *${customerName}*! Tudo pronto para iniciar! ⚽⏳\n\nSua encomenda entrou em processamento logístico na origem.\n\n*Status:* Processando\n*Rastreio:* *${shipment.trackingCode}*\n\n*Produtos:*\n${itemsList}\n\nAssim que houver novos movimentos, te informamos! Tamo junto! 🔥🤙`;
+    }
+
+    return message;
+  };
+
+  const sendNotification = (shipment: Shipment, newStatus: string) => {
+    setNotifiedCustomers([]);
+    setNotifyModalData({ shipment, status: newStatus });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -730,6 +779,38 @@ export default function Shipments() {
         </div>
 
         <div className="space-y-2 flex-1">
+          {shipment.status === 'Recebido' && (
+            <div className="p-2.5 bg-emerald-50 border border-emerald-100 rounded-2xl flex items-center gap-2 text-emerald-800 text-[10px] font-black uppercase tracking-tight shadow-sm select-none">
+              <span className="relative flex h-2 w-2 shrink-0">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              <span>📌 Produto(s) disponível para retirada!</span>
+            </div>
+          )}
+
+          {shipment.status === 'Entregue' && (() => {
+            const historyEntry = shipment.history?.find(h => h.status === 'Entregue');
+            let deliveryDateStr = '';
+            if (historyEntry && historyEntry.updatedAt) {
+              const d = historyEntry.updatedAt.seconds 
+                ? new Date(historyEntry.updatedAt.seconds * 1000) 
+                : (historyEntry.updatedAt instanceof Date ? historyEntry.updatedAt : new Date());
+              deliveryDateStr = d.toLocaleDateString('pt-BR');
+            } else {
+              const dateObj = shipment.updatedAt?.seconds 
+                ? new Date(shipment.updatedAt.seconds * 1000) 
+                : (shipment.updatedAt ? new Date(shipment.updatedAt) : new Date());
+              deliveryDateStr = dateObj.toLocaleDateString('pt-BR');
+            }
+            return (
+              <div className="p-2.5 bg-indigo-50 border border-indigo-100/50 rounded-2xl flex items-center gap-2 text-indigo-800 text-[10px] font-black uppercase tracking-tight shadow-sm select-none">
+                <span>📅 Data de Entrega:</span>
+                <span className="text-indigo-950 font-black font-display">{deliveryDateStr}</span>
+              </div>
+            );
+          })()}
+
           <AnimatePresence mode="wait">
             {showTimelineId === shipment.id ? (
               <motion.div 
@@ -817,7 +898,7 @@ export default function Shipments() {
                               {customerItems.map(item => (
                                 <div key={item.id} className="p-1.5 px-2.5 border-b border-slate-50 last:border-0 flex justify-between items-center text-[9px]">
                                   <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                                    <span className="text-slate-600 font-bold uppercase truncate tracking-tight">{item.productName}</span>
+                                    <span className="text-slate-600 font-bold uppercase truncate tracking-tight">{formatProductNameWithGender(item.productName, item.gender || products.find(p => p.id === item.productId)?.gender)}</span>
                                     {item.isDropshipping && (
                                       <span className="text-[6px] font-black bg-amber-500 text-white px-1 rounded italic leading-none">DS</span>
                                     )}
@@ -1410,7 +1491,7 @@ export default function Shipments() {
                               <div key={idx} className="flex items-center justify-between bg-white border border-slate-100 p-2.5 rounded-xl shadow-sm">
                                 <div className="min-w-0 flex-1">
                                   <p className="text-[10px] font-black text-slate-900 truncate uppercase">{item.name}</p>
-                                  <p className="text-[9px] text-slate-400 font-bold uppercase">{cleanVariationName(item.variationName) || 'Sem variação'}</p>
+                                  <p className="text-[9px] text-slate-400 font-bold uppercase">{formatVariationWithGender(item.variationName, item.gender || products.find(p => p.id === item.productId)?.gender) || 'Sem variação'}</p>
                                 </div>
                                 <div className="flex items-center gap-3 ml-4">
                                   <span className="text-[10px] font-black text-slate-900">x{item.quantity}</span>
@@ -1454,7 +1535,7 @@ export default function Shipments() {
                           </div>
                           <div>
                             <p className="text-xs font-black text-slate-900">{item.customerName}</p>
-                            <p className="text-[10px] text-indigo-600 font-bold uppercase tracking-tight">{item.productName}</p>
+                            <p className="text-[10px] text-indigo-600 font-bold uppercase tracking-tight">{formatProductNameWithGender(item.productName, item.gender || products.find(p => p.id === item.productId)?.gender)}</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-4">
@@ -1629,6 +1710,176 @@ export default function Shipments() {
             </div>
           </motion.div>
         )}
+      </AnimatePresence>
+
+      {/* Modal de Envio Individual por Cliente */}
+      <AnimatePresence>
+        {notifyModalData && (() => {
+          const { shipment, status: targetStatus } = notifyModalData;
+          
+          // Group unique customers
+          const uniqueCustomersMap = new Map<string, { customer: Customer; items: ShipmentItem[] }>();
+          shipment.items.forEach(item => {
+            const customer = customers.find(c => c.id === item.customerId);
+            if (customer) {
+              if (!uniqueCustomersMap.has(customer.id!)) {
+                uniqueCustomersMap.set(customer.id!, { customer, items: [] });
+              }
+              uniqueCustomersMap.get(customer.id!)!.items.push(item);
+            }
+          });
+
+          const uniqueCustomersList = Array.from(uniqueCustomersMap.values());
+
+          return (
+            <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setNotifyModalData(null)}
+                className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+              />
+              <motion.div 
+                initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                className="bg-white rounded-[32px] shadow-2xl w-full max-w-2xl relative z-10 overflow-hidden flex flex-col max-h-[90vh]"
+              >
+                {/* Header */}
+                <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-emerald-50/50">
+                  <div className="flex items-center gap-3">
+                    <div className="size-12 bg-emerald-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-emerald-100 animate-pulse">
+                      <MessageCircle size={24} className="fill-white/10" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-black text-slate-900 italic uppercase">Enviar Notificações</h3>
+                      <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest leading-none mt-1">
+                        Lote {shipment.trackingCode} • Status: <span className="text-emerald-600 font-extrabold">{targetStatus}</span>
+                      </p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => setNotifyModalData(null)} 
+                    className="p-2 hover:bg-slate-100 rounded-full transition-colors"
+                  >
+                    <X size={20} className="text-slate-400" />
+                  </button>
+                </div>
+
+                {/* Content */}
+                <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar bg-slate-50/50">
+                  {uniqueCustomersList.length === 0 ? (
+                    <div className="text-center py-10 bg-white border border-slate-100 rounded-3xl p-6">
+                      <p className="text-xs text-slate-400 font-bold uppercase">Nenhum cliente com contato cadastrado para este lote.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <p className="text-[10px] font-black uppercase text-slate-400 tracking-wider pl-2 border-l-2 border-emerald-500">
+                        {uniqueCustomersList.length} {uniqueCustomersList.length === 1 ? 'Cliente disponível' : 'Clientes disponíveis para contato'}
+                      </p>
+                      
+                      {uniqueCustomersList.map(({ customer, items: customerItems }) => {
+                        const isNotified = notifiedCustomers.includes(customer.id!);
+                        const messageText = getCustomerWhatsAppMessage(shipment, customer.id!, targetStatus);
+                        const cleanPhone = customer.contact ? customer.contact.replace(/\D/g, '') : '';
+                        
+                        return (
+                          <div 
+                            key={customer.id} 
+                            className={cn(
+                              "bg-white border rounded-[24px] p-5 transition-all flex flex-col md:flex-row md:items-start justify-between gap-4 shadow-sm hover:shadow-md",
+                              isNotified ? "border-emerald-200 bg-emerald-50/10" : "border-slate-100"
+                            )}
+                          >
+                            <div className="flex-1 space-y-3 min-w-0">
+                              {/* Cliente Info */}
+                              <div className="flex items-center gap-2">
+                                <span className="font-extrabold text-sm text-slate-900 uppercase tracking-tight">{customer.name}</span>
+                                {customer.contact && (
+                                  <span className="text-[10px] bg-slate-100 font-mono text-slate-500 font-semibold px-2 py-0.5 rounded-full">
+                                    {customer.contact}
+                                  </span>
+                                )}
+                                {isNotified && (
+                                  <span className="text-[9px] bg-emerald-100 text-emerald-700 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-0.5 animate-bounce">
+                                    <CheckCircle2 size={10} /> Enviado
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Items list belonging to client */}
+                              <div className="bg-slate-50/80 rounded-2xl p-3 border border-slate-100/40">
+                                <p className="text-[8px] font-black uppercase tracking-wider text-slate-400 mb-1">Itens neste lote:</p>
+                                <div className="space-y-1">
+                                  {customerItems.map((item, idx) => {
+                                    const itemGender = item.gender || products.find(p => p.id === item.productId)?.gender || 'Ambos';
+                                    return (
+                                      <p key={idx} className="text-[10px] text-slate-600 font-bold uppercase truncate max-w-full">
+                                        • {item.quantity}x {formatProductNameWithGender(item.productName, itemGender)}
+                                      </p>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+
+                              {/* Message bubble preview */}
+                              <div className="relative">
+                                <p className="text-[8px] font-black uppercase tracking-wider text-slate-400 mb-1">Pré-visualização da Mensagem:</p>
+                                <div className="bg-slate-100 border border-slate-200/50 rounded-2xl p-3.5 text-[11px] text-slate-600 font-sans whitespace-pre-wrap max-h-32 overflow-y-auto leading-relaxed scrollbar-thin">
+                                  {messageText}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Actions column */}
+                            <div className="flex flex-row md:flex-col items-center justify-end gap-2 shrink-0 md:self-stretch md:justify-center">
+                              {customer.contact ? (
+                                <button
+                                  onClick={() => {
+                                    const url = `https://wa.me/55${cleanPhone}?text=${encodeURIComponent(messageText)}`;
+                                    window.open(url, '_blank');
+                                    if (!isNotified) {
+                                      setNotifiedCustomers(prev => [...prev, customer.id!]);
+                                    }
+                                  }}
+                                  className={cn(
+                                    "px-4 py-2.5 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 shadow-md w-full md:w-36 text-center select-none cursor-pointer",
+                                    isNotified 
+                                      ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100/80 border border-emerald-200" 
+                                      : "bg-emerald-500 hover:bg-emerald-600 text-white border border-emerald-600 hover:-translate-y-0.5 active:translate-y-0 md:h-12"
+                                  )}
+                                >
+                                  <MessageCircle size={12} className="fill-current/10" />
+                                  {isNotified ? 'REENVIAR' : 'ENVIAR WPP'}
+                                </button>
+                              ) : (
+                                <div className="text-[9px] text-red-500 font-extrabold uppercase bg-red-50 px-3 py-2 rounded-2xl text-center flex items-center gap-1">
+                                  <AlertCircle size={12} /> Sem telefone
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer */}
+                <div className="p-6 border-t border-slate-100 bg-slate-50 flex gap-4">
+                  <button 
+                    type="button" 
+                    onClick={() => setNotifyModalData(null)}
+                    className="w-full py-4 bg-white border border-slate-200 text-slate-700 font-black text-xs uppercase tracking-widest rounded-2xl hover:bg-slate-100 transition-all text-center cursor-pointer"
+                  >
+                    Fechar Notificações
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          );
+        })()}
       </AnimatePresence>
     </motion.div>
   );

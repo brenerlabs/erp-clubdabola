@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, where, orderBy, writeBatch } from 'firebase/firestore';
-import { Customer, Transaction, Sale } from '../types';
+import { Customer, Transaction, Sale, Product } from '../types';
 import { Plus, Search, Edit2, Trash2, Copy, User, Phone, Wallet, History, ArrowDownCircle, ArrowUpCircle, X, ShoppingBag, Star, FileText } from 'lucide-react';
-import { formatCurrency, cn, cleanVariationName } from '../lib/utils';
+import { formatCurrency, cn, cleanVariationName, cleanProductNameWithVariation, formatVariationWithGender, formatProductNameWithGender } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { SidebarContext } from '../App';
 import jsPDF from 'jspdf';
@@ -12,6 +12,7 @@ import autoTable from 'jspdf-autotable';
 export default function Customers() {
   const { setIsSidebarOpen } = useContext(SidebarContext);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [filterPending, setFilterPending] = useState(false);
@@ -65,7 +66,11 @@ export default function Customers() {
       setSales(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Sale)));
     });
 
-    return () => { unsubscribe(); unsubSales(); };
+    const unsubProd = onSnapshot(collection(db, 'products'), (snapshot) => {
+      setProducts(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Product)));
+    });
+
+    return () => { unsubscribe(); unsubSales(); unsubProd(); };
   }, []);
 
   const openModal = (customer?: Customer, isDuplicate = false) => {
@@ -426,8 +431,8 @@ export default function Customers() {
 
     const formatItemsColumn = (items: any[]) => {
       return items.map(i => {
-        const cleanedVar = cleanVariationName(i.variationName);
-        return `${i.quantity}x ${i.name}${cleanedVar ? ` (${cleanedVar})` : ''}`;
+        const iGender = i.gender || products.find(p => p.id === i.productId)?.gender || 'Ambos';
+        return `${i.quantity}x ${formatProductNameWithGender(i.name, iGender)}`;
       }).join(', ');
     };
 
@@ -604,10 +609,11 @@ export default function Customers() {
       .filter(s => s.customerId === selectedCustomer.id)
       .flatMap(s => s.items)
       .forEach(item => {
-        const cleanedVar = cleanVariationName(item.variationName);
-        const key = item.productId + cleanedVar;
+        const iGender = item.gender || products.find(p => p.id === item.productId)?.gender || 'Ambos';
+        const formattedVar = formatVariationWithGender(item.variationName, iGender);
+        const key = item.productId + formattedVar;
         if (!productCounts[key]) {
-          productCounts[key] = { name: item.name + (cleanedVar ? ` (${cleanedVar})` : ''), count: 0 };
+          productCounts[key] = { name: formatProductNameWithGender(item.name, iGender), count: 0 };
         }
         productCounts[key].count += item.quantity;
       });
@@ -1170,10 +1176,10 @@ export default function Customers() {
                         </div>
                         <div className="space-y-2 border-t border-slate-50 pt-4">
                           {sale.items.map((item, idx) => {
-                            const cleanedVar = cleanVariationName(item.variationName);
+                            const iGender = item.gender || products.find(p => p.id === item.productId)?.gender || 'Ambos';
                             return (
                               <div key={idx} className="flex justify-between text-[10px] font-bold uppercase text-slate-500">
-                                <span>{item.quantity}x {item.name}{cleanedVar ? ` (${cleanedVar})` : ''}</span>
+                                <span>{item.quantity}x {formatProductNameWithGender(item.name, iGender)}</span>
                                 <span>{formatCurrency(item.price * item.quantity)}</span>
                               </div>
                             );

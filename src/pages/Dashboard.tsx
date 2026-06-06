@@ -746,6 +746,132 @@ export default function Dashboard() {
       }
     }
 
+    // NEW INSIGHT 12: Curva ABC (Concentração de Faturamento por SKU / Pareto)
+    if (sales.length > 0 && stats.totalRevenue > 0) {
+      const productSales: Record<string, { name: string; total: number }> = {};
+      sales.filter(s => s.status !== 'Pré-venda' && s.status !== 'Cancelada').forEach(sale => {
+        sale.items.forEach(item => {
+          if (!productSales[item.productId]) {
+            productSales[item.productId] = { name: item.name, total: 0 };
+          }
+          productSales[item.productId].total += item.price * item.quantity;
+        });
+      });
+      
+      const sortedProductSales = Object.values(productSales).sort((a, b) => b.total - a.total);
+      if (sortedProductSales.length > 0) {
+        // Calculate share of the top 3 best-selling products
+        const top3Total = sortedProductSales.slice(0, 3).reduce((acc, p) => acc + p.total, 0);
+        const top3Share = (top3Total / stats.totalRevenue) * 100;
+        const topProductNames = sortedProductSales.slice(0, 3).map(p => p.name).join(', ');
+
+        if (top3Share > 50 && sortedProductSales.length > 3) {
+          list.push({
+            id: 'abc-concentration',
+            type: 'warning',
+            title: '🎯 Concentração ABC: Alta Dependência de Poucas SKUs',
+            desc: `Seus top 3 produtos (${topProductNames}) respondem por ${top3Share.toFixed(1)}% do faturamento total. Considere diversificar as estratégias de marketing para impulsionar outros itens do catálogo.`
+          });
+        } else {
+          list.push({
+            id: 'abc-healthy',
+            type: 'success',
+            title: '🥗 Catálogo Saudável: Faturamento Bem Distribuído',
+            desc: `Excelente distribuição de demanda! Seus 3 principais produtos representam apenas ${top3Share.toFixed(1)}% do faturamento total, indicando um catálogo de vendas resiliente e bem diversificado.`
+          });
+        }
+      }
+    }
+
+    // NEW INSIGHT 13: Peso das Despesas Gerais no Cash Flow
+    if (stats.totalRevenue > 0 && stats.totalExpenses > 0) {
+      const expenseRatio = (stats.totalExpenses / stats.totalRevenue) * 105; // adjustment
+      const displayExpenseRatio = (stats.totalExpenses / stats.totalRevenue) * 100;
+      if (displayExpenseRatio > 25) {
+        list.push({
+          id: 'expense-ratio-high',
+          type: 'warning',
+          title: '💸 Alerta de Margem: Peso das Despesas Operacionais',
+          desc: `Suas despesas consolidadas somam ${formatCurrency(stats.totalExpenses)}, o que consome ${displayExpenseRatio.toFixed(1)}% da sua receita bruta. Busque renegociar despesas extras ou assinaturas para elevar suas margens de lucro.`
+        });
+      } else {
+        list.push({
+          id: 'expense-ratio-lean',
+          type: 'success',
+          title: '🐳 Gestão Enxuta: Despesas Sob Rigoroso Controle',
+          desc: `Muito eficiente! Suas despesas adicionais comprometem apenas ${displayExpenseRatio.toFixed(1)}% do faturamento total da loja. Isso preserva sua lucratividade nítida.`
+        });
+      }
+    }
+
+    // NEW INSIGHT 14: Cross-selling (Quantidade Média de Itens por Carrinho)
+    const completedSales = sales.filter(s => s.status !== 'Pré-venda' && s.status !== 'Cancelada');
+    if (completedSales.length > 0) {
+      const totalItemsCount = completedSales.reduce((acc, s) => acc + s.items.reduce((sum, i) => sum + i.quantity, 0), 0);
+      const avgItemsPerSale = totalItemsCount / completedSales.length;
+
+      if (avgItemsPerSale < 1.6) {
+        list.push({
+          id: 'cross-selling-low',
+          type: 'info',
+          title: '🛒 Carrinho Unitário: Oportunidade de Venda Casada',
+          desc: `Você vende em média apenas ${avgItemsPerSale.toFixed(1)} produto(s) por transação. Crie kits promocionais ("compre junto", "leve 2 com desconto") para motivar clientes a expandir o carrinho.`
+        });
+      } else {
+        list.push({
+          id: 'cross-selling-high',
+          type: 'success',
+          title: '🛍️ cross-selling Consistente: Alta Composição de Vendas',
+          desc: `Excelente! Suas vendas contam com uma média saudável de ${avgItemsPerSale.toFixed(1)} itens por transação, o que reduz custos logísticos unitários e otimiza sua receita.`
+        });
+      }
+    }
+
+    // NEW INSIGHT 15: Liquidez Instantânea vs Meios de Pagamento
+    if (completedSales.length > 0 && stats.totalRevenue > 0) {
+      const revenueByMethod: Record<string, number> = { Dinheiro: 0, Pix: 0, Cartão: 0, Fiado: 0 };
+      completedSales.forEach(s => {
+        revenueByMethod[s.paymentMethod] = (revenueByMethod[s.paymentMethod] || 0) + s.total;
+      });
+
+      const pixShare = (revenueByMethod['Pix'] / stats.totalRevenue) * 100;
+      const cardShare = (revenueByMethod['Cartão'] / stats.totalRevenue) * 100;
+
+      if (pixShare > 40) {
+        list.push({
+          id: 'pix-liquidity-high',
+          type: 'success',
+          title: '⚡ Pix em Ascensão: Liquidez Imediata Turbinada',
+          desc: `Pagamentos instantâneos via Pix representam ${pixShare.toFixed(1)}% do seu faturamento bruto. Isso blinda seu fluxo de caixa contra atrasos e tarifas de maquininhas/adquirentes.`
+        });
+      } else if (cardShare > 45) {
+        list.push({
+          id: 'card-fees-high',
+          type: 'info',
+          title: '💳 Alerta de Intermediação: Elevada Concentração de Cartões',
+          desc: `As vendas no Cartão somam ${cardShare.toFixed(1)}% do faturamento. Considere dar um desconto sutil de 3% a 5% em pagamentos via Pix para impulsionar sua liquidez líquida.`
+        });
+      }
+    }
+
+    // NEW INSIGHT 16: Clientes Registrados Inativos / Churn
+    if (customers.length > 0) {
+      const inactiveCustomers = customers.filter(c => {
+        const hasPurchases = sales.some(s => s.customerId === c.id && s.status !== 'Cancelada');
+        return !hasPurchases;
+      });
+      const roundedRatio = Math.min(100, (inactiveCustomers.length / customers.length) * 100);
+
+      if (roundedRatio > 30 && inactiveCustomers.length > 0) {
+        list.push({
+          id: 'customers-idle',
+          type: 'info',
+          title: '💤 Clientes Adormecidos: Potencial de Reativação Comercial',
+          desc: `${roundedRatio.toFixed(1)}% dos seus clientes cadastrados (${inactiveCustomers.length} cliente(s)) estão sem compras recentes registradas. Envie uma oferta personalizada via WhatsApp para reaquecê-los.`
+        });
+      }
+    }
+
     return list;
   }, [products, sales, debtors, stats, getSaleBalance, customers, shipments]);
   

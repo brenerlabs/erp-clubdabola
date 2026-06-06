@@ -37,6 +37,7 @@ export interface SaleItem {
   quantity: number;
   price: number;
   isDropshipping?: boolean;
+  gender?: 'Masculino' | 'Feminino' | 'Ambos';
 }
 
 export interface Sale {
@@ -66,6 +67,7 @@ export interface ShipmentItem {
   quantity: number;
   price: number;
   isDropshipping?: boolean;
+  gender?: 'Masculino' | 'Feminino' | 'Ambos';
 }
 
 export interface ShipmentStatusHistory {
@@ -77,7 +79,7 @@ export interface ShipmentStatusHistory {
 export interface Shipment {
   id?: string;
   trackingCode: string;
-  status: 'Processando' | 'Postado' | 'Em Trânsito' | 'Fiscalização' | 'Recebido' | 'Entregue';
+  status: 'Processando' | 'Postado' | 'Em Trânsito' | 'Chegou no Brasil' | 'Fiscalização' | 'Em trânsito para o destino final' | 'Recebido' | 'Entregue';
   items: ShipmentItem[];
   hasTax: boolean;
   taxAmount: number;
