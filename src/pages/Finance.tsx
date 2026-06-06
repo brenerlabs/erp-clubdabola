@@ -105,31 +105,11 @@ export default function Finance() {
 
   const getSaleBalance = (sale: Sale) => {
     if (sale.paymentMethod !== 'Fiado') return 0;
-    const customer = customers.find(c => c.id === sale.customerId);
-    if (!customer) {
-      const paymentsForSale = transactions
-        .filter(t => t.saleId === sale.id && t.type === 'payment')
-        .reduce((acc, t) => acc + t.amount, 0);
-      return Math.max(0, sale.total - paymentsForSale);
-    }
-
-    const custSales = sales
-      .filter(s => s.customerId === sale.customerId && s.paymentMethod === 'Fiado' && s.status !== 'Pré-venda' && s.status !== 'Cancelada')
-      .sort((a, b) => {
-        const tA = a.createdAt?.seconds || (typeof a.createdAt === 'object' && a.createdAt?.getTime ? a.createdAt.getTime() / 1000 : 0);
-        const tB = b.createdAt?.seconds || (typeof b.createdAt === 'object' && b.createdAt?.getTime ? b.createdAt.getTime() / 1000 : 0);
-        return tA - tB;
-      });
-
-    let remainingDebt = customer.totalDebt || 0;
-    for (const s of custSales) {
-      const sBalance = Math.min(remainingDebt, s.total);
-      remainingDebt -= sBalance;
-      if (s.id === sale.id) {
-        return sBalance;
-      }
-    }
-    return 0;
+    if (sale.status === 'Cancelada') return 0;
+    const paymentsForSale = transactions
+      .filter(t => t.saleId === sale.id && t.type === 'payment')
+      .reduce((acc, t) => acc + t.amount, 0);
+    return Math.max(0, sale.total - paymentsForSale);
   };
 
   const totalInvoiced = sales.filter(s => s.status !== 'Pré-venda' && s.status !== 'Cancelada').reduce((acc, s) => acc + s.total, 0);
@@ -950,7 +930,11 @@ export default function Finance() {
                     // 2. Status Filter
                     if (statusFilter !== 'all') {
                       if (statusFilter === 'Pendente') {
-                        if (s.status !== 'Concluída' || s.paymentMethod !== 'Fiado' || getSaleBalance(s) === 0) return false;
+                        const isPendingFiado = (s.paymentMethod === 'Fiado' && getSaleBalance(s) > 0) || s.status === 'Pendente';
+                        if (!isPendingFiado) return false;
+                      } else if (statusFilter === 'Concluída') {
+                        const isCompleted = s.status === 'Concluída' && (s.paymentMethod !== 'Fiado' || getSaleBalance(s) === 0);
+                        if (!isCompleted) return false;
                       } else {
                         if (s.status !== statusFilter) return false;
                       }

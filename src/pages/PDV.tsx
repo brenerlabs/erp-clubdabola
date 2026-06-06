@@ -245,6 +245,7 @@ export default function PDV() {
                 customerId: preSale.customerId,
                 amount: debtAmount,
                 type: 'debt',
+                paymentMethod: 'Fiado',
                 saleId: preSale.id,
                 createdAt: finalDate
               }));
@@ -364,11 +365,12 @@ export default function PDV() {
 
         // 3. Update Customer Debt and Transactions
         if (selectedCustomer) {
+          const freshCustomer = customers.find(c => c.id === selectedCustomer.id) || selectedCustomer;
           if (paymentMethod === 'Fiado') {
             if (finalDownPayment > 0) {
               const entryTransRef = doc(collection(db, 'transactions'));
               batch.set(entryTransRef, cleanObject({
-                customerId: selectedCustomer.id || null,
+                customerId: freshCustomer.id || null,
                 amount: finalDownPayment,
                 type: 'payment',
                 paymentMethod: 'Dinheiro',
@@ -378,16 +380,17 @@ export default function PDV() {
             }
 
             if (debtAmount > 0) {
-              batch.update(doc(db, 'customers', selectedCustomer.id!), cleanObject({
-                totalDebt: (selectedCustomer.totalDebt || 0) + debtAmount,
+              batch.update(doc(db, 'customers', freshCustomer.id), cleanObject({
+                totalDebt: (freshCustomer.totalDebt || 0) + debtAmount,
                 updatedAt: serverTimestamp()
               }));
 
               const debtTransRef = doc(collection(db, 'transactions'));
               batch.set(debtTransRef, cleanObject({
-                customerId: selectedCustomer.id || null,
+                customerId: freshCustomer.id || null,
                 amount: debtAmount,
                 type: 'debt',
+                paymentMethod: 'Fiado',
                 saleId: saleRef.id,
                 createdAt: finalDate
               }));
@@ -395,7 +398,7 @@ export default function PDV() {
           } else {
             const paymentTransRef = doc(collection(db, 'transactions'));
             batch.set(paymentTransRef, cleanObject({
-              customerId: selectedCustomer.id || null,
+              customerId: freshCustomer.id || null,
               amount: saleTotal,
               type: 'payment',
               paymentMethod,
