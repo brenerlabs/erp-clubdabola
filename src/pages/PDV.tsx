@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, query, onSnapshot, addDoc, updateDoc, doc, serverTimestamp, writeBatch, orderBy, deleteDoc } from 'firebase/firestore';
 import { Product, Customer, SaleItem, Variation, Sale } from '../types';
-import { Search, ShoppingCart, User, Plus, Minus, Trash2, CreditCard, Banknote, QrCode, ClipboardList, Send, X, CheckCircle2, MessageCircle, FileImage, Share2, Receipt, FileText, Sparkles, HelpCircle, Camera, TrendingUp } from 'lucide-react';
+import { Search, ShoppingCart, User, Plus, Minus, Trash2, CreditCard, Banknote, QrCode, ClipboardList, Send, X, CheckCircle2, MessageCircle, FileImage, Share2, Receipt, FileText, Sparkles, HelpCircle, Camera, TrendingUp, Truck } from 'lucide-react';
 import { formatCurrency, cn, cleanObject, cleanVariationName, cleanProductNameWithVariation, formatVariationWithGender, formatProductNameWithGender } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { SidebarContext } from '../App';
@@ -19,6 +19,7 @@ export default function PDV() {
   const [search, setSearch] = useState('');
   const [cart, setCart] = useState<SaleItem[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [shippingRegion, setShippingRegion] = useState<'none' | 'paragominas' | 'saoluis'>('none');
   const [paymentMethod, setPaymentMethod] = useState<'Dinheiro' | 'Cartão' | 'Pix' | 'Fiado'>('Dinheiro');
   const [downPayment, setDownPayment] = useState<string>('');
   const [discountPerc, setDiscountPerc] = useState<string>('0');
@@ -1377,6 +1378,20 @@ export default function PDV() {
                         {customers.map(c => <option key={c.id} value={c.id} className="bg-slate-900 text-white">{c.name}</option>)}
                       </select>
                     </div>
+
+                    {/* Shipping Region Selector */}
+                    <div className="relative group">
+                      <Truck className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 size-4 group-focus-within:text-amber-500" />
+                      <select 
+                        className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs font-black uppercase outline-none appearance-none hover:bg-white/10 focus:ring-1 focus:ring-amber-500 transition-all text-white/80"
+                        value={shippingRegion}
+                        onChange={e => setShippingRegion(e.target.value as any)}
+                      >
+                        <option value="none" className="bg-slate-900 text-white">Sem Frete (Presencial / Retirada)</option>
+                        <option value="paragominas" className="bg-slate-900 text-white">Paragominas (Frete Fixo R$ 8,00)</option>
+                        <option value="saoluis" className="bg-slate-900 text-white">São Luís (Frete Fixo R$ 20,00)</option>
+                      </select>
+                    </div>
                     {selectedCustomer && (
                       <motion.div 
                         initial={{ opacity: 0, height: 0 }}
@@ -1497,6 +1512,70 @@ export default function PDV() {
                   <div className="space-y-3">
                     <div className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-2">Itens no Carrinho ({cart.length})</div>
                     
+                    {/* Shipping Upselling Intelligence Alerts */}
+                    {(() => {
+                      const totalCartQty = cart.reduce((acc, item) => acc + item.quantity, 0);
+                      if (totalCartQty === 1 && shippingRegion !== 'none') {
+                        const itemPrice = cart[0].price;
+                        const shippingCost = shippingRegion === 'saoluis' ? 20.00 : 8.00;
+                        const regionName = shippingRegion === 'saoluis' ? 'São Luís' : 'Paragominas';
+                        const pctSingle = (shippingCost / itemPrice) * 100;
+                        const pctDouble = (shippingCost / (itemPrice * 1.9)) * 100;
+
+                        return (
+                          <motion.div 
+                            initial={{ opacity: 0, y: -10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="p-4 bg-red-800/10 border border-red-500/20 rounded-2xl space-y-1.5"
+                          >
+                            <div className="flex items-center gap-1.5 text-rose-400 font-sans font-black uppercase text-[9px] tracking-widest leading-none">
+                              <TrendingUp size={12} className="text-rose-400 shrink-0 animate-bounce" />
+                              Oportunidade de Upselling de Frete!
+                            </div>
+                            <p className="text-[10px] text-slate-350 leading-normal font-sans uppercase font-bold text-slate-200">
+                              Aviso: O custo de frete representa <span className="text-amber-400 font-black">{pctSingle.toFixed(0)}%</span> do valor desta venda. Ofereça mais 1 item com <span className="text-emerald-400 font-black">10% de desconto</span> para faturar mais e diluir o frete de {regionName} para apenas <span className="text-emerald-400 font-black">{pctDouble.toFixed(0)}%</span>!
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const discountAmount = itemPrice * 0.10;
+                                setDiscountVal(discountAmount.toFixed(2).replace('.', ','));
+                                const sub = itemPrice;
+                                const p = (discountAmount * 100) / sub;
+                                setDiscountPerc(p.toFixed(1).replace('.', ','));
+                                alert(`Simulação ativada! Desconto de 10% (R$ ${formatCurrency(discountAmount)}) pré-configurado no checkout para a oferta do segundo item.`);
+                              }}
+                              className="w-full text-center py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all"
+                            >
+                              Aplicar Sugestão (10% Desc.)
+                            </button>
+                          </motion.div>
+                        );
+                      }
+                      
+                      if (totalCartQty >= 2 && shippingRegion !== 'none') {
+                        const shippingCost = shippingRegion === 'saoluis' ? 20.00 : 8.00;
+                        const regionName = shippingRegion === 'saoluis' ? 'São Luís' : 'Paragominas';
+                        const pctReal = (shippingCost / subtotal) * 100;
+                        return (
+                          <motion.div 
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl space-y-1"
+                          >
+                            <div className="flex items-center gap-1.5 text-emerald-400 font-sans font-black uppercase text-[9px] tracking-widest leading-none">
+                              <CheckCircle2 size={12} className="text-emerald-400 shrink-0" />
+                              Eficiência Logística Máxima!
+                            </div>
+                            <p className="text-[10px] text-slate-300 leading-normal font-sans uppercase font-bold text-slate-200">
+                              Excelente! Ao faturar <span className="text-emerald-400 font-black">{totalCartQty} itens</span>, o peso relativo do frete para {regionName} caiu para apenas <span className="text-emerald-400 font-black">{pctReal.toFixed(1)}%</span> do valor total vendido!
+                            </p>
+                          </motion.div>
+                        );
+                      }
+                      return null;
+                    })()}
+
                     {cart.some(item => (item.name || '').toLowerCase().includes('jogador') || (item.variationName || '').toLowerCase().includes('jogador')) && (
                       <motion.div 
                         initial={{ opacity: 0, y: -10 }}

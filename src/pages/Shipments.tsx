@@ -308,6 +308,7 @@ export default function Shipments() {
   const [editingTaxId, setEditingTaxId] = useState<string | null>(null);
   const [quickTaxAmount, setQuickTaxAmount] = useState('');
   const [showInsights, setShowInsights] = useState(true);
+  const [isSupplierRankOpen, setIsSupplierRankOpen] = useState(false);
   const [showDeliveredSection, setShowDeliveredSection] = useState(false);
   const [activeStatusMenuId, setActiveStatusMenuId] = useState<string | null>(null);
   const [pendingWhatsAppNotify, setPendingWhatsAppNotify] = useState<{ shipment: Shipment, newStatus: string } | null>(null);
@@ -941,6 +942,72 @@ export default function Shipments() {
   const totalItemsCount = shipments.reduce((acc, s) => acc + s.items.reduce((sum, i) => sum + i.quantity, 0), 0);
   const totalDropshippingItemsCount = shipments.reduce((acc, s) => acc + s.items.filter(i => i.isDropshipping).reduce((sum, i) => sum + i.quantity, 0), 0);
   const dropshippingPercentage = totalItemsCount > 0 ? Math.round((totalDropshippingItemsCount / totalItemsCount) * 100) : 0;
+
+  // --- SUPPLIER RANKING LOGIC (FEATURE 5) ---
+  const supplierRankings = (() => {
+    // Group shipments by supplier
+    const groups: Record<string, typeof shipments> = {};
+    shipments.forEach(s => {
+      if (s.supplierName && s.supplierName.trim()) {
+        const name = s.supplierName.trim().toUpperCase();
+        if (!groups[name]) groups[name] = [];
+        groups[name].push(s);
+      }
+    });
+
+    return Object.entries(groups).map(([supplier, list]) => {
+      const total = list.length;
+      const shipped = list.filter(s => s.status !== 'Processando');
+      const taxedList = shipped.filter(s => s.hasTax);
+      const taxedCount = taxedList.length;
+      const taxRate = shipped.length > 0 ? (taxedCount / shipped.length) * 100 : 0;
+
+      const totalTaxPaid = taxedList.reduce((sum, s) => sum + (s.taxAmount || 0), 0);
+      const avgTaxAmount = taxedCount > 0 ? totalTaxPaid / taxedCount : 0;
+
+      let supplierTransitTotal = 0;
+      let supplierDeliveredCount = 0;
+      list.filter(s => s.status === 'Entregue').forEach(s => {
+        if (s.history) {
+          const postado = s.history.find(h => h.status === 'Postado');
+          const entregue = s.history.find(h => h.status === 'Entregue');
+          if (postado && entregue) {
+            const postadoDate = postado.updatedAt?.seconds 
+              ? new Date(postado.updatedAt.seconds * 1000) 
+              : new Date(postado.updatedAt);
+            const entregueDate = entregue.updatedAt?.seconds 
+              ? new Date(entregue.updatedAt.seconds * 1000) 
+              : new Date(entregue.updatedAt);
+            
+            const diff = entregueDate.getTime() - postadoDate.getTime();
+            if (diff > 0) {
+              supplierTransitTotal += diff / (1000 * 60 * 60 * 24);
+              supplierDeliveredCount++;
+            }
+          }
+        }
+      });
+      const avgTransit = supplierDeliveredCount > 0 ? supplierTransitTotal / supplierDeliveredCount : null;
+
+      return {
+        supplier,
+        total,
+        shipped: shipped.length,
+        taxedCount,
+        taxRate,
+        totalTaxPaid,
+        avgTaxAmount,
+        avgTransit,
+        allShipments: list
+      };
+    }).sort((a, b) => {
+      // Prioritize suppliers with faster transit time, or if null, push to back
+      if (a.avgTransit === null && b.avgTransit === null) return b.total - a.total;
+      if (a.avgTransit === null) return 1;
+      if (b.avgTransit === null) return -1;
+      return a.avgTransit - b.avgTransit;
+    });
+  })();
 
   // --- INTER-SEGMENT LOGISTICS TRANSIT TIMES (INSIGHTS) ---
   let phase1Days = 0;
@@ -1825,6 +1892,15 @@ export default function Shipments() {
           >
             <Sparkles size={15} className={cn("text-amber-500 transition-transform duration-300", showInsights ? "fill-amber-400 rotate-[15deg] scale-110" : "")} />
             <span>{showInsights ? 'Ocultar Insights' : 'Ver Insights'}</span>
+          </button>
+
+          <button 
+            type="button"
+            onClick={() => setIsSupplierRankOpen(true)}
+            className="font-bold py-3 px-5 rounded-xl transition-all border bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 flex items-center gap-2 active:scale-95 shadow-sm text-xs cursor-pointer select-none"
+          >
+            <TrendingUp size={15} className="text-red-800 font-sans font-black" />
+            <span>Rank Fornecedores</span>
           </button>
 
           <button 
@@ -2783,6 +2859,172 @@ export default function Shipments() {
             </div>
           );
         })()}
+      </AnimatePresence>
+
+      {/* Fornecedores Dropshipping Rank & Histórico Modal */}
+      <AnimatePresence>
+        {isSupplierRankOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsSupplierRankOpen(false)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              className="bg-white rounded-[32px] shadow-2xl w-full max-w-4xl relative z-10 overflow-hidden flex flex-col max-h-[85vh] border border-slate-200 font-sans"
+            >
+              {/* Header */}
+              <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                <div className="flex items-center gap-3">
+                  <div className="size-12 bg-red-800 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-red-150">
+                    <TrendingUp size={24} />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-black text-slate-900 italic uppercase">Rank de Fornecedores <span className="text-red-800">Dropshipping</span></h3>
+                    <p className="text-slate-500 text-xs font-bold uppercase tracking-widest text-slate-400">Desempenho Aduaneiro & Logística Internacional</p>
+                  </div>
+                </div>
+                <button onClick={() => setIsSupplierRankOpen(false)} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
+                  <X size={24} className="text-slate-400" />
+                </button>
+              </div>
+
+              {/* Content */}
+              <div className="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar">
+                <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4 text-xs font-bold text-slate-650">
+                  <p>
+                    ⚡ <span className="font-semibold text-slate-900">Mapeamento Estatístico:</span> Decida os melhores fornecedores (com menor taxa alfandegária e menor trânsito) pesquisando os históricos de entrega abaixo.
+                  </p>
+                </div>
+
+                <div className="border border-slate-100 rounded-3xl overflow-hidden shadow-sm bg-white">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-100 text-[10px] font-black uppercase text-slate-400 tracking-wider">
+                        <th className="px-6 py-4">Canal Fornecedor</th>
+                        <th className="px-6 py-4 text-center">Encomendas</th>
+                        <th className="px-6 py-4 text-center">Tributação %</th>
+                        <th className="px-6 py-4 text-center">Média Impostos</th>
+                        <th className="px-6 py-4 text-center">Média Trânsito</th>
+                        <th className="px-6 py-4 text-right">Avaliação</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {supplierRankings.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="px-6 py-8 text-center text-xs font-black text-slate-400 uppercase tracking-widest">
+                            Nenhum fornecedor registrado nos lotes.
+                          </td>
+                        </tr>
+                      ) : (
+                        supplierRankings.map((sr, index) => {
+                          const hasTaxRisk = sr.taxRate > 40;
+                          const isExcellent = sr.taxRate < 20 && sr.avgTransit !== null && sr.avgTransit <= 20;
+                          
+                          return (
+                            <tr key={sr.supplier} className="hover:bg-slate-50/50 transition-colors group">
+                              <td className="px-6 py-4">
+                                <span className="text-xs font-bold text-slate-900 select-all group-hover:text-red-800 transition-colors">
+                                  {index + 1}. {sr.supplier}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 text-center text-xs font-black text-slate-800 tabular-nums">
+                                {sr.total}
+                              </td>
+                              <td className="px-6 py-4 text-center">
+                                <span className={cn(
+                                  "px-2 py-1 rounded-md text-[10px] font-extrabold tabular-nums border",
+                                  hasTaxRisk
+                                    ? "bg-rose-50 text-rose-700 border-rose-100"
+                                    : "bg-emerald-50 text-emerald-700 border-emerald-100"
+                                )}>
+                                  {sr.taxRate.toFixed(0)}%
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 text-center text-xs font-black text-slate-805 tabular-nums">
+                                {sr.avgTaxAmount > 0 ? formatCurrency(sr.avgTaxAmount) : 'Isento'}
+                              </td>
+                              <td className="px-6 py-4 text-center text-xs font-black text-slate-805 tabular-nums">
+                                {sr.avgTransit !== null ? `${sr.avgTransit.toFixed(1)} dias` : 'Sem dados'}
+                              </td>
+                              <td className="px-6 py-4 text-right">
+                                <span className={cn(
+                                  "px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider",
+                                  isExcellent
+                                    ? "bg-emerald-500 text-white"
+                                    : hasTaxRisk
+                                      ? "bg-rose-100 text-rose-800"
+                                      : "bg-slate-100 text-slate-700"
+                                )}>
+                                  {isExcellent ? 'RECOMENDADO' : hasTaxRisk ? 'RISCO TAXA' : 'ESTÁVEL'}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Histórico Geral das últimas encomendas por fornecedor */}
+                {supplierRankings.length > 0 && (
+                  <div className="space-y-4">
+                    <h4 className="text-xs font-black text-slate-805 uppercase tracking-wider">Histórico de Cargas Ativas por Fornecedor</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {supplierRankings.slice(0, 4).map(sr => (
+                        <div key={sr.supplier} className="border border-slate-200/65 rounded-2xl p-4 bg-slate-50/20 shadow-sm space-y-3">
+                          <div className="flex justify-between items-center bg-slate-100/50 p-2 rounded-xl border border-slate-200/30">
+                            <span className="text-[10px] font-black text-slate-850 truncate max-w-[180px] uppercase">{sr.supplier}</span>
+                            <span className="text-[9px] font-black bg-red-800 text-white px-2 py-0.5 rounded-lg uppercase">{sr.total} cargas</span>
+                          </div>
+                          
+                          <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar pr-1">
+                            {sr.allShipments.slice(0, 5).map(ship => (
+                              <div key={ship.id} className="text-[10px] flex items-center justify-between border-b border-dashed border-slate-100 pb-2 last:border-0 last:pb-0 font-sans">
+                                <div className="space-y-0.5">
+                                  <p className="font-mono font-bold text-slate-800 select-all">{ship.trackingCode}</p>
+                                  <p className="text-[8px] uppercase font-black text-slate-450">{ship.status}</p>
+                                </div>
+                                <div className="text-right">
+                                  {ship.hasTax ? (
+                                    <span className="text-[8px] bg-amber-50 text-amber-700 border border-amber-100 px-1.5 py-0.5 rounded-md font-extrabold font-sans">
+                                      Taxado: {formatCurrency(ship.taxAmount)}
+                                    </span>
+                                  ) : (
+                                    <span className="text-[8px] bg-emerald-50 text-emerald-700 border border-emerald-100 px-1.5 py-0.5 rounded-md font-extrabold font-sans">
+                                      Sem taxa
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="p-6 border-t border-slate-100 bg-slate-50 flex gap-4">
+                <button 
+                  type="button" 
+                  onClick={() => setIsSupplierRankOpen(false)}
+                  className="w-full py-4 bg-white border border-slate-200 text-slate-750 hover:bg-slate-100 transition-all text-center rounded-2xl font-black text-xs uppercase tracking-widest cursor-pointer"
+                >
+                  Fechar Rank de Fornecedores
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
       </AnimatePresence>
     </motion.div>
   );
