@@ -89,6 +89,8 @@ export interface Shipment {
   notes?: string;
   createdAt: any;
   updatedAt: any;
+  correiosHistory?: any[];
+  lastSyncedAt?: any;
 }
 
 export interface Transaction {

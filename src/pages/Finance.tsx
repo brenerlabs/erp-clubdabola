@@ -57,6 +57,13 @@ export default function Finance() {
   const [paymentTypeFilter, setPaymentTypeFilter] = useState<'all' | 'Dinheiro' | 'Pix' | 'Cartão' | 'Fiado'>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'Concluída' | 'Pendente' | 'Cancelada' | 'Pré-venda'>('all');
 
+  const handleShipmentClick = (trackingCode: string) => {
+    if (!trackingCode || trackingCode === 'Sem Rastreio') return;
+    localStorage.setItem('shipment-search', trackingCode);
+    window.dispatchEvent(new CustomEvent('navigate-app', { detail: { page: 'shipments' } }));
+    window.dispatchEvent(new CustomEvent('shipment-search-update'));
+  };
+
   const getParsedDate = (el: any) => {
     if (!el?.createdAt) return null;
     if (typeof el.createdAt.seconds === 'number') return new Date(el.createdAt.seconds * 1000);
@@ -1121,15 +1128,29 @@ export default function Finance() {
                             </div>
 
                             {/* Logistics details if available */}
-                            {getShipmentForSale(sale.id) && (
-                              <div className="p-3.5 bg-indigo-50/30 border border-indigo-100/50 rounded-xl flex items-center justify-between font-sans shadow-inner">
-                                <div>
-                                  <span className="text-[8px] font-black bg-indigo-600 text-white uppercase px-1.5 py-0.5 rounded tracking-wide mr-2">Encomenda vinculada</span>
-                                  <span className="text-[10px] font-mono font-bold text-indigo-700 select-all">{getShipmentForSale(sale.id)?.trackingCode}</span>
+                            {getShipmentForSale(sale.id) && (() => {
+                              const shipment = getShipmentForSale(sale.id);
+                              const trackingCode = shipment?.trackingCode || '';
+                              return (
+                                <div 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleShipmentClick(trackingCode);
+                                  }}
+                                  title="Clique para ver os detalhes da encomenda!"
+                                  className="p-3.5 bg-indigo-50/45 hover:bg-indigo-100/40 cursor-pointer active:scale-[0.99] border border-indigo-150 rounded-2xl flex items-center justify-between font-sans shadow-sm transition-all duration-200 group/logistic select-none"
+                                >
+                                  <div>
+                                    <span className="text-[8px] font-black bg-indigo-600 text-white uppercase px-1.5 py-0.5 rounded tracking-wide mr-2">Encomenda vinculada</span>
+                                    <span className="text-[10px] font-mono font-bold text-indigo-700 group-hover/logistic:underline">{trackingCode}</span>
+                                  </div>
+                                  <div className="flex items-center gap-3">
+                                    <span className="text-[8px] font-black uppercase text-indigo-500 group-hover/logistic:text-indigo-700 transition-colors">Ver Encomenda →</span>
+                                    <span className="text-[9px] font-black bg-white text-indigo-700 border border-indigo-100 px-2.5 py-0.5 rounded-lg uppercase tracking-wider shadow-sm">{shipment?.status}</span>
+                                  </div>
                                 </div>
-                                <span className="text-[9px] font-black bg-white text-indigo-700 border border-indigo-100 px-2.5 py-0.5 rounded-lg uppercase tracking-wider shadow-sm">{getShipmentForSale(sale.id)?.status}</span>
-                              </div>
-                            )}
+                              );
+                            })()}
 
                             {/* Audit details block */}
                             <div className="pt-3 border-t border-slate-100 flex items-center justify-between">

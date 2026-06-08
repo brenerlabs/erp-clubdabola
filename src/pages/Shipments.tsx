@@ -7,7 +7,7 @@ import {
   CheckCircle2, Clock, AlertCircle, MapPin, 
   MessageCircle, DollarSign, X, Receipt,
   ChevronRight, ArrowRight, ShoppingBag, Box, History, CheckSquare, Square, Calculator,
-  Sparkles, TrendingUp, Activity, Plane, Globe
+  Sparkles, TrendingUp, Activity, Plane, Globe, RefreshCw
 } from 'lucide-react';
 import { formatCurrency, cn, cleanVariationName, cleanProductNameWithVariation, formatVariationWithGender, formatProductNameWithGender } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -138,6 +138,158 @@ const getSelectedTabStyle = (s: string) => {
   }
 };
 
+const mapCorreiosEventToERPStatus = (statusText: string, localText = ''): Shipment['status'] => {
+  const norm = statusText.toLowerCase();
+  const normLocal = localText.toLowerCase();
+  
+  if (norm.includes('entregue') || norm.includes('objeto entregue')) {
+    return 'Entregue';
+  }
+  if (
+    norm.includes('objeto disponível para retirada') || 
+    norm.includes('aguardando retirada') || 
+    norm.includes('endereço indicado') || 
+    (normLocal.includes('unidade de distribuição') && norm.includes('retirada'))
+  ) {
+    return 'Recebido';
+  }
+  if (
+    norm.includes('fiscalização') || 
+    norm.includes('taxa') || 
+    norm.includes('aduaneira') || 
+    norm.includes('retido') || 
+    norm.includes('tributado') || 
+    norm.includes('pagamento') ||
+    norm.includes('aguardando pagamento')
+  ) {
+    return 'Fiscalização';
+  }
+  if (
+    norm.includes('recebido no brasil') || 
+    norm.includes('unidade de tratamento internacional - recebido') || 
+    norm.includes('chegou no brasil') ||
+    ((norm.includes('conferido') || norm.includes('recebido')) && normLocal.includes('internacional'))
+  ) {
+    return 'Chegou no Brasil';
+  }
+  if (
+    norm.includes('unidade de distribuição') && 
+    (norm.includes('trânsito') || norm.includes('encaminhado') || norm.includes('saída para entrega'))
+  ) {
+    return 'Em trânsito para o destino final';
+  }
+  if (
+    norm.includes('trânsito') || 
+    norm.includes('encaminhado') || 
+    norm.includes('objeto encaminhado')
+  ) {
+    return 'Em Trânsito';
+  }
+  if (
+    norm.includes('postado') || 
+    norm.includes('objeto postado') || 
+    norm.includes('postagem')
+  ) {
+    return 'Postado';
+  }
+  return 'Processando';
+};
+
+const generateSimulatedEvents = (trackingCode: string, targetStatus: Shipment['status']): any[] => {
+  const now = new Date();
+  
+  const formatDateStr = (d: Date) => d.toLocaleDateString('pt-BR');
+  const formatTimeStr = (d: Date) => d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+  const eventsList = [
+    {
+      data: formatDateStr(new Date(now.getTime() - 4 * 24 * 60 * 60 * 1000)),
+      hora: "10:30",
+      local: "Agência dos Correios - Shenzhen / CN",
+      status: "Objeto postado pela importadora",
+      subStatus: ["Origem: Centro de triagem internacional", "Destino: Unidade de Tratamento de Importação"]
+    },
+    {
+      data: formatDateStr(new Date(now.getTime() - 3.5 * 24 * 60 * 60 * 1000)),
+      hora: "16:45",
+      local: "Centro Logístico de Exportação - Shenzhen / CN",
+      status: "Objeto encaminhado para o país de destino",
+      subStatus: ["Origem: Aeroporto internacional", "Destino: Unidade de Tratamento Aduaneiro - Curitiba / PR"]
+    },
+    {
+      data: formatDateStr(new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000)),
+      hora: "09:12",
+      local: "Unidade de Tratamento Internacional - Curitiba / PR",
+      status: "Objeto recebido pelos Correios do Brasil",
+      subStatus: ["Objeto recebido no centro de fiscalização aduaneira"]
+    }
+  ];
+
+  if (targetStatus === 'Processando') {
+    return [eventsList[0]];
+  }
+  if (targetStatus === 'Postado' || targetStatus === 'Em Trânsito') {
+    return [eventsList[1], eventsList[0]];
+  }
+
+  eventsList.push({
+    data: formatDateStr(new Date(now.getTime() - 2.5 * 24 * 60 * 60 * 1000)),
+    hora: "14:20",
+    local: "Unidade de Tratamento Internacional - Curitiba / PR",
+    status: "Recebido pelo Centro de Importação - Fiscalização Ativa",
+    subStatus: ["Encaminhado para fiscalização aduaneira", "Acompanhe pela aba 'Minhas Importações'"]
+  });
+
+  if (targetStatus === 'Chegou no Brasil') {
+    return [eventsList[3], eventsList[2], eventsList[1], eventsList[0]];
+  }
+
+  if (targetStatus === 'Fiscalização') {
+    eventsList.push({
+      data: formatDateStr(new Date(now.getTime() - 1.5 * 24 * 60 * 60 * 1000)),
+      hora: "08:15",
+      local: "Unidade de Tratamento Internacional - Curitiba / PR",
+      status: "Retido para fiscalização ou aguardando pagamento de tributo",
+      subStatus: ["Objeto aguarda pagamento de tributos ou declaração de valor aduaneiro"]
+    });
+    return [eventsList[4], eventsList[3], eventsList[2], eventsList[1], eventsList[0]];
+  }
+
+  eventsList.push({
+    data: formatDateStr(new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000)),
+    hora: "11:50",
+    local: "Unidade de Tratamento - São Paulo / SP",
+    status: "Objeto liberado da fiscalização ou em trânsito nacional",
+    subStatus: ["Fiscalização concluída", "Encaminhado para o Centro de Distribuição Local"]
+  });
+
+  if (targetStatus === 'Em trânsito para o destino final') {
+    return [eventsList[4], eventsList[3], eventsList[2], eventsList[1], eventsList[0]];
+  }
+
+  eventsList.push({
+    data: formatDateStr(new Date(now.getTime() - 0.5 * 24 * 60 * 60 * 1000)),
+    hora: "13:10",
+    local: "Unidade de Distribuição - São Paulo / SP",
+    status: "Objeto disponível para retirada",
+    subStatus: ["Endereço indicado para retirada: Unidade de Distribuição Correios correspondente"]
+  });
+
+  if (targetStatus === 'Recebido') {
+    return [eventsList[5], eventsList[4], eventsList[3], eventsList[2], eventsList[1], eventsList[0]];
+  }
+
+  eventsList.push({
+    data: formatDateStr(now),
+    hora: "15:40",
+    local: "Unidade de Distribuição - São Paulo / SP",
+    status: "Objeto entregue ao destinatário",
+    subStatus: ["Entregue em mãos pelo Carteiro da Unidade", "Status Atual: Entregue com Sucesso!"]
+  });
+
+  return [eventsList[6], eventsList[5], eventsList[4], eventsList[3], eventsList[2], eventsList[1], eventsList[0]];
+};
+
 export default function Shipments() {
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -149,6 +301,10 @@ export default function Shipments() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showTimelineId, setShowTimelineId] = useState<string | null>(null);
+  const [expandedCardTab, setExpandedCardTab] = useState<'items' | 'history' | 'correios'>('items');
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [isSyncingSingle, setIsSyncingSingle] = useState<string | null>(null);
+  const [syncFeedback, setSyncFeedback] = useState<{ type: 'success' | 'info' | 'error', message: string } | null>(null);
   const [editingTaxId, setEditingTaxId] = useState<string | null>(null);
   const [quickTaxAmount, setQuickTaxAmount] = useState('');
   const [showInsights, setShowInsights] = useState(true);
@@ -198,6 +354,165 @@ export default function Shipments() {
       unsubSales();
     };
   }, []);
+
+  const syncActiveShipments = async (forceAllAll = false) => {
+    if (isSyncing) return;
+    setIsSyncing(true);
+    setSyncFeedback({ type: 'info', message: 'Iniciando sincronização inteligente de rastreamento...' });
+
+    const activeShipments = shipments.filter(s => {
+      const trackingRegex = /^[A-Z]{2}[0-9]{9}[A-Z]{2}$/;
+      const isValidCode = trackingRegex.test(s.trackingCode.toUpperCase());
+      const isNotDelivered = s.status !== 'Entregue';
+      return isValidCode && (forceAllAll || isNotDelivered);
+    });
+
+    if (activeShipments.length === 0) {
+      setIsSyncing(false);
+      setSyncFeedback({ type: 'success', message: 'Nenhuma encomenda pendente para sincronizar!' });
+      setTimeout(() => setSyncFeedback(null), 5000);
+      return;
+    }
+
+    let successCount = 0;
+    let updateCount = 0;
+    let failedCount = 0;
+
+    for (const ship of activeShipments) {
+      try {
+        const urlCmd = `https://brasilapi.com.br/api/correios/v1/${ship.trackingCode.toUpperCase()}`;
+        const response = await fetch(urlCmd);
+        if (response.ok) {
+          const data = await response.json();
+          const eventos = data.eventos || [];
+          if (eventos.length > 0) {
+            successCount++;
+            const latestEvent = eventos[0];
+            const apiStatusText = latestEvent.status || latestEvent.descricao || '';
+            const apiLocalText = latestEvent.local || latestEvent.unidade || '';
+            
+            const mappedStatus = mapCorreiosEventToERPStatus(apiStatusText, apiLocalText);
+            const oldStatus = ship.status;
+            
+            const docRef = doc(db, 'shipments', ship.id!);
+            const updatePayload: any = {
+              correiosHistory: eventos,
+              lastSyncedAt: new Date().toISOString()
+            };
+
+            if (mappedStatus !== oldStatus) {
+              updateCount++;
+              updatePayload.status = mappedStatus;
+              
+              const newHistory = [...(ship.history || [])];
+              newHistory.push({
+                status: mappedStatus,
+                updatedAt: new Date(),
+                notes: `Sincronizado via Correios API: ${apiStatusText}`
+              });
+              updatePayload.history = newHistory;
+              updatePayload.updatedAt = serverTimestamp();
+            }
+
+            await updateDoc(docRef, updatePayload);
+          }
+        } else {
+          failedCount++;
+        }
+      } catch (err) {
+        console.error(`Erro ao sincronizar ${ship.trackingCode}:`, err);
+        failedCount++;
+      }
+    }
+
+    setIsSyncing(false);
+    if (updateCount > 0) {
+      setSyncFeedback({ 
+        type: 'success', 
+        message: `Sincronização completa! ${successCount} códigos consultados, ${updateCount} encomendas atualizadas.` 
+      });
+    } else {
+      setSyncFeedback({ 
+        type: 'success', 
+        message: 'Rastreamentos atualizados! Todos os status já estão sincronizados.' 
+      });
+    }
+    setTimeout(() => setSyncFeedback(null), 5000);
+  };
+
+  const syncSingleShipment = async (ship: Shipment) => {
+    if (isSyncingSingle) return;
+    setIsSyncingSingle(ship.id!);
+
+    try {
+      const urlCmd = `https://brasilapi.com.br/api/correios/v1/${ship.trackingCode.toUpperCase()}`;
+      const response = await fetch(urlCmd);
+      if (response.ok) {
+        const data = await response.json();
+        const eventos = data.eventos || [];
+        if (eventos.length > 0) {
+          const latestEvent = eventos[0];
+          const apiStatusText = latestEvent.status || latestEvent.descricao || '';
+          const apiLocalText = latestEvent.local || latestEvent.unidade || '';
+          
+          const mappedStatus = mapCorreiosEventToERPStatus(apiStatusText, apiLocalText);
+          const oldStatus = ship.status;
+          
+          const docRef = doc(db, 'shipments', ship.id!);
+          const updatePayload: any = {
+            correiosHistory: eventos,
+            lastSyncedAt: new Date().toISOString()
+          };
+
+          if (mappedStatus !== oldStatus) {
+            updatePayload.status = mappedStatus;
+            const newHistory = [...(ship.history || [])];
+            newHistory.push({
+              status: mappedStatus,
+              updatedAt: new Date(),
+              notes: `Sincronizado via Correios: ${apiStatusText}`
+            });
+            updatePayload.history = newHistory;
+            updatePayload.updatedAt = serverTimestamp();
+          }
+
+          await updateDoc(docRef, updatePayload);
+          alert(`Sincronizado com sucesso! Novo status detectado: ${mappedStatus}`);
+        } else {
+          alert('Objeto encontrado na API, mas nenhum evento foi registrado ainda.');
+        }
+      } else if (response.status === 404) {
+        alert('Código de rastreamento não encontrado nos Correios ou rastreio internacional recente não postado (demora até 72h).');
+      } else {
+        alert('Serviço dos Correios temporariamente indisponível. Tente novamente mais tarde.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao conectar com os servidores dos Correios.');
+    } finally {
+      setIsSyncingSingle(null);
+    }
+  };
+
+  const simulateCorreiosTracking = async (ship: Shipment) => {
+    if (confirm('Deseja iniciar a simulação de movimentos reais dos Correios para esta encomenda no ambiente de testes?')) {
+      const simulated = generateSimulatedEvents(ship.trackingCode, ship.status);
+      const docRef = doc(db, 'shipments', ship.id!);
+      await updateDoc(docRef, {
+        correiosHistory: simulated,
+        lastSyncedAt: new Date().toISOString()
+      });
+    }
+  };
+
+  useEffect(() => {
+    if (shipments.length > 0) {
+      const timer = setTimeout(() => {
+        syncActiveShipments(false);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [shipments.length > 0]);
 
   useEffect(() => {
     const handleStorageChange = () => {
@@ -627,6 +942,150 @@ export default function Shipments() {
   const totalDropshippingItemsCount = shipments.reduce((acc, s) => acc + s.items.filter(i => i.isDropshipping).reduce((sum, i) => sum + i.quantity, 0), 0);
   const dropshippingPercentage = totalItemsCount > 0 ? Math.round((totalDropshippingItemsCount / totalItemsCount) * 100) : 0;
 
+  // --- INTER-SEGMENT LOGISTICS TRANSIT TIMES (INSIGHTS) ---
+  let phase1Days = 0;
+  let phase1Count = 0;
+  let phase2Days = 0;
+  let phase2Count = 0;
+  let phase3Days = 0;
+  let phase3Count = 0;
+
+  shipments.forEach(s => {
+    if (s.history && Array.isArray(s.history)) {
+      const getLogDate = (statusToFind: string) => {
+        const item = s.history!.find(h => h.status === statusToFind);
+        if (!item || !item.updatedAt) return null;
+        return item.updatedAt.seconds 
+          ? new Date(item.updatedAt.seconds * 1000) 
+          : (item.updatedAt instanceof Date ? item.updatedAt : new Date(item.updatedAt));
+      };
+
+      const postado = getLogDate('Postado') || getLogDate('Em Trânsito');
+      const brasil = getLogDate('Chegou no Brasil');
+      const libTransit = getLogDate('Em trânsito para o destino final') || getLogDate('Fiscalização');
+      const entregue = getLogDate('Entregue') || getLogDate('Recebido');
+
+      // 1. Postado -> Chegou no Brasil (Fase Internacional)
+      if (postado && brasil) {
+        const diff = brasil.getTime() - postado.getTime();
+        if (diff > 0) {
+          phase1Days += diff / (1000 * 60 * 60 * 24);
+          phase1Count++;
+        }
+      }
+
+      // 2. Chegou no Brasil -> Desembaraço (Fase Aduaneira)
+      if (brasil) {
+        const aduanaFim = libTransit || entregue;
+        if (aduanaFim) {
+          const diff = aduanaFim.getTime() - brasil.getTime();
+          if (diff > 0) {
+            phase2Days += diff / (1000 * 60 * 60 * 24);
+            phase2Count++;
+          }
+        }
+      }
+
+      // 3. Destino Final -> Entregue (Última Milha Nacional)
+      const destinoOrigem = getLogDate('Em trânsito para o destino final') || getLogDate('Fiscalização');
+      if (destinoOrigem && entregue) {
+        const diff = entregue.getTime() - destinoOrigem.getTime();
+        if (diff > 0) {
+          phase3Days += diff / (1000 * 60 * 60 * 24);
+          phase3Count++;
+        }
+      }
+    }
+  });
+
+  const avgIntlDays = phase1Count > 0 ? (phase1Days / phase1Count).toFixed(1) : null;
+  const avgAduanaDays = phase2Count > 0 ? (phase2Days / phase2Count).toFixed(1) : null;
+  const avgDestinoDays = phase3Count > 0 ? (phase3Days / phase3Count).toFixed(1) : null;
+
+  // Track counts in each phase of funnel
+  const pipelineCounts = {
+    processando: shipments.filter(s => s.status === 'Processando').length,
+    postado: shipments.filter(s => s.status === 'Postado' || s.status === 'Em Trânsito').length,
+    brasil: shipments.filter(s => s.status === 'Chegou no Brasil').length,
+    customs: shipments.filter(s => s.status === 'Fiscalização').length,
+    destino: shipments.filter(s => s.status === 'Em trânsito para o destino final').length,
+    recebido: shipments.filter(s => s.status === 'Recebido').length,
+    entregue: shipments.filter(s => s.status === 'Entregue').length,
+  };
+
+  // Detect stuck shipments that require attention
+  const stuckShipments = shipments.filter(s => {
+    if (s.status === 'Recebido' || s.status === 'Entregue') return false;
+    
+    // Get last state updatedAt date
+    const lastUpdate = s.updatedAt?.seconds 
+      ? new Date(s.updatedAt.seconds * 1000) 
+      : (s.updatedAt ? new Date(s.updatedAt) : new Date());
+    
+    const diffTime = new Date().getTime() - lastUpdate.getTime();
+    const daysInState = Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)));
+
+    if (s.status === 'Processando' && daysInState > 4) return true;
+    if ((s.status === 'Postado' || s.status === 'Em Trânsito') && daysInState > 12) return true;
+    if (s.status === 'Chegou no Brasil' && daysInState > 6) return true;
+    if (s.status === 'Fiscalização' && daysInState > 5) return true;
+    if (s.status === 'Em trânsito para o destino final' && daysInState > 5) return true;
+
+    return false;
+  }).map(s => {
+    const lastUpdate = s.updatedAt?.seconds 
+      ? new Date(s.updatedAt.seconds * 1000) 
+      : (s.updatedAt ? new Date(s.updatedAt) : new Date());
+    const days = Math.max(0, Math.floor((new Date().getTime() - lastUpdate.getTime()) / (1000 * 60 * 60 * 24)));
+    return {
+      id: s.id,
+      trackingCode: s.trackingCode,
+      status: s.status,
+      daysInState: days
+    };
+  });
+
+  const getShipmentDuration = (ship: Shipment) => {
+    const getStartDate = (s: Shipment) => {
+      if (s.createdAt) {
+        return s.createdAt.seconds 
+          ? new Date(s.createdAt.seconds * 1000) 
+          : new Date(s.createdAt);
+      }
+      if (s.history && s.history.length > 0) {
+        const oldest = s.history[0];
+        return oldest.updatedAt?.seconds 
+          ? new Date(oldest.updatedAt.seconds * 1000) 
+          : new Date(oldest.updatedAt);
+      }
+      return null;
+    };
+
+    const start = getStartDate(ship);
+    if (!start) return { days: 0, formatted: '0 dias' };
+
+    let end = new Date();
+    if (ship.status === 'Entregue') {
+      const entregueLog = ship.history?.find(h => h.status === 'Entregue');
+      if (entregueLog && entregueLog.updatedAt) {
+        end = entregueLog.updatedAt.seconds 
+          ? new Date(entregueLog.updatedAt.seconds * 1000) 
+          : new Date(entregueLog.updatedAt);
+      } else if (ship.updatedAt) {
+        end = ship.updatedAt.seconds 
+          ? new Date(ship.updatedAt.seconds * 1000) 
+          : new Date(ship.updatedAt);
+      }
+    }
+
+    const diffMs = end.getTime() - start.getTime();
+    const diffDays = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+    return {
+      days: diffDays,
+      formatted: diffDays === 1 ? '1 dia' : `${diffDays} dias`
+    };
+  };
+
   const renderShipmentCard = (shipment: Shipment) => {
     const statusConfig = getStatusConfig(shipment.status);
     const isSelected = selectedIds.includes(shipment.id!);
@@ -751,9 +1210,19 @@ export default function Shipments() {
           </div>
           <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity shrink-0">
             <button 
-              onClick={() => setShowTimelineId(showTimelineId === shipment.id ? null : shipment.id!)} 
+              onClick={() => {
+                if (showTimelineId === shipment.id) {
+                  setShowTimelineId(null);
+                } else {
+                  setShowTimelineId(shipment.id!);
+                  setExpandedCardTab('correios');
+                }
+              }} 
               title="Histórico"
-              className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-800 transition-colors"
+              className={cn(
+                "p-1.5 hover:bg-slate-100 rounded-lg transition-colors",
+                showTimelineId === shipment.id ? "text-yellow-500 bg-yellow-50 hover:bg-yellow-100" : "text-slate-400 hover:text-slate-800"
+              )}
             >
               <History size={14} />
             </button>
@@ -779,15 +1248,24 @@ export default function Shipments() {
         </div>
 
         <div className="space-y-2 flex-1">
-          {shipment.status === 'Recebido' && (
-            <div className="p-2.5 bg-emerald-50 border border-emerald-100 rounded-2xl flex items-center gap-2 text-emerald-800 text-[10px] font-black uppercase tracking-tight shadow-sm select-none">
-              <span className="relative flex h-2 w-2 shrink-0">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-              </span>
-              <span>📌 Produto(s) disponível para retirada!</span>
-            </div>
-          )}
+          {shipment.status === 'Recebido' && (() => {
+            const duration = getShipmentDuration(shipment);
+            return (
+              <div className="space-y-1.5 w-full">
+                <div className="p-2.5 bg-emerald-50 border border-emerald-100 rounded-2xl flex items-center gap-2 text-emerald-800 text-[10px] font-black uppercase tracking-tight shadow-sm select-none">
+                  <span className="relative flex h-2 w-2 shrink-0">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </span>
+                  <span>📌 Produto(s) disponível para retirada!</span>
+                </div>
+                <div className="p-2.5 bg-slate-50/50 border border-slate-100/60 rounded-2xl flex items-center justify-between px-3 text-slate-500 text-[10px] font-bold uppercase tracking-tight select-none">
+                  <span className="flex items-center gap-1.5 text-slate-400"><Clock size={11} className="text-slate-400" /> Tempo Decorrido:</span>
+                  <span className="text-slate-800 font-extrabold font-mono text-[9px] bg-slate-100 px-1.5 py-0.5 rounded-lg border border-slate-200/50">{duration.formatted}</span>
+                </div>
+              </div>
+            );
+          })()}
 
           {shipment.status === 'Entregue' && (() => {
             const historyEntry = shipment.history?.find(h => h.status === 'Entregue');
@@ -803,10 +1281,60 @@ export default function Shipments() {
                 : (shipment.updatedAt ? new Date(shipment.updatedAt) : new Date());
               deliveryDateStr = dateObj.toLocaleDateString('pt-BR');
             }
+            const duration = getShipmentDuration(shipment);
             return (
-              <div className="p-2.5 bg-indigo-50 border border-indigo-100/50 rounded-2xl flex items-center gap-2 text-indigo-800 text-[10px] font-black uppercase tracking-tight shadow-sm select-none">
-                <span>📅 Data de Entrega:</span>
-                <span className="text-indigo-950 font-black font-display">{deliveryDateStr}</span>
+              <div className="space-y-1.5 w-full">
+                <div className="p-2.5 bg-indigo-50 border border-indigo-100/50 rounded-2xl flex items-center gap-2 text-indigo-800 text-[10px] font-black uppercase tracking-tight shadow-sm select-none">
+                  <span>📅 Data de Entrega:</span>
+                  <span className="text-indigo-950 font-black font-display">{deliveryDateStr}</span>
+                </div>
+                {/* Destaque premium verde esmeralda para encomenda entregue */}
+                <div className="p-2.5 bg-emerald-50 border border-emerald-100 text-emerald-800 rounded-2xl flex items-center justify-between px-3 text-[10px] font-black uppercase tracking-tight shadow-sm select-none animate-fade-in">
+                  <span className="flex items-center gap-1.5">
+                    <CheckCircle2 size={12} className="text-emerald-600 shrink-0" />
+                    Tempo Total de Envio:
+                  </span>
+                  <span className="bg-emerald-600 border border-emerald-700/10 text-white font-mono px-2 py-0.5 rounded-lg text-[9px] font-black tracking-wider shadow-inner">
+                    {duration.formatted} ✅
+                  </span>
+                </div>
+              </div>
+            );
+          })()}
+
+          {!['Recebido', 'Entregue'].includes(shipment.status) && (() => {
+            let etaText = '';
+            switch (shipment.status) {
+              case 'Processando':
+                etaText = 'Previsão: 15–20 dias úteis ⏳';
+                break;
+              case 'Postado':
+              case 'Em Trânsito':
+                etaText = 'Previsão: 10–15 dias úteis ✈️';
+                break;
+              case 'Chegou no Brasil':
+                etaText = 'Previsão: 5–8 dias úteis 🇧🇷';
+                break;
+              case 'Fiscalização':
+                etaText = 'Fiscalização ativa (até 5 dias úteis) ⚠️';
+                break;
+              case 'Em trânsito para o destino final':
+                etaText = 'Previsão: 2–4 dias úteis 🚀';
+                break;
+              default:
+                etaText = 'Prazo sob consulta';
+            }
+            const duration = getShipmentDuration(shipment);
+            return (
+              <div className="space-y-1.5 w-full">
+                <div className="p-2 bg-slate-50 border border-slate-100/60 rounded-2xl flex items-center justify-between px-3 text-slate-500 text-[10px] font-bold uppercase tracking-tight select-none">
+                  <span className="flex items-center gap-1"><Sparkles size={11} className="text-amber-500 fill-amber-400/20" /> Previsão Inteligente:</span>
+                  <span className="text-slate-800 font-extrabold">{etaText}</span>
+                </div>
+                <div className="p-2.5 bg-slate-50/50 border border-slate-100/45 rounded-2xl flex items-center justify-between px-3 text-slate-500 text-[10px] font-bold uppercase tracking-tight select-none">
+                  <span className="flex items-center gap-1.5 text-slate-400"><Clock size={11} className="text-slate-400" /> Dias Decorridos:</span>
+                  <span className="text-slate-800 font-extrabold font-mono text-[9px] bg-slate-100 px-1.5 py-0.5 rounded-lg border border-slate-200/50">{duration.formatted}</span>
+                </div>
               </div>
             );
           })()}
@@ -814,40 +1342,248 @@ export default function Shipments() {
           <AnimatePresence mode="wait">
             {showTimelineId === shipment.id ? (
               <motion.div 
-                key="timeline"
-                initial={{ opacity: 0, x: -5 }} 
-                animate={{ opacity: 1, x: 0 }} 
-                exit={{ opacity: 0, x: 5 }}
-                className="space-y-2 pt-1"
+                key="expanded-card-tabs"
+                initial={{ opacity: 0, scale: 0.98 }} 
+                animate={{ opacity: 1, scale: 1 }} 
+                exit={{ opacity: 0, scale: 0.98 }}
+                className="space-y-3 pt-1"
               >
-                <div className="flex items-center justify-between border-b border-slate-100 pb-1">
-                  <p className="text-[9px] font-black uppercase text-red-800 tracking-widest">Log de Auditoria</p>
-                  <span className="text-[8px] font-bold text-slate-400 uppercase">Histórico</span>
+                {/* Visual tabs switcher */}
+                <div className="flex bg-slate-100 p-0.5 rounded-xl border border-slate-200/50 select-none">
+                  <button
+                    type="button"
+                    onClick={() => setExpandedCardTab('items')}
+                    className={cn(
+                      "flex-1 py-1.5 text-[8.5px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer",
+                      expandedCardTab === 'items' 
+                        ? "bg-white text-slate-800 shadow-sm" 
+                        : "text-slate-500 hover:text-slate-800"
+                    )}
+                  >
+                    👥 Clientes
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedCardTab('correios')}
+                    className={cn(
+                      "flex-1 py-1.5 text-[8.5px] font-black uppercase tracking-wider rounded-lg transition-all flex items-center justify-center gap-1 cursor-pointer",
+                      expandedCardTab === 'correios' 
+                        ? "bg-yellow-400 text-blue-900 shadow-sm" 
+                        : "text-slate-500 hover:text-slate-800"
+                    )}
+                  >
+                    💛 Correios
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedCardTab('history')}
+                    className={cn(
+                      "flex-1 py-1.5 text-[8.5px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer",
+                      expandedCardTab === 'history' 
+                        ? "bg-white text-slate-800 shadow-sm" 
+                        : "text-slate-500 hover:text-slate-800"
+                    )}
+                  >
+                    📝 Logs ERP
+                  </button>
                 </div>
-                <div className="space-y-3 pl-2 border-l-2 border-slate-100 h-[132px] overflow-y-auto custom-scrollbar pt-1 pr-1">
-                  {shipment.history?.slice().reverse().map((h, i) => {
-                    const hConfig = getStatusConfig(h.status);
-                    return (
-                      <div key={i} className="relative pl-3 pb-1">
-                        <div className={cn("absolute -left-[14px] top-1.5 size-2 rounded-full border-2 border-white shadow-sm", hConfig.dot)} />
-                        <div className="flex items-center gap-1.5">
-                          <span className={cn("text-[9px] font-black uppercase tracking-wider px-1 rounded", hConfig.text, hConfig.bg)}>
-                            {h.status}
-                          </span>
-                        </div>
-                        {h.notes && <p className="text-[9px] text-slate-500 font-medium mt-0.5">{h.notes}</p>}
-                        <p className="text-[8px] text-slate-400 font-bold mt-1">
-                          {new Date(h.updatedAt?.seconds * 1000 || h.updatedAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                        </p>
+
+                <AnimatePresence mode="wait">
+                  {expandedCardTab === 'items' && (
+                    <motion.div 
+                      key="items-tab"
+                      initial={{ opacity: 0, y: 2 }} 
+                      animate={{ opacity: 1, y: 0 }} 
+                      exit={{ opacity: 0, y: -2 }}
+                      className="space-y-2"
+                    >
+                      <div className="flex justify-between items-center border-b border-slate-100 pb-1">
+                        <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Consignatários</p>
+                        <span className="text-[9px] font-black text-slate-900 bg-slate-100 px-2 py-0.5 rounded-md font-display tabular-nums">
+                          ∑ {shipment.items.reduce((acc, i) => acc + i.quantity, 0)} UN
+                        </span>
                       </div>
-                    );
-                  })}
-                </div>
+                      <div className="space-y-1.5 max-h-[132px] overflow-y-auto custom-scrollbar pr-1">
+                        {(Array.from(new Set(shipment.items.map(i => i.customerId))) as string[]).map(customerId => {
+                          const customerName = shipment.items.find(i => i.customerId === customerId)?.customerName;
+                          const customerItems = shipment.items.filter(i => i.customerId === customerId);
+                          const isExpanded = expandedGroups[shipment.id!]?.[customerId];
+
+                          return (
+                            <div key={customerId} className="space-y-1">
+                              <button 
+                                onClick={() => toggleExpand(shipment.id!, customerId)}
+                                className="w-full flex items-center justify-between text-[10px] bg-slate-50/50 p-2 rounded-xl border border-slate-100 hover:bg-slate-100/50 transition-colors"
+                              >
+                                <div className="flex items-center gap-2 min-w-0 flex-1">
+                                  <div className="size-4 bg-white rounded flex items-center justify-center text-slate-400 border border-slate-100 shadow-sm shrink-0">
+                                    {isExpanded ? <X size={8} /> : <Plus size={8} />}
+                                  </div>
+                                  <span className="font-bold text-slate-800 truncate uppercase tracking-tight">{customerName}</span>
+                                </div>
+                                <span className="text-[8px] font-black text-red-800 bg-red-100/80 px-1.5 py-0.5 rounded-lg ml-2 shrink-0">
+                                  {customerItems.length} {customerItems.length === 1 ? 'Item' : 'Itens'}
+                                </span>
+                              </button>
+                              
+                              <AnimatePresence>
+                                {isExpanded && (
+                                  <motion.div 
+                                    initial={{ height: 0, opacity: 0 }}
+                                    animate={{ height: 'auto', opacity: 1 }}
+                                    exit={{ height: 0, opacity: 0 }}
+                                    className="bg-slate-50/30 rounded-xl overflow-hidden ml-3 border-l-2 border-slate-200"
+                                  >
+                                    {customerItems.map(item => (
+                                      <div key={item.id} className="p-1.5 px-2.5 border-b border-slate-50 last:border-0 flex justify-between items-center text-[9px]">
+                                        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                                          <span className="text-slate-600 font-bold uppercase truncate tracking-tight">{formatProductNameWithGender(item.productName, item.gender || products.find(p => p.id === item.productId)?.gender)}</span>
+                                          {item.isDropshipping && (
+                                            <span className="text-[6px] font-black bg-amber-500 text-white px-1 rounded italic leading-none">DS</span>
+                                          )}
+                                        </div>
+                                        <span className="font-black text-slate-950 ml-2 shrink-0 mr-1">x{item.quantity}</span>
+                                      </div>
+                                    ))}
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {expandedCardTab === 'history' && (
+                    <motion.div 
+                      key="history-tab"
+                      initial={{ opacity: 0, y: 2 }} 
+                      animate={{ opacity: 1, y: 0 }} 
+                      exit={{ opacity: 0, y: -2 }}
+                      className="space-y-2"
+                    >
+                      <div className="flex items-center justify-between border-b border-slate-100 pb-1">
+                        <p className="text-[9px] font-black uppercase text-red-800 tracking-widest">Log de Auditoria</p>
+                        <span className="text-[8px] font-bold text-slate-400 uppercase">Interno ERP</span>
+                      </div>
+                      <div className="space-y-3 pl-2 border-l-2 border-slate-100 h-[132px] overflow-y-auto custom-scrollbar pt-1 pr-1">
+                        {shipment.history?.slice().reverse().map((h, i) => {
+                          const hConfig = getStatusConfig(h.status);
+                          return (
+                            <div key={i} className="relative pl-3 pb-1">
+                              <div className={cn("absolute -left-[14px] top-1.5 size-2 rounded-full border-2 border-white shadow-sm", hConfig.dot)} />
+                              <div className="flex items-center gap-1.5">
+                                <span className={cn("text-[9px] font-black uppercase tracking-wider px-1 rounded", hConfig.text, hConfig.bg)}>
+                                  {h.status}
+                                </span>
+                              </div>
+                              {h.notes && <p className="text-[9px] text-slate-500 font-medium mt-0.5 leading-normal">{h.notes}</p>}
+                              <p className="text-[8px] text-slate-400 font-bold mt-1 select-none">
+                                {new Date(h.updatedAt?.seconds * 1000 || h.updatedAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {expandedCardTab === 'correios' && (
+                    <motion.div 
+                      key="correios-tab"
+                      initial={{ opacity: 0, y: 2 }} 
+                      animate={{ opacity: 1, y: 0 }} 
+                      exit={{ opacity: 0, y: -2 }}
+                      className="space-y-2 pt-0.5"
+                    >
+                      <div className="flex items-center justify-between border-b border-amber-200 pb-1">
+                        <span className="text-[8.5px] bg-yellow-400 text-blue-900 px-1.5 py-0.5 rounded border border-yellow-500 font-extrabold uppercase tracking-wider flex items-center gap-1 select-none">
+                          💛 Rastreio Oficial Correios
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => syncSingleShipment(shipment)}
+                          disabled={isSyncingSingle === shipment.id}
+                          className="text-[8px] font-black uppercase bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-0.5 rounded transition-all flex items-center gap-1 border border-slate-300/40 cursor-pointer"
+                        >
+                          <RefreshCw size={8} className={cn("text-red-800", isSyncingSingle === shipment.id ? "animate-spin" : "")} />
+                          {isSyncingSingle === shipment.id ? 'Sincronizando...' : 'Consultar API'}
+                        </button>
+                      </div>
+
+                      {shipment.correiosHistory && shipment.correiosHistory.length > 0 ? (
+                        <div className="space-y-3 pl-3.5 border-l border-amber-400/50 h-[118px] overflow-y-auto custom-scrollbar pt-1 pr-1">
+                          {shipment.correiosHistory.map((evt: any, i: number) => (
+                            <div key={i} className="relative pl-3.5 pb-1 select-text">
+                              <div className="absolute -left-[19.5px] top-1.5 size-2 rounded-full border border-yellow-400 bg-blue-600 shadow-sm" />
+                              <div className="space-y-0.5">
+                                <p className="text-[9.5px] font-extrabold text-slate-900 leading-tight uppercase tracking-tight">
+                                  {evt.status || evt.descricao}
+                                </p>
+                                {evt.local && (
+                                  <p className="text-[8px] text-slate-500 font-bold uppercase flex items-center gap-1">
+                                    📍 {evt.local || evt.unidade}
+                                  </p>
+                                )}
+                                {evt.subStatus && evt.subStatus.length > 0 && (
+                                  <div className="text-[8px] text-slate-400 font-medium italic space-y-0.5 mt-0.5 pl-1.5 border-l border-slate-200">
+                                    {evt.subStatus.map((sub: string, subIdx: number) => (
+                                      <p key={subIdx}>– {sub}</p>
+                                    ))}
+                                  </div>
+                                )}
+                                <p className="text-[8px] text-slate-400 font-bold tracking-wider mt-1 select-none font-mono">
+                                  📅 {evt.data} às {evt.hora}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center py-2 bg-slate-50 border border-slate-200/50 rounded-2xl p-2.5 text-center space-y-1.5 h-[118px]">
+                          <div className="space-y-0.5">
+                            <p className="text-[8.5px] font-black text-slate-700 uppercase">Nenhum evento registrado ainda</p>
+                            <p className="text-[7.5px] font-semibold text-slate-400 uppercase leading-relaxed max-w-[200px] mx-auto">
+                              Padrão para importações recentes. Quer simular o rastreio real dos Correios para testar?
+                            </p>
+                          </div>
+                          <div className="flex gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => simulateCorreiosTracking(shipment)}
+                              className="text-[8px] font-extrabold uppercase bg-yellow-400 text-blue-900 hover:bg-yellow-500 px-2.5 py-1 rounded-xl transition-all shadow-sm border border-yellow-500 cursor-pointer"
+                            >
+                              🔧 Simular Rastreio
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => syncSingleShipment(shipment)}
+                              disabled={isSyncingSingle === shipment.id}
+                              className="text-[8px] font-extrabold uppercase bg-white text-slate-700 hover:bg-slate-100 px-2.5 py-1 rounded-xl transition-all border border-slate-200 cursor-pointer flex items-center gap-1"
+                            >
+                              <RefreshCw size={8} className={isSyncingSingle === shipment.id ? 'animate-spin' : ''} />
+                              Consultar
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {shipment.lastSyncedAt && (
+                        <p className="text-[7px] font-black text-slate-400 uppercase text-right select-none font-mono tracking-wide pr-1">
+                          Sincronizado: {new Date(shipment.lastSyncedAt).toLocaleString('pt-BR')}
+                        </p>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
                 <button 
+                  type="button"
                   onClick={() => setShowTimelineId(null)} 
-                  className="w-full py-1.5 text-[8px] font-black uppercase text-slate-400 hover:text-slate-600 bg-slate-50 hover:bg-slate-100 rounded-xl transition-all border border-slate-100"
+                  className="w-full py-1.5 text-[8.5px] font-black uppercase text-slate-400 hover:text-slate-600 bg-slate-50 hover:bg-slate-100 rounded-xl transition-all border border-slate-100/60 cursor-pointer select-none"
                 >
-                  Voltar para Itens
+                  Voltar para Encomenda
                 </button>
               </motion.div>
             ) : (
@@ -883,7 +1619,7 @@ export default function Shipments() {
                             <span className="font-bold text-slate-800 truncate uppercase tracking-tight">{customerName}</span>
                           </div>
                           <span className="text-[8px] font-black text-red-800 bg-red-100/80 px-1.5 py-0.5 rounded-lg ml-2 shrink-0">
-                            {customerItems.length} {customerItems.length === 1 ? 'Prod' : 'Prods'}
+                            {customerItems.length} {customerItems.length === 1 ? 'Item' : 'Itens'}
                           </span>
                         </button>
                         
@@ -1064,6 +1800,21 @@ export default function Shipments() {
           )}
           <button 
             type="button"
+            onClick={() => syncActiveShipments(true)}
+            disabled={isSyncing}
+            className={cn(
+              "font-bold py-3 px-5 rounded-xl transition-all border flex items-center gap-2 active:scale-95 shadow-sm text-xs cursor-pointer select-none",
+              isSyncing 
+                ? "bg-slate-100 border-slate-200 text-slate-400" 
+                : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300"
+            )}
+          >
+            <RefreshCw size={15} className={cn("text-red-800 transition-transform duration-300", isSyncing ? "animate-spin text-red-500" : "")} />
+            <span>{isSyncing ? 'Sincronizando...' : 'Sincronizar API'}</span>
+          </button>
+
+          <button 
+            type="button"
             onClick={() => setShowInsights(!showInsights)}
             className={cn(
               "font-bold py-3 px-5 rounded-xl transition-all border flex items-center gap-2 active:scale-95 shadow-sm text-xs cursor-pointer select-none",
@@ -1084,6 +1835,27 @@ export default function Shipments() {
           </button>
         </div>
       </div>
+
+      <AnimatePresence>
+        {syncFeedback && (
+          <motion.div
+            initial={{ opacity: 0, height: 0, y: -10 }}
+            animate={{ opacity: 1, height: 'auto', y: 0 }}
+            exit={{ opacity: 0, height: 0, y: -10 }}
+            className={cn(
+              "p-3.5 rounded-2xl text-[10px] font-black uppercase tracking-wider flex items-center gap-2.5 shadow-sm border select-none w-full",
+              syncFeedback.type === 'success' 
+                ? "bg-emerald-50 border-emerald-100 text-emerald-800"
+                : syncFeedback.type === 'error'
+                  ? "bg-rose-50 border-rose-100 text-rose-800"
+                  : "bg-indigo-50 border-indigo-100 text-indigo-800"
+            )}
+          >
+            <span className={cn("size-2 rounded-full", syncFeedback.type === 'success' ? "bg-emerald-500 animate-ping" : syncFeedback.type === 'error' ? "bg-rose-500" : "bg-indigo-500 animate-pulse")} />
+            <span>{syncFeedback.message}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="flex flex-col lg:flex-row items-center justify-between gap-4 p-6 bg-white/40 backdrop-blur-md rounded-3xl border border-white/60 shadow-xl shadow-slate-200/50">
         <div className="flex-1 max-w-md relative group">
@@ -1247,6 +2019,137 @@ export default function Shipments() {
                     {fiscalizacaoAlerts.length} LOTES
                   </span>
                 </div>
+              </div>
+            </div>
+
+            {/* Advanced Logistics Intelligence Panels */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
+              {/* Pipeline Flow Funnel */}
+              <div className="lg:col-span-2 bg-white border border-slate-200/80 p-5 rounded-[24px] shadow-sm flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <TrendingUp size={16} className="text-indigo-600" />
+                      <span className="text-[10px] font-black uppercase text-slate-800 tracking-wider">Pipeline Flow Funnel</span>
+                    </div>
+                    <span className="text-[8px] font-black uppercase text-slate-400 bg-slate-50 px-2 py-0.5 rounded-md border border-slate-100 font-mono">
+                      Carga Ativa
+                    </span>
+                  </div>
+
+                  {/* Funnel Pipeline Steps */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div className="bg-slate-50 border border-slate-100 p-3.5 rounded-2xl">
+                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Origem / Inicial</p>
+                      <p className="text-xl font-black text-slate-800 font-display tabular-nums leading-none">{pipelineCounts.processando}</p>
+                      <p className="text-[8px] text-slate-500 font-semibold mt-1.5 leading-tight uppercase font-mono">Processando</p>
+                    </div>
+                    <div className="bg-sky-50/40 border border-sky-100/50 p-3.5 rounded-2xl">
+                      <p className="text-[8px] font-black text-sky-600 uppercase tracking-widest leading-none mb-1 flex items-center gap-1">
+                        <Plane size={10} /> Em Trânsito
+                      </p>
+                      <p className="text-xl font-black text-sky-700 font-display tabular-nums leading-none">{pipelineCounts.postado}</p>
+                      <p className="text-[8px] text-slate-500 font-semibold mt-1.5 leading-tight uppercase font-mono">Canal Aéreo</p>
+                    </div>
+                    <div className="bg-emerald-50/40 border border-emerald-100/50 p-3.5 rounded-2xl">
+                      <p className="text-[8px] font-black text-emerald-600 uppercase tracking-widest leading-none mb-1 flex items-center gap-1">
+                        <Globe size={10} /> Chegou no BR
+                      </p>
+                      <p className="text-xl font-black text-emerald-700 font-display tabular-nums leading-none">{pipelineCounts.brasil}</p>
+                      <p className="text-[8px] text-slate-500 font-semibold mt-1.5 leading-tight uppercase font-mono">Aguard. Aduana</p>
+                    </div>
+                    <div className="bg-indigo-50/40 border border-indigo-100/50 p-3.5 rounded-2xl">
+                      <p className="text-[8px] font-black text-indigo-600 uppercase tracking-widest leading-none mb-1 flex items-center gap-1">
+                        <Truck size={10} /> Distribuição
+                      </p>
+                      <p className="text-xl font-black text-indigo-700 font-display tabular-nums leading-none">{pipelineCounts.destino}</p>
+                      <p className="text-[8px] text-slate-500 font-semibold mt-1.5 leading-tight uppercase font-mono">Última Milha</p>
+                    </div>
+                  </div>
+
+                  {/* Real calculated segmented delays banner */}
+                  <div className="mt-4 bg-indigo-50/30 border border-indigo-100/40 rounded-2xl p-4">
+                    <p className="text-[9px] font-black uppercase text-indigo-900 tracking-wider mb-2.5">Prazos Médios Logísticos Segmentados (Histórico Real)</p>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="flex items-start gap-2.5">
+                        <div className="size-6 shrink-0 rounded-lg bg-white shadow-sm flex items-center justify-center text-indigo-600 font-mono text-xs font-black border border-indigo-100/30">1</div>
+                        <div>
+                          <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider leading-none mb-1">Leg Internacional</p>
+                          <p className="text-[11px] font-extrabold text-slate-800 leading-none">
+                            {avgIntlDays ? `${avgIntlDays} dias` : '10 a 15 dias (Est.)'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-2.5">
+                        <div className="size-6 shrink-0 rounded-lg bg-white shadow-sm flex items-center justify-center text-indigo-600 font-mono text-xs font-black border border-indigo-100/30">2</div>
+                        <div>
+                          <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider leading-none mb-1">Fase Aduaneira</p>
+                          <p className="text-[11px] font-extrabold text-slate-800 leading-none">
+                            {avgAduanaDays ? `${avgAduanaDays} dias` : '3 a 5 dias (Est.)'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-2.5">
+                        <div className="size-6 shrink-0 rounded-lg bg-white shadow-sm flex items-center justify-center text-indigo-600 font-mono text-xs font-black border border-indigo-100/30">3</div>
+                        <div>
+                          <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider leading-none mb-1">Transporte Nacional</p>
+                          <p className="text-[11px] font-extrabold text-slate-800 leading-none">
+                            {avgDestinoDays ? `${avgDestinoDays} dias` : '3 a 6 dias (Est.)'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Attention Tracker / Stuck Shipments warning panel */}
+              <div className="bg-white border border-slate-200/80 p-5 rounded-[24px] shadow-sm flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle size={16} className="text-amber-500" />
+                      <span className="text-[10px] font-black uppercase text-slate-800 tracking-wider">Atenção Requerida</span>
+                    </div>
+                    {stuckShipments.length > 0 && (
+                      <span className="text-[8px] font-black uppercase bg-rose-50 border border-rose-100 text-rose-600 px-2 py-0.5 rounded-full tracking-wider animate-pulse">
+                        {stuckShipments.length} Lento(s)
+                      </span>
+                    )}
+                  </div>
+
+                  {stuckShipments.length > 0 ? (
+                    <div className="space-y-2 max-h-[160px] overflow-y-auto custom-scrollbar pr-1">
+                      {stuckShipments.map(s => (
+                        <div key={s.id} className="p-3 bg-amber-50/40 hover:bg-amber-50 border border-amber-100/50 rounded-2xl transition-all">
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="font-mono text-xs font-bold text-amber-950 tracking-tight">{s.trackingCode}</span>
+                            <span className="text-[8px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-md font-black shrink-0">
+                              {s.daysInState}d s/ atualiz.
+                            </span>
+                          </div>
+                          <p className="text-[8px] text-slate-500 font-semibold mt-1 leading-normal uppercase">
+                            Parado no status <span className="font-extrabold text-slate-700">{s.status}</span>.
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center text-center py-6 h-full">
+                      <div className="size-10 bg-emerald-50 rounded-full flex items-center justify-center text-emerald-600 mb-3">
+                        <CheckCircle2 size={20} />
+                      </div>
+                      <p className="text-[10px] font-black uppercase text-slate-800 tracking-wider leading-none">Fluxo Saudável</p>
+                      <p className="text-[9px] text-slate-500 font-semibold mt-1.5 max-w-[200px] leading-relaxed">
+                        Nenhum lote está parado além do tempo de tolerância logística para sua fase atual!
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <p className="text-[8px] text-slate-400 font-bold uppercase mt-4 pt-3 border-t border-slate-100">
+                  Monitoramento Proativo de Gargalos
+                </p>
               </div>
             </div>
           </motion.div>
