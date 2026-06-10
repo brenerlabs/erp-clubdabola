@@ -1365,7 +1365,7 @@ export default function PDV() {
                     </div>
                     {/* Customer Selector */}
                     <div className="relative group">
-                      <User className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 size-4 group-focus-within:text-amber-500" />
+                      <User className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 size-4 group-focus-within:text-amber-500 z-10 pointer-events-none" />
                       <select 
                         className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs font-black uppercase outline-none appearance-none hover:bg-white/10 focus:ring-1 focus:ring-amber-500 transition-all text-white/80"
                         value={selectedCustomer?.id || ''}
@@ -1381,7 +1381,7 @@ export default function PDV() {
 
                     {/* Shipping Region Selector */}
                     <div className="relative group">
-                      <Truck className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 size-4 group-focus-within:text-amber-500" />
+                      <Truck className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 size-4 group-focus-within:text-amber-500 z-10 pointer-events-none" />
                       <select 
                         className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs font-black uppercase outline-none appearance-none hover:bg-white/10 focus:ring-1 focus:ring-amber-500 transition-all text-white/80"
                         value={shippingRegion}
@@ -1438,7 +1438,7 @@ export default function PDV() {
                         animate={{ opacity: 1, y: 0 }}
                         className="relative group"
                       >
-                        <Banknote className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 size-4 group-focus-within:text-emerald-400" />
+                        <Banknote className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 size-4 group-focus-within:text-emerald-400 z-10 pointer-events-none" />
                         <input 
                           type="text"
                           inputMode="decimal"
@@ -1454,7 +1454,7 @@ export default function PDV() {
 
                     <div className="grid grid-cols-2 gap-2">
                       <div className="relative group">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 text-[10px] font-black group-focus-within:text-amber-400">% Desc.</span>
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 text-[10px] font-black group-focus-within:text-amber-400 z-10 pointer-events-none">% Desc.</span>
                         <input 
                           type="text"
                           inputMode="decimal"
@@ -1469,7 +1469,7 @@ export default function PDV() {
                         />
                       </div>
                       <div className="relative group">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 text-[10px] font-black group-focus-within:text-amber-400">R$ Desc.</span>
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 text-[10px] font-black group-focus-within:text-amber-400 z-10 pointer-events-none">R$ Desc.</span>
                         <input 
                           type="text"
                           inputMode="decimal"
@@ -1487,7 +1487,7 @@ export default function PDV() {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="relative group font-sans">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 text-[9px] font-black group-focus-within:text-white uppercase tracking-widest leading-none">Venda em:</span>
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 text-[9px] font-black group-focus-within:text-white uppercase tracking-widest leading-none z-10 pointer-events-none">Venda em:</span>
                         <input 
                           type="date"
                           className="w-full bg-white/5 border border-white/10 rounded-xl pl-24 pr-4 py-2.5 text-xs font-black outline-none hover:bg-white/10 focus:ring-1 focus:ring-red-800 transition-all text-white/90"

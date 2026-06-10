@@ -330,6 +330,13 @@ export default function Shipments() {
   // Item selection from Sales
   const [selectedSaleId, setSelectedSaleId] = useState('');
 
+  // Item selection from Products (direct buy for stock)
+  const [addItemMode, setAddItemMode] = useState<'sale' | 'stock'>('sale');
+  const [selectedStockProductId, setSelectedStockProductId] = useState('');
+  const [selectedStockVariationId, setSelectedStockVariationId] = useState('');
+  const [stockQuantity, setStockQuantity] = useState('1');
+  const [stockPrice, setStockPrice] = useState('0');
+
   useEffect(() => {
     const q = query(collection(db, 'shipments'), orderBy('createdAt', 'desc'));
     const unsub = onSnapshot(q, (snapshot) => {
@@ -557,6 +564,11 @@ export default function Shipments() {
       setSupplierName('');
     }
     setSelectedSaleId('');
+    setAddItemMode('sale');
+    setSelectedStockProductId('');
+    setSelectedStockVariationId('');
+    setStockQuantity('1');
+    setStockPrice('0');
     setIsModalOpen(true);
   };
 
@@ -572,12 +584,14 @@ export default function Shipments() {
     }));
   };
 
-  const shippedItemKeys = new Set([
-    ...shipments
-      .filter(s => s.id !== editingShipment?.id)
-      .flatMap(s => s.items.map(i => `${i.saleId}-${i.productId}-${i.variationId}`)),
-    ...items.map(i => `${i.saleId}-${i.productId}-${i.variationId}`)
-  ]);
+  const shippedItemKeys = new Set(
+    [
+      ...shipments
+        .filter(s => s.id !== editingShipment?.id)
+        .flatMap(s => s.items.filter(i => i.saleId).map(i => `${i.saleId}-${i.productId}-${i.variationId}`)),
+      ...items.filter(i => i.saleId).map(i => `${i.saleId}-${i.productId}-${i.variationId}`)
+    ]
+  );
 
   const addSingleSaleItem = (sale: Sale, item: SaleItem) => {
     const pGender = item.gender || products.find(p => p.id === item.productId)?.gender || 'Ambos';
@@ -643,6 +657,56 @@ export default function Shipments() {
 
   const removeItem = (id: string) => {
     setItems(items.filter(i => i.id !== id));
+  };
+
+  const handleStockProductChange = (productId: string) => {
+    setSelectedStockProductId(productId);
+    const product = products.find(p => p.id === productId);
+    if (product) {
+      setStockPrice(String(product.costPrice));
+      if (product.variations && product.variations.length > 0) {
+        setSelectedStockVariationId(product.variations[0].id);
+      } else {
+        setSelectedStockVariationId('');
+      }
+    } else {
+      setStockPrice('0');
+      setSelectedStockVariationId('');
+    }
+  };
+
+  const addStockItem = () => {
+    if (!selectedStockProductId) return;
+    const product = products.find(p => p.id === selectedStockProductId);
+    if (!product) return;
+
+    const variation = product.variations?.find(v => v.id === selectedStockVariationId);
+    const variationName = variation ? `${variation.size}${variation.color ? ` / ${variation.color}` : ''}` : 'Única';
+    
+    const pGender = product.gender || 'Ambos';
+    const formattedVar = formatVariationWithGender(variationName, pGender);
+    const pName = `${product.name}${formattedVar ? ` (${formattedVar})` : ''}`;
+
+    const newItem: ShipmentItem = {
+      id: Math.random().toString(36).substr(2, 9),
+      productId: product.id!,
+      variationId: selectedStockVariationId,
+      customerId: 'estoque',
+      customerName: 'Estoque (Pronta Entrega)',
+      productName: pName,
+      quantity: Number(stockQuantity) || 1,
+      price: Number(stockPrice) || 0,
+      isDropshipping: false,
+      gender: pGender
+    };
+
+    setItems(prev => [...prev, newItem]);
+    
+    // Clear variation and reset quantity to 1 for consecutive adds
+    setSelectedStockVariationId('');
+    setStockQuantity('1');
+    setStockPrice('0');
+    setSelectedStockProductId('');
   };
 
   const getCustomerWhatsAppMessage = (shipment: Shipment, customerId: string, newStatus: string) => {
@@ -2436,77 +2500,166 @@ export default function Shipments() {
                   />
                 </div>
 
-                {/* Items Management from Sales */}
+                {/* Items Management */}
                 <div className="bg-slate-50 rounded-[32px] p-6 border border-slate-100 space-y-4">
                   <div className="flex items-center justify-between mb-2">
-                    <h4 className="text-sm font-black uppercase tracking-widest text-slate-900 italic">Vendas Vinculadas</h4>
-                    <span className="text-[10px] bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full font-bold">{items.length} itens</span>
+                    <h4 className="text-sm font-black uppercase tracking-widest text-slate-900 italic">Itens da Encomenda</h4>
+                    <span className="text-[10px] bg-indigo-100 text-indigo-600 px-3 py-1 rounded-full font-bold">{items.length} itens</span>
                   </div>
 
-                  <div className="flex flex-col gap-3">
-                    <div className="flex flex-col gap-4">
-                      <div className="relative">
-                        <ShoppingBag size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  {/* Mode Selection */}
+                  <div className="grid grid-cols-2 p-1 bg-slate-200/60 rounded-2xl">
+                    <button
+                      type="button"
+                      onClick={() => setAddItemMode('sale')}
+                      className={`py-2 text-[10px] font-black uppercase tracking-wider rounded-xl transition-all ${addItemMode === 'sale' ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                    >
+                      Vincular a Venda
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAddItemMode('stock')}
+                      className={`py-2 text-[10px] font-black uppercase tracking-wider rounded-xl transition-all ${addItemMode === 'stock' ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                    >
+                      Comprar para Estoque
+                    </button>
+                  </div>
+
+                  {addItemMode === 'sale' ? (
+                    <div className="flex flex-col gap-3">
+                      <div className="flex flex-col gap-4">
+                        <div className="relative">
+                          <ShoppingBag size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                          <select 
+                            value={selectedSaleId}
+                            onChange={e => setSelectedSaleId(e.target.value)}
+                            className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-2xl text-xs font-bold outline-none focus:ring-2 focus:ring-red-800 bg-white appearance-none"
+                          >
+                            <option value="">Selecionar Venda Realizada</option>
+                            {availableSales.slice(0, 50).map(s => (
+                              <option key={s.id} value={s.id}>
+                                {s.customerName} - {formatCurrency(s.total)} ({s.createdAt?.toDate?.()?.toLocaleDateString?.() || 'Recente'})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {selectedSaleId && (
+                          <div className="space-y-2 animate-in fade-in slide-in-from-top-2 border-l-2 border-red-800 pl-4 py-1">
+                            <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2">Produtos Disponíveis desta Venda</p>
+                            {sales.find(s => s.id === selectedSaleId)?.items
+                              .filter(item => !shippedItemKeys.has(`${selectedSaleId}-${item.productId}-${item.variationId}`))
+                              .map((item, idx) => (
+                                <div key={idx} className="flex items-center justify-between bg-white border border-slate-100 p-2.5 rounded-xl shadow-sm">
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-[10px] font-black text-slate-900 truncate uppercase">{item.name}</p>
+                                    <p className="text-[9px] text-slate-400 font-bold uppercase">{formatVariationWithGender(item.variationName, item.gender || products.find(p => p.id === item.productId)?.gender) || 'Sem variação'}</p>
+                                  </div>
+                                  <div className="flex items-center gap-3 ml-4">
+                                    <span className="text-[10px] font-black text-slate-900">x{item.quantity}</span>
+                                    <button 
+                                      type="button"
+                                      onClick={() => {
+                                        const sale = sales.find(s => s.id === selectedSaleId);
+                                        if (sale) addSingleSaleItem(sale, item);
+                                      }}
+                                      className="p-1 px-3 bg-red-800 text-white text-[9px] font-black uppercase rounded-lg hover:bg-black transition-all"
+                                    >
+                                      Add
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            <button 
+                              type="button"
+                              onClick={() => {
+                                addSaleItems(selectedSaleId);
+                                setSelectedSaleId('');
+                              }}
+                              className="w-full py-2 bg-slate-900 text-white text-[9px] font-black uppercase tracking-widest rounded-xl hover:bg-red-800 transition-all mt-2"
+                            >
+                              Vincular Todos os Itens
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-4 py-1">
+                      <div className="space-y-2">
+                        <label className="text-[9px] uppercase font-black text-slate-400 tracking-wider">Selecionar Produto</label>
                         <select 
-                          value={selectedSaleId}
-                          onChange={e => setSelectedSaleId(e.target.value)}
-                          className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-2xl text-xs font-bold outline-none focus:ring-2 focus:ring-red-800 bg-white appearance-none"
+                          value={selectedStockProductId}
+                          onChange={e => handleStockProductChange(e.target.value)}
+                          className="w-full px-4 py-3 border border-slate-200 rounded-2xl text-xs font-bold outline-none focus:ring-2 focus:ring-red-800 bg-white"
                         >
-                          <option value="">Selecionar Venda Realizada</option>
-                          {availableSales.slice(0, 50).map(s => (
-                            <option key={s.id} value={s.id}>
-                              {s.customerName} - {formatCurrency(s.total)} ({s.createdAt?.toDate?.()?.toLocaleDateString?.() || 'Recente'})
-                            </option>
+                          <option value="">Selecione o Produto para Reposição</option>
+                          {products.map(p => (
+                            <option key={p.id} value={p.id}>{p.name} ({p.gender || 'Ambos'})</option>
                           ))}
                         </select>
                       </div>
 
-                      {selectedSaleId && (
-                        <div className="space-y-2 animate-in fade-in slide-in-from-top-2 border-l-2 border-red-800 pl-4 py-1">
-                          <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2">Produtos Disponíveis desta Venda</p>
-                          {sales.find(s => s.id === selectedSaleId)?.items
-                            .filter(item => !shippedItemKeys.has(`${selectedSaleId}-${item.productId}-${item.variationId}`))
-                            .map((item, idx) => (
-                              <div key={idx} className="flex items-center justify-between bg-white border border-slate-100 p-2.5 rounded-xl shadow-sm">
-                                <div className="min-w-0 flex-1">
-                                  <p className="text-[10px] font-black text-slate-900 truncate uppercase">{item.name}</p>
-                                  <p className="text-[9px] text-slate-400 font-bold uppercase">{formatVariationWithGender(item.variationName, item.gender || products.find(p => p.id === item.productId)?.gender) || 'Sem variação'}</p>
-                                </div>
-                                <div className="flex items-center gap-3 ml-4">
-                                  <span className="text-[10px] font-black text-slate-900">x{item.quantity}</span>
-                                  <button 
-                                    type="button"
-                                    onClick={() => {
-                                      const sale = sales.find(s => s.id === selectedSaleId);
-                                      if (sale) addSingleSaleItem(sale, item);
-                                    }}
-                                    className="p-1 px-3 bg-red-800 text-white text-[9px] font-black uppercase rounded-lg hover:bg-black transition-all"
-                                  >
-                                    Add
-                                  </button>
-                                </div>
-                              </div>
-                            ))}
-                          <button 
+                      {selectedStockProductId && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 bg-white/40 p-4 border border-slate-200/50 rounded-2xl">
+                          <div className="space-y-2">
+                            <label className="text-[9px] uppercase font-black text-slate-400 tracking-wider">Variação / Tamanho</label>
+                            <select
+                              value={selectedStockVariationId}
+                              onChange={e => setSelectedStockVariationId(e.target.value)}
+                              className="w-full px-4 py-3 border border-slate-200 rounded-2xl text-xs font-bold outline-none focus:ring-2 focus:ring-red-800 bg-white"
+                            >
+                              <option value="">Única (Sem Variação)</option>
+                              {products.find(p => p.id === selectedStockProductId)?.variations.map(v => (
+                                <option key={v.id} value={v.id}>
+                                  {v.size} {v.color ? ` / ${v.color}` : ''} (Atual em Estoque: {v.stock} un)
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div className="space-y-2">
+                            <label className="text-[9px] uppercase font-black text-slate-400 tracking-wider">Quantidade</label>
+                            <input 
+                              type="number"
+                              min="1"
+                              value={stockQuantity}
+                              onChange={e => setStockQuantity(e.target.value)}
+                              className="w-full px-4 py-3 border border-slate-200 rounded-2xl text-xs font-bold outline-none focus:ring-2 focus:ring-red-800 bg-white"
+                            />
+                          </div>
+
+                          <div className="space-y-2 md:col-span-2">
+                            <label className="text-[9px] uppercase font-black text-slate-400 tracking-wider">Custo Unitário da Importação (R$)</label>
+                            <input 
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={stockPrice}
+                              onChange={e => setStockPrice(e.target.value)}
+                              placeholder="0.00"
+                              className="w-full px-4 py-3 border border-slate-200 rounded-2xl text-xs font-bold outline-none focus:ring-2 focus:ring-red-800 bg-white"
+                            />
+                            <p className="text-[9px] text-slate-400 font-bold uppercase mt-1">Carregado automaticamente com base no preço de custo cadastrado do produto.</p>
+                          </div>
+
+                          <button
                             type="button"
-                            onClick={() => {
-                              addSaleItems(selectedSaleId);
-                              setSelectedSaleId('');
-                            }}
-                            className="w-full py-2 bg-slate-900 text-white text-[9px] font-black uppercase tracking-widest rounded-xl hover:bg-red-800 transition-all mt-2"
+                            onClick={addStockItem}
+                            className="md:col-span-2 w-full py-3 bg-red-800 border border-red-955 text-white text-[10px] font-black uppercase tracking-widest rounded-2xl hover:bg-black transition-all shadow-md shadow-rose-100"
                           >
-                            Vincular Todos os Itens
+                            Adicionar ao Lote de Estoque
                           </button>
                         </div>
                       )}
                     </div>
-                  </div>
+                  )}
 
                   <div className="space-y-2 mt-4 max-h-48 overflow-y-auto custom-scrollbar pr-2">
                     {items.map(item => (
                       <div key={item.id} className="bg-white p-3 rounded-2xl flex items-center justify-between border border-slate-100 shadow-sm animate-in fade-in slide-in-from-top-2">
                         <div className="flex items-center gap-3">
-                          <div className="size-8 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400">
+                          <div className="size-8 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400 relative">
                              <Box size={16} />
                              {item.isDropshipping && (
                                <div className="absolute top-0 right-0 size-3 bg-amber-500 rounded-full border-2 border-slate-50" />
@@ -2531,7 +2684,7 @@ export default function Shipments() {
                     ))}
                     {items.length === 0 && (
                       <div className="text-center py-8 border-2 border-dashed border-slate-200 rounded-[32px]">
-                        <p className="text-slate-400 text-xs font-bold uppercase tracking-widest text-center px-4">Selecione uma venda acima para vincular os produtos a este lote de importação</p>
+                        <p className="text-slate-400 text-xs font-bold uppercase tracking-widest text-center px-4">Selecione uma venda ou um produto do estoque acima para vincular a este lote de importação</p>
                       </div>
                     )}
                   </div>

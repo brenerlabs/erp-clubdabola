@@ -5,29 +5,149 @@
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
   --font-display: "Space Grotesk", sans-serif;
-  --color-primary: #800000;
-  --color-accent: #f59e0b;
+  --color-primary: #8c2828;
+  --color-accent: #c69c3a;
   --color-sidebar: #0f172a;
   --color-background: #f8fafc;
+  
+  --color-red-500: #d45d5d;
+  --color-red-600: #c54a4a;
+  --color-red-700: #b33b3b;
+  --color-red-800: #8c2828;
+  --color-red-900: #5a1818;
 }
 
 body {
-  @apply font-sans text-slate-900 antialiased bg-slate-50 selection:bg-red-800 selection:text-white;
+  @apply font-sans text-slate-800 antialiased bg-[#f8fafc] selection:bg-rose-100 selection:text-rose-900;
 }
 
-/* Custom Scrollbar */
+/* Global Font Overrides for High-Fidelity Swiss Design Feel */
+h1, h2, h3, h4, h5, h6 {
+  font-family: "Space Grotesk", sans-serif !important;
+}
+
+/* Universal Light Mode Styles - Clean & High Contrast */
+.bg-white {
+  background-color: #ffffff !important; /* Pure white card backgrounds */
+}
+
+header.bg-white, header img, div.bg-white, section.bg-white {
+  background-color: #ffffff !important;
+}
+
+.bg-slate-50 {
+  background-color: #f8fafc !important; /* Soft off-white matching body */
+}
+
+.bg-slate-100 {
+  background-color: #f1f5f9 !important; /* Soft light gray */
+}
+
+/* High Contrast Readable Text Overrides to prevent low visibility */
+.text-slate-900, .text-slate-850, .text-slate-800 {
+  color: #0f172a !important; /* Strong dark charcoal for headings/text */
+}
+
+.text-slate-700, .text-slate-650, .text-slate-600 {
+  color: #334155 !important; /* Highly legible dark slate for secondary text */
+}
+
+.text-slate-500, .text-slate-400 {
+  color: #64748b !important; /* Muted slate gray for subtitles/labels */
+}
+
+.border-slate-50, .border-slate-100, .border-slate-200, .border-slate-350, .border-slate-300 {
+  border-color: #cbd5e1 !important; /* Subtle light gray borders */
+}
+
+/* Table Enhancements */
+table {
+  background-color: #ffffff;
+}
+tr {
+  transition: all 0.2s ease-in-out;
+}
+tr:hover {
+  background-color: #f8fafc !important;
+}
+th {
+  background-color: #f1f5f9 !important;
+  color: #475569 !important;
+  font-family: "Space Grotesk", sans-serif !important;
+  text-transform: uppercase;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+
+input, select, textarea {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+/* Restabelecer estilos para containers escuros (como o painel de Checkout no PDV) */
+.bg-slate-900 input, .bg-slate-900 select, .bg-slate-900 textarea,
+.bg-slate-950 input, .bg-slate-950 select, .bg-slate-950 textarea,
+.bg-slate-950 select option, .bg-slate-900 select option,
+.dark input, .dark select, .dark textarea,
+[data-theme="dark"] input, [data-theme="dark"] select, [data-theme="dark"] textarea {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+  color: #f1f5f9 !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+input:focus, select:focus, textarea:focus {
+  outline: none !important;
+  border-color: #8c2828 !important;
+  box-shadow: 0 0 0 1px #8c2828 !important;
+}
+
+.bg-slate-900 input:focus, .bg-slate-900 select:focus, .bg-slate-900 textarea:focus,
+.bg-slate-950 input:focus, .bg-slate-950 select:focus, .bg-slate-950 textarea:focus,
+.dark input:focus, .dark select:focus, .dark textarea:focus {
+  outline: none !important;
+  border-color: #c69c3a !important;
+  box-shadow: 0 0 0 1px #c69c3a !important;
+}
+
+select option {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+
+.bg-slate-900 select option, .bg-slate-950 select option, .dark select option {
+  background-color: #0f172a !important;
+  color: #ffffff !important;
+}
+
+/* Readability for status and metrics indicators */
+.text-red-800, .text-red-900, .text-red-700 {
+  color: #8c2828 !important;
+}
+
+td.text-red-800, span.text-red-800 {
+  color: #8c2828 !important;
+}
+
+/* Shadow Optimizations: smooth, modern, soft shadows */
+.shadow-xl, .shadow-2xl, .shadow-md, .shadow-sm {
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 2px 6px -1px rgba(0, 0, 0, 0.03) !important;
+}
+
+/* Custom Scrollbar Override for Light Mode */
 ::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  @apply bg-slate-200 rounded-full transition-colors;
+  background: rgba(0, 0, 0, 0.12);
+  border-radius: 999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  @apply bg-slate-400;
+  background: rgba(0, 0, 0, 0.25);
 }
 
 .analytical-card {
@@ -39,11 +159,11 @@ body {
 }
 
 .btn-primary {
-  @apply bg-slate-950 text-white px-5 py-2.5 rounded-lg font-bold text-[11px] uppercase tracking-wider hover:bg-red-800 transition-all shadow-md active:scale-95;
+  @apply bg-amber-500 text-slate-950 px-5 py-2.5 rounded-xl font-black text-[11px] uppercase tracking-wider hover:bg-amber-400 transition-all shadow-md active:scale-95 border-0;
 }
 
 .label-analytical {
-  @apply text-[10px] font-bold uppercase tracking-widest text-slate-400;
+  @apply text-[10px] font-bold uppercase tracking-widest text-[#94a3b8];
 }
 
 /* iOS Safari Automatic Zoom Prevention & Touch Optimizations */

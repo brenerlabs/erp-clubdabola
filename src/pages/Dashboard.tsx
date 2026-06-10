@@ -166,6 +166,7 @@ export default function Dashboard() {
   const stats = React.useMemo(() => {
     let revenue = 0;
     let profit = 0;
+    let totalItemsQuantity = 0;
     
     filteredSales.forEach(sale => {
       revenue += sale.total;
@@ -174,6 +175,7 @@ export default function Dashboard() {
         if (product) {
           profit += (item.price - product.costPrice) * item.quantity;
         }
+        totalItemsQuantity += item.quantity;
       });
     });
 
@@ -197,6 +199,9 @@ export default function Dashboard() {
       totalRevenue: revenue,
       totalProfit: profit - paidTaxes - totalExp,
       avgTicket: filteredSales.length > 0 ? revenue / filteredSales.length : 0,
+      totalItemsSold: totalItemsQuantity,
+      avgItemPrice: totalItemsQuantity > 0 ? revenue / totalItemsQuantity : 0,
+      avgItemsPerSale: filteredSales.length > 0 ? totalItemsQuantity / filteredSales.length : 0,
       lowStockItems: products.filter(p => !p.isDropshipping && p.totalStock <= p.minStock).length,
       dropshippingOrders: filteredSales.filter(s => s.items.some(i => i.isDropshipping)).length,
       totalDebt: debt,
@@ -909,7 +914,7 @@ export default function Dashboard() {
     return acc;
   }, []);
 
-  const COLORS = ['#991b1b', '#d4af37', '#0f172a', '#450a0a', '#78350f'];
+  const COLORS = ['#8c2828', '#c69c3a', '#e57373', '#94a3b8', '#ab5a5a'];
 
   return (
     <div className="space-y-8 pb-10">
@@ -1246,11 +1251,34 @@ export default function Dashboard() {
               </div>
             </div>
             
-            <div className="space-y-1">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Consumo Médio (Ticket)</span>
-              <h3 className="text-2xl font-black text-slate-900 font-display tracking-tight leading-none uppercase tabular-nums">
-                {formatCurrency(stats.avgTicket)}
-              </h3>
+            <div className="space-y-4">
+              <div className="space-y-1">
+                <div className="flex justify-between items-baseline">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Ticket Médio p/ Venda</span>
+                  <span className="text-[8px] bg-blue-50 text-blue-600 border border-blue-100 font-bold px-1.5 py-0.5 rounded uppercase font-sans">AOV</span>
+                </div>
+                <h3 className="text-2xl font-black text-slate-900 font-display tracking-tight leading-none uppercase tabular-nums">
+                  {formatCurrency(stats.avgTicket)}
+                </h3>
+                <p className="text-[8px] text-slate-400 font-bold uppercase leading-tight">Receita total dividida pelo nº de pedidos</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 pt-3 border-t border-slate-100">
+                <div className="space-y-0.5">
+                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Preço Médio p/ Peça</span>
+                  <p className="text-sm font-black text-slate-800 tracking-tight tabular-nums">
+                    {formatCurrency(stats.avgItemPrice)}
+                  </p>
+                  <p className="text-[8px] text-slate-400 font-bold uppercase leading-none">Média por item individual</p>
+                </div>
+                <div className="space-y-0.5">
+                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Itens por Venda</span>
+                  <p className="text-sm font-black text-slate-800 tracking-tight tabular-nums">
+                    {stats.avgItemsPerSale.toFixed(1)} un
+                  </p>
+                  <p className="text-[8px] text-slate-400 font-bold uppercase leading-none">UPT (Itens por Carrinho)</p>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1632,18 +1660,18 @@ export default function Dashboard() {
           <div className="flex-1 min-h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={salesByDay}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                 <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: '#64748b' }} />
                 <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: '#64748b' }} />
                 <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: '#64748b' }} />
                 <Tooltip 
-                   cursor={{ fill: 'rgba(153, 27, 27, 0.05)' }}
-                   contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', padding: '16px' }}
+                   cursor={{ fill: 'rgba(140, 40, 40, 0.02)' }}
+                   contentStyle={{ borderRadius: '16px', border: '1px solid #cbd5e1', backgroundColor: '#ffffff', boxShadow: '0 10px 30px rgba(0, 0, 0, 0.06)', padding: '16px' }}
                    itemStyle={{ fontSize: '12px', fontWeight: 'bold' }}
                    labelStyle={{ fontWeight: 'black', marginBottom: '8px', color: '#0f172a' }}
                 />
-                <Bar yAxisId="left" dataKey="total" fill="#991b1b" radius={[6, 6, 0, 0]} />
-                <Bar yAxisId="right" dataKey="quantity" fill="#d4af37" radius={[6, 6, 0, 0]} />
+                <Bar yAxisId="left" dataKey="total" fill="#8c2828" radius={[6, 6, 0, 0]} />
+                <Bar yAxisId="right" dataKey="quantity" fill="#c69c3a" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -1653,7 +1681,7 @@ export default function Dashboard() {
         <div className="xl:col-span-1 bg-white p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden flex flex-col">
           <div className="flex flex-col mb-6">
             <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
-              <TrendingUp size={18} className="text-emerald-600" />
+              <TrendingUp size={18} className="text-red-800" />
               Sales vs. Amortização
             </h3>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Comparativo Mensal (6 Meses)</p>
@@ -1661,17 +1689,17 @@ export default function Dashboard() {
 
           <div className="flex items-center gap-4 text-[9px] font-black uppercase tracking-widest mb-6">
             <div className="flex items-center gap-1.5">
-              <span className="size-2 bg-red-850 rounded-full" style={{ backgroundColor: '#991b1b' }}></span> Vendas
+              <span className="size-2 bg-red-800 rounded-full" style={{ backgroundColor: '#8c2828' }}></span> Vendas
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="size-2 bg-emerald-500 rounded-full" style={{ backgroundColor: '#10b981' }}></span> Amortizado (Fiado)
+              <span className="size-2 bg-amber-500 rounded-full" style={{ backgroundColor: '#c69c3a' }}></span> Amortizado (Fiado)
             </div>
           </div>
 
           <div className="flex-1 min-h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={monthlyComparisonData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                 <XAxis 
                   dataKey="monthLabel" 
                   axisLine={false} 
@@ -1685,14 +1713,14 @@ export default function Dashboard() {
                   tickFormatter={(val) => `R$ ${val >= 1000 ? (val / 1000).toFixed(0) + 'k' : val}`}
                 />
                 <Tooltip 
-                  cursor={{ fill: 'rgba(16, 185, 129, 0.05)' }}
-                  contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', padding: '16px' }}
+                  cursor={{ fill: 'rgba(140, 40, 40, 0.02)' }}
+                  contentStyle={{ borderRadius: '16px', border: '1px solid #cbd5e1', backgroundColor: '#ffffff', boxShadow: '0 10px 30px rgba(0, 0, 0, 0.06)', padding: '16px' }}
                   itemStyle={{ fontSize: '11px', fontWeight: 'bold' }}
                   labelStyle={{ fontWeight: 'black', marginBottom: '8px', color: '#0f172a' }}
                   formatter={(value: any) => [formatCurrency(Number(value)), '']}
                 />
-                <Bar dataKey="salesTotal" name="Vendas" fill="#991b1b" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="amortizedTotal" name="Amortizado" fill="#10b981" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="salesTotal" name="Vendas" fill="#8c2828" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="amortizedTotal" name="Amortizado" fill="#c69c3a" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
