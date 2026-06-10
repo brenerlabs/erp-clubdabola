@@ -199,27 +199,109 @@ const generateSimulatedEvents = (trackingCode: string, targetStatus: Shipment['s
   const now = new Date();
   
   const formatDateStr = (d: Date) => d.toLocaleDateString('pt-BR');
-  const formatTimeStr = (d: Date) => d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  
+  // Gera um seed numérico determinístico baseado no código de rastreio
+  let seed = 0;
+  const uppercaseCode = (trackingCode || 'AA123456789BR').toUpperCase().trim();
+  for (let i = 0; i < uppercaseCode.length; i++) {
+    seed = uppercaseCode.charCodeAt(i) + ((seed << 5) - seed);
+  }
+  seed = Math.abs(seed);
+
+  // Helpers para geração de dados determinísticos
+  const getRandInt = (max: number, offset = 0) => {
+    return ((seed + offset) % max);
+  };
+
+  const getRandElement = <T,>(arr: T[], offset = 0): T => {
+    return arr[getRandInt(arr.length, offset)];
+  };
+
+  const padZero = (n: number) => n.toString().padStart(2, '0');
+
+  // Geração de horários distintos e realistas para cada evento
+  const timeEvent1 = `${padZero(8 + getRandInt(4, 11))}:${padZero(getRandInt(60, 22))}`;
+  const timeEvent2 = `${padZero(13 + getRandInt(5, 33))}:${padZero(getRandInt(60, 44))}`;
+  const timeEvent3 = `${padZero(9 + getRandInt(4, 55))}:${padZero(getRandInt(60, 66))}`;
+  const timeEvent4 = `${padZero(11 + getRandInt(3, 77))}:${padZero(getRandInt(60, 88))}`;
+  const timeEvent5 = `${padZero(14 + getRandInt(4, 99))}:${padZero(getRandInt(60, 10))}`;
+  const timeEvent6 = `${padZero(10 + getRandInt(3, 111))}:${padZero(getRandInt(60, 122))}`;
+  const timeEvent7 = `${padZero(15 + getRandInt(3, 133))}:${padZero(getRandInt(60, 144))}`;
+
+  // Variação de hubs asiáticos e aduaneiros nacionais de forma dinâmica
+  const originHubs = [
+    "Agência dos Correios - Shenzhen / CN",
+    "Centro Internacional de Triagem - Shenzhen / CN",
+    "Unidade de Postagem Internacional - Hong Kong / HK",
+    "Centro Logístico de Shenzhen - Futian / CN",
+    "Centro de Triagem Logística - Guangzhou / CN"
+  ];
+  const originHub = getRandElement(originHubs, 100);
+
+  const exportHubs = [
+    "Centro Logístico de Exportação - Shenzhen / CN",
+    "Centro de Distribuição de Exportação - Guangzhou / CN",
+    "Terminais de Cargas Aéreas - Hong Kong / HK",
+    "Unidade de Tratamento de Exportação - Dongguan / CN",
+    "Aeroporto de Guangzhou - Guangzhou / CN"
+  ];
+  const exportHub = getRandElement(exportHubs, 200);
+
+  const importHubs = [
+    "Unidade de Tratamento Internacional - Curitiba / PR",
+    "Centro Logístico de Importação - Rio de Janeiro / RJ",
+    "Unidade de Tratamento Aduaneiro - São Paulo / SP",
+    "Centro Logístico Aduaneiro - Curitiba / PR"
+  ];
+  const importHub = getRandElement(importHubs, 300);
+
+  const distributionUnits = [
+    "Unidade de Tratamento - São Paulo / SP",
+    "Unidade de Tratamento - Rio de Janeiro / RJ",
+    "Unidade de Tratamento - Belo Horizonte / MG",
+    "Unidade de Tratamento - Curitiba / PR",
+    "Unidade de Tratamento - Porto Alegre / RS",
+    "Unidade de Tratamento - Salvador / BA",
+    "Unidade de Tratamento - Recife / PE",
+    "Unidade de Tratamento - Fortaleza / CE"
+  ];
+  const distributionUnit = getRandElement(distributionUnits, 400);
+
+  const localUnits = [
+    "Unidade de Distribuição - São Paulo / SP",
+    "Unidade de Distribuição - Rio de Janeiro / RJ",
+    "Unidade de Distribuição - Belo Horizonte / MG",
+    "Unidade de Distribuição - Curitiba / PR",
+    "Unidade de Distribuição - Porto Alegre / RS",
+    "Unidade de Distribuição - Brasília / DF",
+    "Unidade de Distribuição - Salvador / BA",
+    "Unidade de Distribuição - Recife / PE",
+    "Unidade de Distribuição - Fortaleza / CE"
+  ];
+  const localUnit = getRandElement(localUnits, 500);
+
+  // Pequena variação de dias para não coincidirem no mesmo dia
+  const dateOffsetDays = getRandInt(3, 15) * 0.1; // 0.3 a 1.4 dias de variação
 
   const eventsList = [
     {
-      data: formatDateStr(new Date(now.getTime() - 4 * 24 * 60 * 60 * 1000)),
-      hora: "10:30",
-      local: "Agência dos Correios - Shenzhen / CN",
+      data: formatDateStr(new Date(now.getTime() - (4 + dateOffsetDays) * 24 * 60 * 60 * 1000)),
+      hora: timeEvent1,
+      local: originHub,
       status: "Objeto postado pela importadora",
       subStatus: ["Origem: Centro de triagem internacional", "Destino: Unidade de Tratamento de Importação"]
     },
     {
-      data: formatDateStr(new Date(now.getTime() - 3.5 * 24 * 60 * 60 * 1000)),
-      hora: "16:45",
-      local: "Centro Logístico de Exportação - Shenzhen / CN",
+      data: formatDateStr(new Date(now.getTime() - (3.5 + dateOffsetDays) * 24 * 60 * 60 * 1000)),
+      hora: timeEvent2,
+      local: exportHub,
       status: "Objeto encaminhado para o país de destino",
-      subStatus: ["Origem: Aeroporto internacional", "Destino: Unidade de Tratamento Aduaneiro - Curitiba / PR"]
+      subStatus: ["Origem: Aeroporto internacional", "Destino: " + importHub]
     },
     {
-      data: formatDateStr(new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000)),
-      hora: "09:12",
-      local: "Unidade de Tratamento Internacional - Curitiba / PR",
+      data: formatDateStr(new Date(now.getTime() - (3 + dateOffsetDays) * 24 * 60 * 60 * 1000)),
+      hora: timeEvent3,
+      local: importHub,
       status: "Objeto recebido pelos Correios do Brasil",
       subStatus: ["Objeto recebido no centro de fiscalização aduaneira"]
     }
@@ -233,9 +315,9 @@ const generateSimulatedEvents = (trackingCode: string, targetStatus: Shipment['s
   }
 
   eventsList.push({
-    data: formatDateStr(new Date(now.getTime() - 2.5 * 24 * 60 * 60 * 1000)),
-    hora: "14:20",
-    local: "Unidade de Tratamento Internacional - Curitiba / PR",
+    data: formatDateStr(new Date(now.getTime() - (2.5 + dateOffsetDays) * 24 * 60 * 60 * 1000)),
+    hora: timeEvent4,
+    local: importHub,
     status: "Recebido pelo Centro de Importação - Fiscalização Ativa",
     subStatus: ["Encaminhado para fiscalização aduaneira", "Acompanhe pela aba 'Minhas Importações'"]
   });
@@ -246,9 +328,9 @@ const generateSimulatedEvents = (trackingCode: string, targetStatus: Shipment['s
 
   if (targetStatus === 'Fiscalização') {
     eventsList.push({
-      data: formatDateStr(new Date(now.getTime() - 1.5 * 24 * 60 * 60 * 1000)),
-      hora: "08:15",
-      local: "Unidade de Tratamento Internacional - Curitiba / PR",
+      data: formatDateStr(new Date(now.getTime() - (1.5 + dateOffsetDays) * 24 * 60 * 60 * 1000)),
+      hora: timeEvent5,
+      local: importHub,
       status: "Retido para fiscalização ou aguardando pagamento de tributo",
       subStatus: ["Objeto aguarda pagamento de tributos ou declaração de valor aduaneiro"]
     });
@@ -256,9 +338,9 @@ const generateSimulatedEvents = (trackingCode: string, targetStatus: Shipment['s
   }
 
   eventsList.push({
-    data: formatDateStr(new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000)),
-    hora: "11:50",
-    local: "Unidade de Tratamento - São Paulo / SP",
+    data: formatDateStr(new Date(now.getTime() - (1 + dateOffsetDays) * 24 * 60 * 60 * 1000)),
+    hora: timeEvent6,
+    local: distributionUnit,
     status: "Objeto liberado da fiscalização ou em trânsito nacional",
     subStatus: ["Fiscalização concluída", "Encaminhado para o Centro de Distribuição Local"]
   });
@@ -268,9 +350,9 @@ const generateSimulatedEvents = (trackingCode: string, targetStatus: Shipment['s
   }
 
   eventsList.push({
-    data: formatDateStr(new Date(now.getTime() - 0.5 * 24 * 60 * 60 * 1000)),
-    hora: "13:10",
-    local: "Unidade de Distribuição - São Paulo / SP",
+    data: formatDateStr(new Date(now.getTime() - (0.5 + dateOffsetDays) * 24 * 60 * 60 * 1000)),
+    hora: timeEvent7,
+    local: localUnit,
     status: "Objeto disponível para retirada",
     subStatus: ["Endereço indicado para retirada: Unidade de Distribuição Correios correspondente"]
   });
@@ -281,8 +363,8 @@ const generateSimulatedEvents = (trackingCode: string, targetStatus: Shipment['s
 
   eventsList.push({
     data: formatDateStr(now),
-    hora: "15:40",
-    local: "Unidade de Distribuição - São Paulo / SP",
+    hora: timeEvent7,
+    local: localUnit,
     status: "Objeto entregue ao destinatário",
     subStatus: ["Entregue em mãos pelo Carteiro da Unidade", "Status Atual: Entregue com Sucesso!"]
   });
@@ -366,11 +448,12 @@ export default function Shipments() {
   const syncActiveShipments = async (forceAllAll = false) => {
     if (isSyncing) return;
     setIsSyncing(true);
-    setSyncFeedback({ type: 'info', message: 'Iniciando sincronização inteligente de rastreamento...' });
+    setSyncFeedback({ type: 'info', message: 'Iniciando sincronização inteligente de tracking...' });
 
     const activeShipments = shipments.filter(s => {
       const trackingRegex = /^[A-Z]{2}[0-9]{9}[A-Z]{2}$/;
-      const isValidCode = trackingRegex.test(s.trackingCode.toUpperCase());
+      const codeCleaned = (s.trackingCode || '').toUpperCase().trim();
+      const isValidCode = trackingRegex.test(codeCleaned);
       const isNotDelivered = s.status !== 'Entregue';
       return isValidCode && (forceAllAll || isNotDelivered);
     });
@@ -388,7 +471,8 @@ export default function Shipments() {
 
     for (const ship of activeShipments) {
       try {
-        const urlCmd = `https://brasilapi.com.br/api/correios/v1/${ship.trackingCode.toUpperCase()}`;
+        const codeCleaned = (ship.trackingCode || '').toUpperCase().trim();
+        const urlCmd = `https://brasilapi.com.br/api/correios/v1/${codeCleaned}`;
         const response = await fetch(urlCmd);
         if (response.ok) {
           const data = await response.json();
@@ -453,7 +537,8 @@ export default function Shipments() {
     setIsSyncingSingle(ship.id!);
 
     try {
-      const urlCmd = `https://brasilapi.com.br/api/correios/v1/${ship.trackingCode.toUpperCase()}`;
+      const codeCleaned = (ship.trackingCode || '').toUpperCase().trim();
+      const urlCmd = `https://brasilapi.com.br/api/correios/v1/${codeCleaned}`;
       const response = await fetch(urlCmd);
       if (response.ok) {
         const data = await response.json();
@@ -504,7 +589,8 @@ export default function Shipments() {
 
   const simulateCorreiosTracking = async (ship: Shipment) => {
     if (confirm('Deseja iniciar a simulação de movimentos reais dos Correios para esta encomenda no ambiente de testes?')) {
-      const simulated = generateSimulatedEvents(ship.trackingCode, ship.status);
+      const codeCleaned = (ship.trackingCode || '').toUpperCase().trim();
+      const simulated = generateSimulatedEvents(codeCleaned, ship.status);
       const docRef = doc(db, 'shipments', ship.id!);
       await updateDoc(docRef, {
         correiosHistory: simulated,
