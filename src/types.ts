@@ -68,6 +68,7 @@ export interface ShipmentItem {
   price: number;
   isDropshipping?: boolean;
   gender?: 'Masculino' | 'Feminino' | 'Ambos';
+  status?: 'Pendente' | 'Recebido' | 'Faturado';
 }
 
 export interface ShipmentStatusHistory {
@@ -91,6 +92,7 @@ export interface Shipment {
   updatedAt: any;
   correiosHistory?: any[];
   lastSyncedAt?: any;
+  stockProcessed?: boolean;
 }
 
 export interface Transaction {

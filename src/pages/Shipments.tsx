@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, orderBy, writeBatch } from 'firebase/firestore';
+import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, getDoc, serverTimestamp, orderBy, writeBatch } from 'firebase/firestore';
 import { Shipment, ShipmentItem, Customer, Product, Sale, SaleItem } from '../types';
 import { 
   Package, Search, Plus, Trash2, Edit2, Truck, 
@@ -697,7 +697,8 @@ export default function Shipments() {
       quantity: item.quantity,
       price: item.price,
       isDropshipping: item.isDropshipping || false,
-      gender: pGender
+      gender: pGender,
+      status: 'Pendente'
     }]);
   };
 
@@ -728,7 +729,8 @@ export default function Shipments() {
         quantity: item.quantity,
         price: item.price,
         isDropshipping: item.isDropshipping || false,
-        gender: pGender
+        gender: pGender,
+        status: 'Pendente'
       });
     });
 
@@ -783,7 +785,8 @@ export default function Shipments() {
       quantity: Number(stockQuantity) || 1,
       price: Number(stockPrice) || 0,
       isDropshipping: false,
-      gender: pGender
+      gender: pGender,
+      status: 'Pendente'
     };
 
     setItems(prev => [...prev, newItem]);
@@ -941,18 +944,61 @@ export default function Shipments() {
 
   const batchUpdateStatus = async (newStatus: Shipment['status']) => {
     if (selectedIds.length === 0) return;
-    const batch = writeBatch(db);
-    selectedIds.forEach(id => {
+    
+    for (const id of selectedIds) {
       const s = shipments.find(sh => sh.id === id);
       if (s) {
-        batch.update(doc(db, 'shipments', id), { 
+        let autoStockProcessed = s.stockProcessed || false;
+        const history = [...(s.history || [])];
+        history.push({ 
           status: newStatus, 
+          updatedAt: new Date(), 
+          notes: `Ação em massa: ${newStatus}` 
+        });
+
+        const stockItems = s.items.filter(i => i.customerId === 'estoque');
+
+        if ((newStatus === 'Recebido' || newStatus === 'Entregue') && !autoStockProcessed && stockItems.length > 0) {
+          for (const item of stockItems) {
+            if (!item.productId) continue;
+            try {
+              const prodRef = doc(db, 'products', item.productId);
+              const prodSnap = await getDoc(prodRef);
+              if (prodSnap.exists()) {
+                const productData = { id: prodSnap.id, ...prodSnap.data() } as Product;
+                const updatedVariations = (productData.variations || []).map(v => {
+                  if (v.id === item.variationId) {
+                    return { ...v, stock: (v.stock || 0) + item.quantity };
+                  }
+                  return v;
+                });
+                const totalStock = updatedVariations.reduce((acc, v) => acc + (v.stock || 0), 0);
+                await updateDoc(prodRef, {
+                  variations: updatedVariations,
+                  totalStock,
+                  updatedAt: serverTimestamp()
+                });
+              }
+            } catch (err) {
+              console.error("Erro ao atualizar bulk estoque:", err);
+            }
+          }
+          autoStockProcessed = true;
+          history.push({
+            status: newStatus,
+            updatedAt: new Date(),
+            notes: `Estoque automático integrado em lote.`
+          });
+        }
+
+        await updateDoc(doc(db, 'shipments', id), {
+          status: newStatus,
           updatedAt: serverTimestamp(),
-          history: [...(s.history || []), { status: newStatus, updatedAt: new Date(), notes: `Ação em massa: ${newStatus}` }]
+          history,
+          stockProcessed: autoStockProcessed
         });
       }
-    });
-    await batch.commit();
+    }
     setSelectedIds([]);
   };
 
@@ -985,10 +1031,47 @@ export default function Shipments() {
         notes: `Alteração rápida de status para ${newStatus}`
       });
 
+      let autoStockProcessed = shipment.stockProcessed || false;
+      const stockItems = shipment.items.filter(i => i.customerId === 'estoque');
+
+      if ((newStatus === 'Recebido' || newStatus === 'Entregue') && !autoStockProcessed && stockItems.length > 0) {
+        for (const item of stockItems) {
+          if (!item.productId) continue;
+          try {
+            const prodRef = doc(db, 'products', item.productId);
+            const prodSnap = await getDoc(prodRef);
+            if (prodSnap.exists()) {
+              const productData = { id: prodSnap.id, ...prodSnap.data() } as Product;
+              const updatedVariations = (productData.variations || []).map(v => {
+                if (v.id === item.variationId) {
+                  return { ...v, stock: (v.stock || 0) + item.quantity };
+                }
+                return v;
+              });
+              const totalStock = updatedVariations.reduce((acc, v) => acc + (v.stock || 0), 0);
+              await updateDoc(prodRef, {
+                variations: updatedVariations,
+                totalStock: totalStock,
+                updatedAt: serverTimestamp()
+              });
+            }
+          } catch (itemErr) {
+            console.error("Erro ao atualizar item de estoque individual:", itemErr);
+          }
+        }
+        autoStockProcessed = true;
+        history.push({
+          status: newStatus,
+          updatedAt: finalDate,
+          notes: `Estoque automático integrado: ${stockItems.length} item(ns) inseridos no estoque real.`
+        });
+      }
+
       await updateDoc(doc(db, 'shipments', shipment.id!), {
         status: newStatus,
         updatedAt: serverTimestamp(),
-        history
+        history,
+        stockProcessed: autoStockProcessed
       });
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, 'shipments');
@@ -1004,6 +1087,133 @@ export default function Shipments() {
         updatedAt: serverTimestamp()
       });
     } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, 'shipments');
+    }
+  };
+
+  const updateItemStatus = async (shipmentId: string, itemId: string, nextStatus: 'Pendente' | 'Recebido' | 'Faturado') => {
+    try {
+      const shipment = shipments.find(s => s.id === shipmentId);
+      if (!shipment) return;
+
+      const updatedItems = shipment.items.map(i => {
+        if (i.id === itemId) {
+          return { ...i, status: nextStatus };
+        }
+        return i;
+      });
+
+      const targetItem = shipment.items.find(i => i.id === itemId);
+      if (targetItem) {
+        const previousStatus = targetItem.status || 'Pendente';
+
+        // 1. Monitoramento de Estoque de reposição automático
+        if (targetItem.customerId === 'estoque' && nextStatus === 'Recebido' && previousStatus !== 'Recebido') {
+          const prodRef = doc(db, 'products', targetItem.productId);
+          const prodSnap = await getDoc(prodRef);
+          if (prodSnap.exists()) {
+            const productData = { id: prodSnap.id, ...prodSnap.data() } as Product;
+            const updatedVariations = (productData.variations || []).map(v => {
+              if (v.id === targetItem.variationId) {
+                return { ...v, stock: (v.stock || 0) + targetItem.quantity };
+              }
+              return v;
+            });
+            const totalStock = updatedVariations.reduce((acc, v) => acc + (v.stock || 0), 0);
+            await updateDoc(prodRef, {
+              variations: updatedVariations,
+              totalStock,
+              updatedAt: serverTimestamp()
+            });
+          }
+        }
+
+        // 2. Faturamento Automático da Sale integrada
+        if (nextStatus === 'Faturado' && previousStatus !== 'Faturado' && targetItem.saleId) {
+          const saleRef = doc(db, 'sales', targetItem.saleId);
+          const saleSnap = await getDoc(saleRef);
+          if (saleSnap.exists()) {
+            const saleData = saleSnap.data() as Sale;
+            if (saleData.status === 'Pendente' || saleData.status === 'Pré-venda') {
+              await updateDoc(saleRef, {
+                status: 'Concluída',
+                updatedAt: serverTimestamp()
+              });
+            }
+          }
+        }
+      }
+
+      await updateDoc(doc(db, 'shipments', shipmentId), {
+        items: updatedItems,
+        updatedAt: serverTimestamp()
+      });
+    } catch (err) {
+      console.error("Erro ao atualizar status do item correspondente:", err);
+      handleFirestoreError(err, OperationType.WRITE, 'shipments');
+    }
+  };
+
+  const updateCustomerGroupStatus = async (shipmentId: string, customerId: string, nextStatus: 'Pendente' | 'Recebido' | 'Faturado') => {
+    try {
+      const shipment = shipments.find(s => s.id === shipmentId);
+      if (!shipment) return;
+
+      const updatedItems = shipment.items.map(i => {
+        if (i.customerId === customerId) {
+          return { ...i, status: nextStatus };
+        }
+        return i;
+      });
+
+      const customerItems = shipment.items.filter(i => i.customerId === customerId);
+      for (const item of customerItems) {
+        const previousStatus = item.status || 'Pendente';
+        if (previousStatus === nextStatus) continue;
+
+        // 1. Monitoramento de Estoque de reposição automático
+        if (item.customerId === 'estoque' && nextStatus === 'Recebido') {
+          const prodRef = doc(db, 'products', item.productId);
+          const prodSnap = await getDoc(prodRef);
+          if (prodSnap.exists()) {
+            const productData = { id: prodSnap.id, ...prodSnap.data() } as Product;
+            const updatedVariations = (productData.variations || []).map(v => {
+              if (v.id === item.variationId) {
+                return { ...v, stock: (v.stock || 0) + item.quantity };
+              }
+              return v;
+            });
+            const totalStock = updatedVariations.reduce((acc, v) => acc + (v.stock || 0), 0);
+            await updateDoc(prodRef, {
+              variations: updatedVariations,
+              totalStock,
+              updatedAt: serverTimestamp()
+            });
+          }
+        }
+
+        // 2. Faturamento Automático da Sale integrada
+        if (nextStatus === 'Faturado' && item.saleId) {
+          const saleRef = doc(db, 'sales', item.saleId);
+          const saleSnap = await getDoc(saleRef);
+          if (saleSnap.exists()) {
+            const saleData = saleSnap.data() as Sale;
+            if (saleData.status === 'Pendente' || saleData.status === 'Pré-venda') {
+              await updateDoc(saleRef, {
+                status: 'Concluída',
+                updatedAt: serverTimestamp()
+              });
+            }
+          }
+        }
+      }
+
+      await updateDoc(doc(db, 'shipments', shipmentId), {
+        items: updatedItems,
+        updatedAt: serverTimestamp()
+      });
+    } catch (err) {
+      console.error("Erro ao atualizar lote de status do cliente:", err);
       handleFirestoreError(err, OperationType.WRITE, 'shipments');
     }
   };
@@ -1638,9 +1848,26 @@ export default function Shipments() {
                                   </div>
                                   <span className="font-bold text-slate-800 truncate uppercase tracking-tight">{customerName}</span>
                                 </div>
-                                <span className="text-[8px] font-black text-red-800 bg-red-100/80 px-1.5 py-0.5 rounded-lg ml-2 shrink-0">
-                                  {customerItems.length} {customerItems.length === 1 ? 'Item' : 'Itens'}
-                                </span>
+                                <div className="flex items-center gap-1.5 ml-2 shrink-0 select-none" onClick={e => e.stopPropagation()}>
+                                  <span className="text-[8px] font-black text-slate-500 mr-1 uppercase">Lote:</span>
+                                  <select
+                                    value=""
+                                    onChange={(e) => {
+                                      if (e.target.value) {
+                                        updateCustomerGroupStatus(shipment.id!, customerId, e.target.value as any);
+                                      }
+                                    }}
+                                    className="text-[8.5px] font-black bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 px-1.5 py-0.5 rounded-lg cursor-pointer outline-none"
+                                  >
+                                    <option value="" disabled>Alterar...</option>
+                                    <option value="Pendente">⏳ Pendente</option>
+                                    <option value="Recebido">✓ Recebido</option>
+                                    <option value="Faturado">💳 Faturado</option>
+                                  </select>
+                                  <span className="text-[8px] font-black text-red-800 bg-red-100/80 px-1.5 py-0.5 rounded-lg ml-1">
+                                    {customerItems.length} {customerItems.length === 1 ? 'Item' : 'Itens'}
+                                  </span>
+                                </div>
                               </button>
                               
                               <AnimatePresence>
@@ -1652,14 +1879,43 @@ export default function Shipments() {
                                     className="bg-slate-50/30 rounded-xl overflow-hidden ml-3 border-l-2 border-slate-200"
                                   >
                                     {customerItems.map(item => (
-                                      <div key={item.id} className="p-1.5 px-2.5 border-b border-slate-50 last:border-0 flex justify-between items-center text-[9px]">
+                                      <div key={item.id} className="p-1.5 px-2.5 border-b border-slate-50 last:border-0 flex justify-between items-center text-[9px] hover:bg-slate-50/50 transition-colors">
                                         <div className="flex items-center gap-1.5 min-w-0 flex-1">
                                           <span className="text-slate-600 font-bold uppercase truncate tracking-tight">{formatProductNameWithGender(item.productName, item.gender || products.find(p => p.id === item.productId)?.gender)}</span>
                                           {item.isDropshipping && (
                                             <span className="text-[6px] font-black bg-amber-500 text-white px-1 rounded italic leading-none">DS</span>
                                           )}
+                                          {customerId === 'estoque' && (
+                                            <span className={cn(
+                                              "text-[7px] font-black px-1.5 py-0.5 rounded leading-none shrink-0 uppercase tracking-wider border",
+                                              shipment.stockProcessed 
+                                                ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
+                                                : "bg-amber-50 text-amber-700 border-amber-200"
+                                            )}>
+                                              {shipment.stockProcessed ? '✓ No Estoque' : '⏳ Aguardando'}
+                                            </span>
+                                          )}
                                         </div>
-                                        <span className="font-black text-slate-950 ml-2 shrink-0 mr-1">x{item.quantity}</span>
+                                        <div className="flex items-center gap-2 ml-2 shrink-0" onClick={e => e.stopPropagation()}>
+                                          <span className="font-extrabold text-slate-900 border-r border-slate-200/60 pr-2 font-mono">x{item.quantity}</span>
+                                          <select
+                                            value={item.status || 'Pendente'}
+                                            onChange={(e) => updateItemStatus(shipment.id!, item.id, e.target.value as any)}
+                                            className={cn(
+                                              "text-[9px] font-black px-1.5 py-0.5 rounded-lg border outline-none cursor-pointer transition-all pr-4 relative appearance-none bg-no-repeat bg-[right_4px_center] bg-[length:6px] select-none",
+                                              (item.status || 'Pendente') === 'Pendente' && "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100",
+                                              (item.status || 'Pendente') === 'Recebido' && "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100",
+                                              (item.status || 'Pendente') === 'Faturado' && "bg-sky-50 text-sky-700 border-sky-305 hover:bg-sky-100"
+                                            )}
+                                            style={{
+                                              backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23334155' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'></polyline></svg>")`,
+                                            }}
+                                          >
+                                            <option value="Pendente">⏳ PEN</option>
+                                            <option value="Recebido">✓ REC</option>
+                                            <option value="Faturado">💳 FAT</option>
+                                          </select>
+                                        </div>
                                       </div>
                                     ))}
                                   </motion.div>
@@ -1835,9 +2091,26 @@ export default function Shipments() {
                             </div>
                             <span className="font-bold text-slate-800 truncate uppercase tracking-tight">{customerName}</span>
                           </div>
-                          <span className="text-[8px] font-black text-red-800 bg-red-100/80 px-1.5 py-0.5 rounded-lg ml-2 shrink-0">
-                            {customerItems.length} {customerItems.length === 1 ? 'Item' : 'Itens'}
-                          </span>
+                          <div className="flex items-center gap-1.5 ml-2 shrink-0 select-none" onClick={e => e.stopPropagation()}>
+                            <span className="text-[8px] font-black text-slate-500 mr-1 uppercase">Lote:</span>
+                            <select
+                              value=""
+                              onChange={(e) => {
+                                if (e.target.value) {
+                                  updateCustomerGroupStatus(shipment.id!, customerId, e.target.value as any);
+                                }
+                              }}
+                              className="text-[8.5px] font-black bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 px-1.5 py-0.5 rounded-lg cursor-pointer outline-none"
+                            >
+                              <option value="" disabled>Alterar...</option>
+                              <option value="Pendente">⏳ Pendente</option>
+                              <option value="Recebido">✓ Recebido</option>
+                              <option value="Faturado">💳 Faturado</option>
+                            </select>
+                            <span className="text-[8px] font-black text-red-800 bg-red-100/80 px-1.5 py-0.5 rounded-lg ml-1">
+                              {customerItems.length} {customerItems.length === 1 ? 'Item' : 'Itens'}
+                            </span>
+                          </div>
                         </button>
                         
                         <AnimatePresence>
@@ -1849,14 +2122,43 @@ export default function Shipments() {
                               className="bg-slate-50/30 rounded-xl overflow-hidden ml-3 border-l-2 border-slate-200"
                             >
                               {customerItems.map(item => (
-                                <div key={item.id} className="p-1.5 px-2.5 border-b border-slate-50 last:border-0 flex justify-between items-center text-[9px]">
+                                <div key={item.id} className="p-1.5 px-2.5 border-b border-slate-50 last:border-0 flex justify-between items-center text-[9px] hover:bg-slate-50/50 transition-colors">
                                   <div className="flex items-center gap-1.5 min-w-0 flex-1">
                                     <span className="text-slate-600 font-bold uppercase truncate tracking-tight">{formatProductNameWithGender(item.productName, item.gender || products.find(p => p.id === item.productId)?.gender)}</span>
                                     {item.isDropshipping && (
                                       <span className="text-[6px] font-black bg-amber-500 text-white px-1 rounded italic leading-none">DS</span>
                                     )}
+                                    {customerId === 'estoque' && (
+                                      <span className={cn(
+                                        "text-[7px] font-black px-1.5 py-0.5 rounded leading-none shrink-0 uppercase tracking-wider border",
+                                        shipment.stockProcessed 
+                                          ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
+                                          : "bg-amber-50 text-amber-700 border-amber-200"
+                                      )}>
+                                        {shipment.stockProcessed ? '✓ No Estoque' : '⏳ Aguardando'}
+                                      </span>
+                                    )}
                                   </div>
-                                  <span className="font-black text-slate-950 ml-2 shrink-0 mr-1">x{item.quantity}</span>
+                                  <div className="flex items-center gap-2 ml-2 shrink-0" onClick={e => e.stopPropagation()}>
+                                    <span className="font-extrabold text-slate-900 border-r border-slate-200/60 pr-2 font-mono">x{item.quantity}</span>
+                                    <select
+                                      value={item.status || 'Pendente'}
+                                      onChange={(e) => updateItemStatus(shipment.id!, item.id, e.target.value as any)}
+                                      className={cn(
+                                        "text-[9px] font-black px-1.5 py-0.5 rounded-lg border outline-none cursor-pointer transition-all pr-4 relative appearance-none bg-no-repeat bg-[right_4px_center] bg-[length:6px] select-none",
+                                        (item.status || 'Pendente') === 'Pendente' && "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100",
+                                        (item.status || 'Pendente') === 'Recebido' && "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100",
+                                        (item.status || 'Pendente') === 'Faturado' && "bg-sky-50 text-sky-700 border-sky-305 hover:bg-sky-100"
+                                      )}
+                                      style={{
+                                        backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23334155' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'></polyline></svg>")`,
+                                      }}
+                                    >
+                                      <option value="Pendente">⏳ PEN</option>
+                                      <option value="Recebido">✓ REC</option>
+                                      <option value="Faturado">💳 FAT</option>
+                                    </select>
+                                  </div>
                                 </div>
                               ))}
                             </motion.div>
