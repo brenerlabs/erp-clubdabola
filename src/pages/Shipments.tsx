@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, getDoc, serverTimestamp, orderBy, writeBatch } from 'firebase/firestore';
 import { Shipment, ShipmentItem, Customer, Product, Sale, SaleItem } from '../types';
@@ -408,6 +408,68 @@ export default function Shipments() {
   const [notes, setNotes] = useState('');
   const [supplierName, setSupplierName] = useState('');
   const [sendWhatsAppOnSave, setSendWhatsAppOnSave] = useState(true);
+
+  // Supplier Autocomplete Suggestions state and memo calculations
+  const [showSupplierSuggestions, setShowSupplierSuggestions] = useState(false);
+
+  const existingSuppliers = useMemo(() => {
+    const names = new Set<string>();
+    // Pre-seed with defaults mentioned in the prompt (always uppercase)
+    names.add('LYLY');
+    names.add('CHENG');
+    
+    // Add all unique supplier names present in existing shipments
+    shipments.forEach(s => {
+      if (s.supplierName && s.supplierName.trim()) {
+        let name = s.supplierName.trim().toUpperCase();
+        if (name === 'LILY' || name === 'LILÝ') {
+          name = 'LYLY';
+        }
+        names.add(name);
+      }
+    });
+
+    return Array.from(names).sort((a, b) => a.localeCompare(b));
+  }, [shipments]);
+
+  const supplierSuggestions = useMemo(() => {
+    const q = supplierName.trim().toUpperCase();
+    if (!q) return [];
+    return existingSuppliers.filter(sup => 
+      sup.includes(q) && 
+      sup !== supplierName.trim().toUpperCase()
+    );
+  }, [existingSuppliers, supplierName]);
+
+  // Automated migration effect to correct existing shipments' supplier names in Firestore to use uppercase and normalize LILY -> LYLY, CHENG -> CHENG, and others to UPPERCASE.
+  useEffect(() => {
+    if (shipments.length === 0) return;
+
+    const runSupplierMigration = async () => {
+      try {
+        for (const s of shipments) {
+          if (!s.id) continue;
+          const currentName = s.supplierName || '';
+          if (!currentName.trim()) continue;
+
+          let targetName = currentName.trim().toUpperCase();
+          if (targetName === 'LILY' || targetName === 'LILÝ') {
+            targetName = 'LYLY';
+          }
+
+          if (currentName !== targetName) {
+            await updateDoc(doc(db, 'shipments', s.id), {
+              supplierName: targetName
+            });
+          }
+        }
+      } catch (err) {
+        console.error('Error during supplier name standardization migration:', err);
+      }
+    };
+
+    runSupplierMigration();
+  }, [shipments]);
 
   // Item selection from Sales
   const [selectedSaleId, setSelectedSaleId] = useState('');
@@ -881,7 +943,13 @@ export default function Shipments() {
         taxAmount: parseFloat(String(taxAmount || '0').replace(',', '.')) || 0,
         taxPaid,
         notes,
-        supplierName,
+        supplierName: (() => {
+          let name = supplierName.trim().toUpperCase();
+          if (name === 'LILY' || name === 'LILÝ') {
+            return 'LYLY';
+          }
+          return name;
+        })(),
         updatedAt: serverTimestamp(),
       };
 
@@ -1128,18 +1196,35 @@ export default function Shipments() {
           }
         }
 
-        // 2. Faturamento Automático da Sale integrada
-        if (nextStatus === 'Faturado' && previousStatus !== 'Faturado' && targetItem.saleId) {
-          const saleRef = doc(db, 'sales', targetItem.saleId);
-          const saleSnap = await getDoc(saleRef);
-          if (saleSnap.exists()) {
-            const saleData = saleSnap.data() as Sale;
-            if (saleData.status === 'Pendente' || saleData.status === 'Pré-venda') {
-              await updateDoc(saleRef, {
-                status: 'Concluída',
-                updatedAt: serverTimestamp()
-              });
+        // 2. Faturamento Automático da Sale integrada + Registro financeiro na Compensação
+        if (nextStatus === 'Faturado' && previousStatus !== 'Faturado') {
+          const amount = targetItem.price * targetItem.quantity;
+          if (amount > 0) {
+            let pMethod: any = 'Dinheiro';
+            
+            if (targetItem.saleId) {
+              const saleRef = doc(db, 'sales', targetItem.saleId);
+              const saleSnap = await getDoc(saleRef);
+              if (saleSnap.exists()) {
+                const saleData = saleSnap.data() as Sale;
+                pMethod = saleData.paymentMethod || 'Dinheiro';
+                if (saleData.status === 'Pendente' || saleData.status === 'Pré-venda') {
+                  await updateDoc(saleRef, {
+                    status: 'Concluída',
+                    updatedAt: serverTimestamp()
+                  });
+                }
+              }
             }
+
+            await addDoc(collection(db, 'transactions'), {
+              customerId: targetItem.customerId || 'Consumidor Final',
+              amount: amount,
+              type: 'payment',
+              paymentMethod: pMethod === 'Fiado' ? 'Dinheiro' : pMethod,
+              saleId: targetItem.saleId || null,
+              createdAt: serverTimestamp()
+            });
           }
         }
       }
@@ -1192,18 +1277,35 @@ export default function Shipments() {
           }
         }
 
-        // 2. Faturamento Automático da Sale integrada
-        if (nextStatus === 'Faturado' && item.saleId) {
-          const saleRef = doc(db, 'sales', item.saleId);
-          const saleSnap = await getDoc(saleRef);
-          if (saleSnap.exists()) {
-            const saleData = saleSnap.data() as Sale;
-            if (saleData.status === 'Pendente' || saleData.status === 'Pré-venda') {
-              await updateDoc(saleRef, {
-                status: 'Concluída',
-                updatedAt: serverTimestamp()
-              });
+        // 2. Faturamento Automático da Sale integrada + Registro financeiro na Compensação
+        if (nextStatus === 'Faturado') {
+          const amount = item.price * item.quantity;
+          if (amount > 0) {
+            let pMethod: any = 'Dinheiro';
+            
+            if (item.saleId) {
+              const saleRef = doc(db, 'sales', item.saleId);
+              const saleSnap = await getDoc(saleRef);
+              if (saleSnap.exists()) {
+                const saleData = saleSnap.data() as Sale;
+                pMethod = saleData.paymentMethod || 'Dinheiro';
+                if (saleData.status === 'Pendente' || saleData.status === 'Pré-venda') {
+                  await updateDoc(saleRef, {
+                    status: 'Concluída',
+                    updatedAt: serverTimestamp()
+                  });
+                }
+              }
             }
+
+            await addDoc(collection(db, 'transactions'), {
+              customerId: item.customerId || 'Consumidor Final',
+              amount: amount,
+              type: 'payment',
+              paymentMethod: pMethod === 'Fiado' ? 'Dinheiro' : pMethod,
+              saleId: item.saleId || null,
+              createdAt: serverTimestamp()
+            });
           }
         }
       }
@@ -2877,15 +2979,47 @@ export default function Shipments() {
                   </div>
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-2 relative">
                   <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Fornecedor / Loja</label>
                   <input 
                     type="text" 
                     value={supplierName} 
-                    onChange={e => setSupplierName(e.target.value)}
+                    onChange={e => {
+                      setSupplierName(e.target.value.toUpperCase());
+                      setShowSupplierSuggestions(true);
+                    }}
+                    onFocus={() => setShowSupplierSuggestions(true)}
+                    onBlur={() => {
+                      // Small delay so that micro-interaction click events are captured before panel dismantles
+                      setTimeout(() => setShowSupplierSuggestions(false), 200);
+                    }}
                     placeholder="Ex: Alibaba, Wechat Seller..."
                     className="w-full px-4 py-3 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-sm bg-slate-50/50 transition-all"
                   />
+                  
+                  {showSupplierSuggestions && supplierSuggestions.length > 0 && (
+                    <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden max-h-48 overflow-y-auto">
+                      <div className="p-2 border-b border-slate-100 bg-slate-50">
+                        <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Fornecedores Encontrados</span>
+                      </div>
+                      <div className="divide-y divide-slate-100">
+                        {supplierSuggestions.map((suggestion, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onMouseDown={() => {
+                              setSupplierName(suggestion);
+                              setShowSupplierSuggestions(false);
+                            }}
+                            className="w-full text-left px-4 py-2.5 hover:bg-indigo-50 transition-all flex items-center justify-between text-xs font-bold text-slate-700"
+                          >
+                            <span>{suggestion}</span>
+                            <span className="text-[9px] text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md font-black">Selecionar</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Items Management */}

@@ -5,15 +5,16 @@ import {
   Package, 
   Users, 
   DollarSign, 
-  LogOut,
-  ChevronRight,
-  Menu,
-  X,
-  Plus,
-  RefreshCcw,
-  Send,
-  Truck,
-  Camera
+  LogOut, 
+  ChevronRight, 
+  Menu, 
+  X, 
+  Plus, 
+  RefreshCcw, 
+  Send, 
+  Truck, 
+  Camera,
+  BarChart3
 } from 'lucide-react';
 import { auth, db, handleFirestoreError, OperationType } from './lib/firebase';
 import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from 'firebase/auth';
@@ -29,8 +30,9 @@ import Finance from './pages/Finance';
 import Compensations from './pages/Compensations';
 import Shipments from './pages/Shipments';
 import Mural from './pages/Mural';
+import Reports from './pages/Reports';
 
-type Page = 'dashboard' | 'pdv' | 'products' | 'customers' | 'finance' | 'compensations' | 'shipments' | 'mural';
+type Page = 'dashboard' | 'pdv' | 'products' | 'customers' | 'finance' | 'compensations' | 'shipments' | 'mural' | 'reports';
 
 
 interface SidebarContextType {
@@ -218,6 +220,7 @@ export default function App() {
     { id: 'customers', label: 'Clientes', icon: Users },
     { id: 'shipments', label: 'Encomendas', icon: Truck },
     { id: 'compensations', label: 'Compensações', icon: RefreshCcw },
+    { id: 'reports', label: 'Relatórios & Rastreio', icon: BarChart3 },
     { id: 'finance', label: 'Financeiro & Auditoria', icon: DollarSign },
     { id: 'mural', label: 'Mural & Logo', icon: Camera },
   ];
@@ -421,6 +424,7 @@ export default function App() {
               {activePage === 'products' && <Products />}
               {activePage === 'customers' && <Customers />}
               {activePage === 'compensations' && <Compensations />}
+              {activePage === 'reports' && <Reports />}
               {activePage === 'shipments' && <Shipments />}
               {activePage === 'finance' && <Finance />}
               {activePage === 'mural' && <Mural />}
