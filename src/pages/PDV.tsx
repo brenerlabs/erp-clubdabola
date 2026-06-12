@@ -87,10 +87,17 @@ export default function PDV() {
     setCart(cart.map(item => {
       if (item.productId === pId && item.variationId === vId) {
         const product = products.find(p => p.id === pId);
-        const variation = product?.variations.find(v => v.id === vId);
         const nextQty = item.quantity + delta;
         if (nextQty <= 0) return item;
-        if (product && !product.isDropshipping && variation && nextQty > variation.stock) return item;
+
+        if (product && !product.isDropshipping) {
+          const variation = product.variations?.find(v => v.id === vId);
+          if (variation) {
+            if (nextQty > variation.stock) return item;
+          } else if (vId === 'unica') {
+            if (nextQty > (product.totalStock || 0)) return item;
+          }
+        }
         return { ...item, quantity: nextQty };
       }
       return item;
@@ -206,10 +213,16 @@ export default function PDV() {
 
         const product = products.find(p => p.id === item.productId);
         if (product) {
-          const nextVariations = product.variations.map(v => 
-            v.id === item.variationId ? { ...v, stock: Math.max(0, v.stock - item.quantity) } : v
-          );
-          const nextTotalStock = nextVariations.reduce((acc, v) => acc + v.stock, 0);
+          let nextVariations = product.variations || [];
+          let nextTotalStock = product.totalStock || 0;
+          if (nextVariations.length > 0) {
+            nextVariations = nextVariations.map(v => 
+              v.id === item.variationId ? { ...v, stock: Math.max(0, v.stock - item.quantity) } : v
+            );
+            nextTotalStock = nextVariations.reduce((acc, v) => acc + v.stock, 0);
+          } else {
+            nextTotalStock = Math.max(0, nextTotalStock - item.quantity);
+          }
 
           batch.update(doc(db, 'products', item.productId), cleanObject({
             variations: nextVariations,
@@ -354,10 +367,16 @@ export default function PDV() {
           
           const product = products.find(p => p.id === item.productId);
           if (product) {
-            const nextVariations = product.variations.map(v => 
-              v.id === item.variationId ? { ...v, stock: Math.max(0, v.stock - item.quantity) } : v
-            );
-            const nextTotalStock = nextVariations.reduce((acc, v) => acc + v.stock, 0);
+            let nextVariations = product.variations || [];
+            let nextTotalStock = product.totalStock || 0;
+            if (nextVariations.length > 0) {
+              nextVariations = nextVariations.map(v => 
+                v.id === item.variationId ? { ...v, stock: Math.max(0, v.stock - item.quantity) } : v
+              );
+              nextTotalStock = nextVariations.reduce((acc, v) => acc + v.stock, 0);
+            } else {
+              nextTotalStock = Math.max(0, nextTotalStock - item.quantity);
+            }
             batch.update(doc(db, 'products', item.productId), cleanObject({
               variations: nextVariations,
               totalStock: nextTotalStock,
@@ -1224,7 +1243,18 @@ export default function PDV() {
 
         <div className="flex-1 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 pb-4">
           {filteredProducts.map(product => (
-            <div key={product.id} className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm flex flex-col group hover:-translate-y-1 hover:shadow-md hover:border-red-800/30 transition-all duration-300 ease-out">
+            <div 
+              key={product.id} 
+              onClick={() => {
+                if (!product.variations || product.variations.length === 0) {
+                  addToCart(product, { id: 'unica', size: 'ÚNICA', color: '', stock: product.totalStock || 0 });
+                }
+              }}
+              className={cn(
+                "bg-white p-3 rounded-xl border border-slate-100 shadow-sm flex flex-col group hover:-translate-y-1 hover:shadow-md hover:border-red-800/30 transition-all duration-300 ease-out",
+                (!product.variations || product.variations.length === 0) && "cursor-pointer"
+              )}
+            >
               <div className="mb-2">
                 <div className="flex items-center justify-between gap-2">
                   <span className="px-1.5 py-0.5 bg-slate-100 text-[8px] font-black text-slate-400 rounded uppercase tracking-wider">{product.category}</span>
@@ -1244,24 +1274,45 @@ export default function PDV() {
               <div className="mt-auto space-y-2">
                 <div className="text-xs md:text-sm font-black text-red-800 font-display tabular-nums leading-none">{formatCurrency(product.sellingPrice)}</div>
                 <div className="flex flex-wrap gap-1 items-stretch justify-start">
-                  {product.variations.map(v => (
+                  {!product.variations || product.variations.length === 0 ? (
                     <button 
-                      key={v.id}
-                      disabled={!product.isDropshipping && v.stock <= 0}
-                      onClick={() => {
-                        addToCart(product, v);
+                      type="button"
+                      disabled={!product.isDropshipping && (product.totalStock || 0) <= 0}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        addToCart(product, { id: 'unica', size: 'ÚNICA', color: '', stock: product.totalStock || 0 });
                       }}
                       className={cn(
                         "text-[9px] px-2 py-1.5 border rounded font-black transition-all truncate uppercase relative flex-1 min-w-[45%] text-center",
-                        (!product.isDropshipping && v.stock <= 0) 
+                        (!product.isDropshipping && (product.totalStock || 0) <= 0) 
                           ? "bg-gray-50 border-gray-100 text-gray-200 cursor-not-allowed opacity-40 shadow-none scale-100" 
                           : "bg-white border-slate-200 text-slate-600 hover:border-red-800 hover:bg-red-50 hover:text-red-800 active:scale-95 shadow-sm",
                         product.isDropshipping && "border-amber-100 text-amber-600 bg-amber-50/20"
                       )}
                     >
-                      {[v.size, v.color].map(x => x?.trim()).filter(x => x && x !== '' && x.toUpperCase() !== 'N/A').join(' - ')} <span className="opacity-40">{product.isDropshipping ? 'DS' : v.stock}</span>
+                      Selecionar <span className="opacity-40">{product.isDropshipping ? 'DS' : (product.totalStock || 0)}</span>
                     </button>
-                  ))}
+                  ) : (
+                    product.variations.map(v => (
+                      <button 
+                        key={v.id}
+                        disabled={!product.isDropshipping && v.stock <= 0}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          addToCart(product, v);
+                        }}
+                        className={cn(
+                          "text-[9px] px-2 py-1.5 border rounded font-black transition-all truncate uppercase relative flex-1 min-w-[45%] text-center",
+                          (!product.isDropshipping && v.stock <= 0) 
+                            ? "bg-gray-50 border-gray-100 text-gray-200 cursor-not-allowed opacity-40 shadow-none scale-100" 
+                            : "bg-white border-slate-200 text-slate-600 hover:border-red-800 hover:bg-red-50 hover:text-red-800 active:scale-95 shadow-sm",
+                          product.isDropshipping && "border-amber-100 text-amber-600 bg-amber-50/20"
+                        )}
+                      >
+                        {[v.size, v.color].map(x => x?.trim()).filter(x => x && x !== '' && x.toUpperCase() !== 'N/A').join(' - ')} <span className="opacity-40">{product.isDropshipping ? 'DS' : v.stock}</span>
+                      </button>
+                    ))
+                  )}
                 </div>
               </div>
             </div>

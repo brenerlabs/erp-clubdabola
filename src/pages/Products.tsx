@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, orderBy, writeBatch } from 'firebase/firestore';
 import { Product, Variation, Sale } from '../types';
-import { Plus, Search, Edit2, Trash2, Copy, Package, Box, X, Eye, FileText, Download, TrendingUp, ShoppingBag, Users, Calendar, Calculator, DollarSign, Percent } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Copy, Package, Box, X, Eye, FileText, Download, TrendingUp, ShoppingBag, Users, Calendar, Calculator, DollarSign, Percent, ChevronDown, ChevronRight } from 'lucide-react';
 import { formatCurrency, calculateMargin, calculateMarkup, cn, cleanVariationName } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { SidebarContext } from '../App';
@@ -24,6 +24,7 @@ export default function Products() {
   const [isImporting, setIsImporting] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+  const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
 
   // Simulator States
   const [simCost, setSimCost] = useState('50');
@@ -613,6 +614,32 @@ export default function Products() {
     return matchesSearch && matchesCategory && matchesGender;
   });
 
+  const groupedProducts = React.useMemo(() => {
+    const groups: Record<string, Product[]> = {};
+    filtered.forEach(p => {
+      const cat = (p.category || 'GERAL').toUpperCase().trim();
+      if (!groups[cat]) {
+        groups[cat] = [];
+      }
+      groups[cat].push(p);
+    });
+
+    // Sort categories alphabetically
+    const sortedCategories = Object.keys(groups).sort((a, b) => a.localeCompare(b));
+
+    return sortedCategories.map(cat => ({
+      categoryName: cat,
+      productsList: groups[cat]
+    }));
+  }, [filtered]);
+
+  const isCategoryExpanded = (catName: string) => {
+    if (search.trim() !== '' || filterCategory !== 'Todas' || filterGender !== 'Todos') {
+      return true;
+    }
+    return !!expandedCategories[catName];
+  };
+
   const categories = ['Todas', ...Array.from(new Set(products.map(p => p.category))).sort()];
   const genders = ['Todos', 'Masculino', 'Feminino', 'Ambos'];
 
@@ -886,119 +913,187 @@ export default function Products() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
-            {filtered.map(product => (
-              <tr key={product.id} className="hover:bg-slate-50/80 transition-colors group">
-                <td className="px-8 py-5">
-                  <div className="flex items-center gap-3">
-                    <div className="size-10 bg-slate-100 rounded-xl flex items-center justify-center text-slate-400 shadow-inner">
-                      <Package size={20} />
-                    </div>
-                    <div>
-                      <div className="font-bold text-slate-900 text-sm leading-none font-display tracking-tight">{product.name}</div>
-                      <div className="flex gap-2 mt-2">
-                        {product.isDropshipping && (
-                          <div className="text-[8px] px-1.5 py-0.5 bg-amber-500 text-white font-bold rounded uppercase tracking-tight shadow-sm">DS</div>
-                        )}
-                        {product.gender && (
-                          <div className={cn(
-                            "text-[8px] px-1.5 py-0.5 font-bold rounded uppercase tracking-tight shadow-sm",
-                            product.gender === 'Masculino' ? "bg-blue-500 text-white" : 
-                            product.gender === 'Feminino' ? "bg-pink-500 text-white" : 
-                            "bg-slate-500 text-white"
-                          )}>
-                            {product.gender}
-                          </div>
-                        )}
-                        <div className="text-[9px] text-slate-400 font-black uppercase tracking-widest">Mg: {product.margin.toFixed(0)}%</div>
-                        <div className="text-[9px] text-amber-600 font-black uppercase tracking-widest">Mk: {calculateMarkup(product.costPrice, product.sellingPrice).toFixed(0)}%</div>
+            {groupedProducts.map(({ categoryName, productsList }) => (
+              <React.Fragment key={categoryName}>
+                {/* Category Header Row */}
+                <tr 
+                  onClick={() => {
+                    setExpandedCategories(prev => ({
+                      ...prev,
+                      [categoryName]: !prev[categoryName]
+                    }));
+                  }}
+                  className="bg-slate-50/65 hover:bg-slate-100/95 cursor-pointer select-none transition-colors border-y border-slate-100"
+                >
+                  <td colSpan={5} className="px-8 py-3.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <span className="text-slate-400 p-0.5 hover:bg-slate-200 rounded-lg transition-colors">
+                          {isCategoryExpanded(categoryName) ? <ChevronDown size={18} className="text-slate-700" /> : <ChevronRight size={18} className="text-slate-700" />}
+                        </span>
+                        <div className="flex items-baseline gap-2.5">
+                          <span className="px-2.5 py-1 bg-slate-900 border border-slate-800 text-amber-500 text-[10px] font-black rounded-xl uppercase tracking-widest leading-none font-sans shadow-sm">
+                            {categoryName}
+                          </span>
+                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                            — {productsList.length} {productsList.length === 1 ? 'Produto cadastrado' : 'Produtos cadastrados'}
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-8 py-5">
-                  <span className="px-2 py-0.5 bg-slate-900 text-amber-500 text-[10px] font-black rounded uppercase tracking-widest leading-none font-sans">{product.category}</span>
-                </td>
-                <td className="px-8 py-5 text-right font-sans">
-                  <div className="text-sm font-black text-slate-950 font-display tabular-nums tracking-tight italic">{formatCurrency(product.sellingPrice)}</div>
-                  <div className="text-[9px] text-slate-400 font-black uppercase tabular-nums tracking-widest mt-1">Custo: {formatCurrency(product.costPrice)}</div>
-                </td>
-                <td className="px-8 py-5 text-center">
-                  <div className="flex flex-col items-center">
-                    <div className="flex items-center gap-1.5 font-display tabular-nums leading-none">
-                      <span className={cn(
-                        "text-lg font-black tracking-tighter italic",
-                        (product.totalStock || 0) <= (product.minStock || 0) ? "text-red-600" : "text-slate-950"
-                      )}>
-                        {product.totalStock}
+                      <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest opacity-65">
+                        {isCategoryExpanded(categoryName) ? 'Clique para recolher ▲' : 'Clique para expandir ▼'}
                       </span>
-                      {(product.totalStock || 0) <= (product.minStock || 0) && (
-                        <div className="size-2 bg-red-600 rounded-full animate-pulse shadow-sm" />
-                      )}
                     </div>
-                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mt-1">
-                      RESERVA DE ESTOQUE
-                    </span>
-                  </div>
-                </td>
-                <td className="px-8 py-5">
-                  <div className="flex items-center justify-end gap-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => setHistoryProduct(product)} className="p-2.5 hover:bg-red-800 hover:text-white text-slate-900 rounded-xl transition-all bg-white shadow-sm border border-slate-100" title="Histórico de Compras">
-                      <Eye size={16} />
-                    </button>
-                    <button onClick={() => openModal(product, true)} className="p-2.5 hover:bg-red-800 hover:text-white text-slate-900 rounded-xl transition-all bg-white shadow-sm border border-slate-100" title="Duplicar">
-                      <Copy size={16} />
-                    </button>
-                    <button onClick={() => openModal(product)} className="p-2.5 hover:bg-red-800 hover:text-white text-slate-900 rounded-xl transition-all bg-white shadow-sm border border-slate-100" title="Editar">
-                      <Edit2 size={16} />
-                    </button>
-                    <button onClick={() => confirmDelete(product)} className="p-2.5 hover:bg-slate-950 hover:text-white text-slate-900 rounded-xl transition-all bg-white shadow-sm border border-slate-100" title="Excluir">
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </td>
-              </tr>
+                  </td>
+                </tr>
+
+                {/* Product Rows */}
+                {isCategoryExpanded(categoryName) && productsList.map(product => (
+                  <tr key={product.id} className="hover:bg-slate-50/80 transition-colors group">
+                    <td className="px-8 py-5">
+                      <div className="flex items-center gap-3">
+                        <div className="size-10 bg-slate-100 rounded-xl flex items-center justify-center text-slate-400 shadow-inner">
+                          <Package size={20} />
+                        </div>
+                        <div>
+                          <div className="font-bold text-slate-900 text-sm leading-none font-display tracking-tight">{product.name}</div>
+                          <div className="flex gap-2 mt-2">
+                            {product.isDropshipping && (
+                              <div className="text-[8px] px-1.5 py-0.5 bg-amber-500 text-white font-bold rounded uppercase tracking-tight shadow-sm">DS</div>
+                            )}
+                            {product.gender && (
+                              <div className={cn(
+                                "text-[8px] px-1.5 py-0.5 font-bold rounded uppercase tracking-tight shadow-sm",
+                                product.gender === 'Masculino' ? "bg-blue-500 text-white" : 
+                                product.gender === 'Feminino' ? "bg-pink-500 text-white" : 
+                                "bg-slate-500 text-white"
+                              )}>
+                                {product.gender}
+                              </div>
+                            )}
+                            <div className="text-[9px] text-slate-400 font-black uppercase tracking-widest">Mg: {product.margin.toFixed(0)}%</div>
+                            <div className="text-[9px] text-amber-600 font-black uppercase tracking-widest">Mk: {calculateMarkup(product.costPrice, product.sellingPrice).toFixed(0)}%</div>
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-8 py-5">
+                      <span className="px-2 py-0.5 bg-slate-900 text-amber-500 text-[10px] font-black rounded uppercase tracking-widest leading-none font-sans">{product.category}</span>
+                    </td>
+                    <td className="px-8 py-5 text-right font-sans">
+                      <div className="text-sm font-black text-slate-950 font-display tabular-nums tracking-tight italic">{formatCurrency(product.sellingPrice)}</div>
+                      <div className="text-[9px] text-slate-400 font-black uppercase tabular-nums tracking-widest mt-1">Custo: {formatCurrency(product.costPrice)}</div>
+                    </td>
+                    <td className="px-8 py-5 text-center">
+                      <div className="flex flex-col items-center">
+                        <div className="flex items-center gap-1.5 font-display tabular-nums leading-none">
+                          <span className={cn(
+                            "text-lg font-black tracking-tighter italic",
+                            (product.totalStock || 0) <= (product.minStock || 0) ? "text-red-600" : "text-slate-950"
+                          )}>
+                            {product.totalStock}
+                          </span>
+                          {(product.totalStock || 0) <= (product.minStock || 0) && (
+                            <div className="size-2 bg-red-600 rounded-full animate-pulse shadow-sm" />
+                          )}
+                        </div>
+                        <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mt-1">
+                          RESERVA DE ESTOQUE
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-8 py-5">
+                      <div className="flex items-center justify-end gap-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => setHistoryProduct(product)} className="p-2.5 hover:bg-red-800 hover:text-white text-slate-900 rounded-xl transition-all bg-white shadow-sm border border-slate-100" title="Histórico de Compras">
+                          <Eye size={16} />
+                        </button>
+                        <button onClick={() => openModal(product, true)} className="p-2.5 hover:bg-red-800 hover:text-white text-slate-900 rounded-xl transition-all bg-white shadow-sm border border-slate-100" title="Duplicar">
+                          <Copy size={16} />
+                        </button>
+                        <button onClick={() => openModal(product)} className="p-2.5 hover:bg-red-800 hover:text-white text-slate-900 rounded-xl transition-all bg-white shadow-sm border border-slate-100" title="Editar">
+                          <Edit2 size={16} />
+                        </button>
+                        <button onClick={() => confirmDelete(product)} className="p-2.5 hover:bg-slate-950 hover:text-white text-slate-900 rounded-xl transition-all bg-white shadow-sm border border-slate-100" title="Excluir">
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </React.Fragment>
             ))}
           </tbody>
         </table>
         </div>
 
         {/* Mobile List View */}
-        <div className="md:hidden divide-y divide-slate-100 px-2">
-          {filtered.map(product => (
-            <div key={product.id} className="p-4 space-y-3">
-              <div className="flex items-start justify-between">
+        <div className="md:hidden space-y-4 px-2 py-4">
+          {groupedProducts.map(({ categoryName, productsList }) => (
+            <div key={categoryName} className="bg-white rounded-[24px] border border-slate-200/60 shadow-sm overflow-hidden">
+              {/* Category Header */}
+              <button 
+                type="button"
+                onClick={() => {
+                  setExpandedCategories(prev => ({
+                    ...prev,
+                    [categoryName]: !prev[categoryName]
+                  }));
+                }}
+                className="w-full flex items-center justify-between p-4 bg-slate-50/70 hover:bg-slate-100/50 border-b border-slate-100 text-left outline-none"
+              >
                 <div className="flex items-center gap-3">
-                  <div className="size-10 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-600">
-                    <Package size={20} />
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-slate-900 text-sm leading-tight">{product.name}</h4>
-                    <span className="text-[10px] text-indigo-500 font-black uppercase tracking-widest">{product.category}</span>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-sm font-black text-slate-900">{formatCurrency(product.sellingPrice)}</div>
-                  <div className={cn(
-                    "text-[10px] font-bold uppercase",
-                    product.totalStock <= product.minStock ? "text-rose-500" : "text-slate-400"
-                  )}>
-                    Estoque: {product.totalStock}
+                  <span className="text-slate-500">
+                    {isCategoryExpanded(categoryName) ? <ChevronDown size={16} className="text-slate-800" /> : <ChevronRight size={16} className="text-slate-800" />}
+                  </span>
+                  <div className="flex flex-col">
+                    <span className="text-[10px] font-black text-slate-800 uppercase tracking-widest">{categoryName}</span>
+                    <span className="text-[9px] text-slate-500 font-bold uppercase mt-0.5">{productsList.length} {productsList.length === 1 ? 'PRODUTO' : 'PRODUTOS'}</span>
                   </div>
                 </div>
-              </div>
-              <div className="flex items-center justify-between pt-2">
-                <div className="flex gap-2">
-                  <div className="text-[9px] bg-slate-100 px-1.5 py-0.5 rounded font-bold text-slate-500 uppercase">Mg: {product.margin.toFixed(1)}%</div>
-                  <div className="text-[9px] bg-indigo-50 px-1.5 py-0.5 rounded font-bold text-indigo-500 uppercase">Mk: {calculateMarkup(product.costPrice, product.sellingPrice).toFixed(1)}%</div>
+              </button>
+
+              {/* Category Products */}
+              {isCategoryExpanded(categoryName) && (
+                <div className="divide-y divide-slate-100">
+                  {productsList.map(product => (
+                    <div key={product.id} className="p-4 space-y-3">
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="size-10 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-600">
+                            <Package size={20} />
+                          </div>
+                          <div>
+                            <h4 className="font-bold text-slate-900 text-sm leading-tight">{product.name}</h4>
+                            <span className="text-[10px] text-indigo-500 font-black uppercase tracking-widest">{product.category}</span>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-sm font-black text-slate-900">{formatCurrency(product.sellingPrice)}</div>
+                          <div className={cn(
+                            "text-[10px] font-bold uppercase",
+                            product.totalStock <= product.minStock ? "text-rose-500" : "text-slate-400"
+                          )}>
+                            Estoque: {product.totalStock}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between pt-2">
+                        <div className="flex gap-2">
+                          <div className="text-[9px] bg-slate-100 px-1.5 py-0.5 rounded font-bold text-slate-500 uppercase">Mg: {product.margin.toFixed(1)}%</div>
+                          <div className="text-[9px] bg-indigo-50 px-1.5 py-0.5 rounded font-bold text-indigo-500 uppercase">Mk: {calculateMarkup(product.costPrice, product.sellingPrice).toFixed(1)}%</div>
+                        </div>
+                        <div className="flex gap-2">
+                          <button onClick={() => setHistoryProduct(product)} className="p-2 bg-slate-100 text-slate-600 rounded-lg flex items-center gap-1 text-[10px] font-black uppercase tracking-wider px-3" title="Histórico">
+                            <Eye size={14} /> Histórico
+                          </button>
+                          <button onClick={() => openModal(product)} className="p-2 bg-slate-100 text-slate-600 rounded-lg"><Edit2 size={14} /></button>
+                          <button onClick={() => confirmDelete(product)} className="p-2 bg-rose-50 text-rose-600 rounded-lg"><Trash2 size={14} /></button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <div className="flex gap-2">
-                  <button onClick={() => setHistoryProduct(product)} className="p-2 bg-slate-100 text-slate-600 rounded-lg flex items-center gap-1 text-[10px] font-black uppercase tracking-wider px-3" title="Histórico">
-                    <Eye size={14} /> Histórico
-                  </button>
-                  <button onClick={() => openModal(product)} className="p-2 bg-slate-100 text-slate-600 rounded-lg"><Edit2 size={14} /></button>
-                  <button onClick={() => confirmDelete(product)} className="p-2 bg-rose-50 text-rose-600 rounded-lg"><Trash2 size={14} /></button>
-                </div>
-              </div>
+              )}
             </div>
           ))}
         </div>
