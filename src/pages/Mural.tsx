@@ -741,7 +741,7 @@ export default function Mural() {
                   {/* Polaroid Frame Container */}
                   <div 
                     className="aspect-square w-full rounded-2xl overflow-hidden bg-slate-950 relative border border-slate-100 select-none"
-                    style={{ cursor: (item.scale || 1.0) > 1.0 ? 'grab' : 'default' }}
+                    style={{ cursor: (item.scale || 1.0) > 0.1 ? 'grab' : 'default' }}
                     onMouseDown={(e) => handleMouseDown(e, item)}
                     onMouseMove={(e) => handleMouseMove(e, item)}
                     onMouseUp={() => handleMouseUpOrLeave(item)}
@@ -767,7 +767,7 @@ export default function Mural() {
                         <button 
                           onClick={async (e) => {
                             e.stopPropagation();
-                            const nextScale = Math.max(1.0, (item.scale || 1.0) - 0.1);
+                            const nextScale = Math.max(0.1, (item.scale || 1.0) - 0.1);
                             if (item.id) {
                               await updateDoc(doc(db, 'customer_photos', item.id), { scale: nextScale });
                             }
@@ -1074,7 +1074,7 @@ export default function Mural() {
                     <div className="space-y-4">
                       <div 
                         className="relative aspect-video rounded-2xl overflow-hidden border border-slate-200 group bg-slate-950 flex items-center justify-center select-none"
-                        style={{ cursor: photoScale > 1.0 ? 'grab' : 'default' }}
+                        style={{ cursor: photoScale > 0.1 ? 'grab' : 'default' }}
                         onMouseDown={handleModalPhotoMouseDown}
                         onMouseMove={handleModalPhotoMouseMove}
                         onMouseUp={handleModalPhotoMouseUpOrLeave}
@@ -1108,7 +1108,7 @@ export default function Mural() {
                         <button
                           type="button"
                           onClick={() => {
-                            const nextScale = Math.max(1.0, photoScale - 0.1);
+                            const nextScale = Math.max(0.1, photoScale - 0.1);
                             setPhotoScale(nextScale);
                           }}
                           className="size-7 bg-white hover:bg-slate-200 rounded-lg flex items-center justify-center text-slate-700 text-xs font-bold shadow-sm transition-all font-sans"

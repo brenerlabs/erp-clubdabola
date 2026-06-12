@@ -1758,6 +1758,10 @@ export default function Shipments() {
                     {shipment.supplierName}
                   </span>
                 )}
+
+                <span className="text-[9px] font-bold text-slate-400 uppercase bg-slate-50 border border-slate-100 rounded px-1.5 py-0.5 select-none font-mono">
+                  {getShipmentDuration(shipment).formatted}
+                </span>
               </div>
             </div>
           </div>
@@ -1801,24 +1805,15 @@ export default function Shipments() {
         </div>
 
         <div className="space-y-2 flex-1">
-          {shipment.status === 'Recebido' && (() => {
-            const duration = getShipmentDuration(shipment);
-            return (
-              <div className="space-y-1.5 w-full">
-                <div className="p-2.5 bg-emerald-50 border border-emerald-100 rounded-2xl flex items-center gap-2 text-emerald-800 text-[10px] font-black uppercase tracking-tight shadow-sm select-none">
-                  <span className="relative flex h-2 w-2 shrink-0">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                  </span>
-                  <span>📌 Produto(s) disponível para retirada!</span>
-                </div>
-                <div className="p-2.5 bg-slate-50/50 border border-slate-100/60 rounded-2xl flex items-center justify-between px-3 text-slate-500 text-[10px] font-bold uppercase tracking-tight select-none">
-                  <span className="flex items-center gap-1.5 text-slate-400"><Clock size={11} className="text-slate-400" /> Tempo Decorrido:</span>
-                  <span className="text-slate-800 font-extrabold font-mono text-[9px] bg-slate-100 px-1.5 py-0.5 rounded-lg border border-slate-200/50">{duration.formatted}</span>
-                </div>
-              </div>
-            );
-          })()}
+          {shipment.status === 'Recebido' && (
+            <div className="p-2 bg-emerald-50 border border-emerald-100/50 rounded-xl flex items-center gap-1.5 text-emerald-800 text-[10px] font-bold uppercase select-none">
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+              </span>
+              <span>Disponível para Retirada</span>
+            </div>
+          )}
 
           {shipment.status === 'Entregue' && (() => {
             const historyEntry = shipment.history?.find(h => h.status === 'Entregue');
@@ -1834,63 +1829,14 @@ export default function Shipments() {
                 : (shipment.updatedAt ? new Date(shipment.updatedAt) : new Date());
               deliveryDateStr = dateObj.toLocaleDateString('pt-BR');
             }
-            const duration = getShipmentDuration(shipment);
             return (
-              <div className="space-y-1.5 w-full">
-                <div className="p-2.5 bg-indigo-50 border border-indigo-100/50 rounded-2xl flex items-center gap-2 text-indigo-800 text-[10px] font-black uppercase tracking-tight shadow-sm select-none">
-                  <span>📅 Data de Entrega:</span>
-                  <span className="text-indigo-950 font-black font-display">{deliveryDateStr}</span>
-                </div>
-                {/* Destaque premium verde esmeralda para encomenda entregue */}
-                <div className="p-2.5 bg-emerald-50 border border-emerald-100 text-emerald-800 rounded-2xl flex items-center justify-between px-3 text-[10px] font-black uppercase tracking-tight shadow-sm select-none animate-fade-in">
-                  <span className="flex items-center gap-1.5">
-                    <CheckCircle2 size={12} className="text-emerald-600 shrink-0" />
-                    Tempo Total de Envio:
-                  </span>
-                  <span className="bg-emerald-600 border border-emerald-700/10 text-white font-mono px-2 py-0.5 rounded-lg text-[9px] font-black tracking-wider shadow-inner">
-                    {duration.formatted} ✅
-                  </span>
-                </div>
+              <div className="p-2 bg-indigo-50/50 border border-indigo-100/40 rounded-xl flex items-center justify-between px-2.5 text-indigo-800 text-[10px] font-bold uppercase select-none">
+                <span>Entregue em:</span>
+                <span className="font-extrabold">{deliveryDateStr}</span>
               </div>
             );
           })()}
 
-          {!['Recebido', 'Entregue'].includes(shipment.status) && (() => {
-            let etaText = '';
-            switch (shipment.status) {
-              case 'Processando':
-                etaText = 'Previsão: 15–20 dias úteis ⏳';
-                break;
-              case 'Postado':
-              case 'Em Trânsito':
-                etaText = 'Previsão: 10–15 dias úteis ✈️';
-                break;
-              case 'Chegou no Brasil':
-                etaText = 'Previsão: 5–8 dias úteis 🇧🇷';
-                break;
-              case 'Fiscalização':
-                etaText = 'Fiscalização ativa (até 5 dias úteis) ⚠️';
-                break;
-              case 'Em trânsito para o destino final':
-                etaText = 'Previsão: 2–4 dias úteis 🚀';
-                break;
-              default:
-                etaText = 'Prazo sob consulta';
-            }
-            const duration = getShipmentDuration(shipment);
-            return (
-              <div className="space-y-1.5 w-full">
-                <div className="p-2 bg-slate-50 border border-slate-100/60 rounded-2xl flex items-center justify-between px-3 text-slate-500 text-[10px] font-bold uppercase tracking-tight select-none">
-                  <span className="flex items-center gap-1"><Sparkles size={11} className="text-amber-500 fill-amber-400/20" /> Previsão Inteligente:</span>
-                  <span className="text-slate-800 font-extrabold">{etaText}</span>
-                </div>
-                <div className="p-2.5 bg-slate-50/50 border border-slate-100/45 rounded-2xl flex items-center justify-between px-3 text-slate-500 text-[10px] font-bold uppercase tracking-tight select-none">
-                  <span className="flex items-center gap-1.5 text-slate-400"><Clock size={11} className="text-slate-400" /> Dias Decorridos:</span>
-                  <span className="text-slate-800 font-extrabold font-mono text-[9px] bg-slate-100 px-1.5 py-0.5 rounded-lg border border-slate-200/50">{duration.formatted}</span>
-                </div>
-              </div>
-            );
-          })()}
 
           <AnimatePresence mode="wait">
             {showTimelineId === shipment.id ? (
@@ -1961,6 +1907,10 @@ export default function Shipments() {
                           const customerName = shipment.items.find(i => i.customerId === customerId)?.customerName;
                           const customerItems = shipment.items.filter(i => i.customerId === customerId);
                           const isExpanded = expandedGroups[shipment.id!]?.[customerId];
+                          
+                          const firstStatus = customerItems[0]?.status || 'Pendente';
+                          const allSameStatus = customerItems.every(i => (i.status || 'Pendente') === firstStatus);
+                          const currentGroupStatus = allSameStatus ? firstStatus : '';
 
                           return (
                             <div key={customerId} className="space-y-1">
@@ -1977,7 +1927,7 @@ export default function Shipments() {
                                 <div className="flex items-center gap-1.5 ml-2 shrink-0 select-none" onClick={e => e.stopPropagation()}>
                                   <span className="text-[8px] font-black text-slate-500 mr-1 uppercase">Lote:</span>
                                   <select
-                                    value=""
+                                    value={currentGroupStatus}
                                     onChange={(e) => {
                                       if (e.target.value) {
                                         updateCustomerGroupStatus(shipment.id!, customerId, e.target.value as any);
@@ -2205,6 +2155,10 @@ export default function Shipments() {
                     const customerItems = shipment.items.filter(i => i.customerId === customerId);
                     const isExpanded = expandedGroups[shipment.id!]?.[customerId];
 
+                    const firstStatus = customerItems[0]?.status || 'Pendente';
+                    const allSameStatus = customerItems.every(i => (i.status || 'Pendente') === firstStatus);
+                    const currentGroupStatus = allSameStatus ? firstStatus : '';
+
                     return (
                       <div key={customerId} className="space-y-1">
                         <button 
@@ -2220,7 +2174,7 @@ export default function Shipments() {
                           <div className="flex items-center gap-1.5 ml-2 shrink-0 select-none" onClick={e => e.stopPropagation()}>
                             <span className="text-[8px] font-black text-slate-500 mr-1 uppercase">Lote:</span>
                             <select
-                              value=""
+                              value={currentGroupStatus}
                               onChange={(e) => {
                                 if (e.target.value) {
                                   updateCustomerGroupStatus(shipment.id!, customerId, e.target.value as any);
@@ -2232,7 +2186,7 @@ export default function Shipments() {
                               <option value="Pendente">⏳ Pendente</option>
                               <option value="Recebido">✓ Recebido</option>
                               <option value="Faturado">💳 Faturado</option>
-                            </select>
+                              </select>
                             <span className="text-[8px] font-black text-red-800 bg-red-100/80 px-1.5 py-0.5 rounded-lg ml-1">
                               {customerItems.length} {customerItems.length === 1 ? 'Item' : 'Itens'}
                             </span>
