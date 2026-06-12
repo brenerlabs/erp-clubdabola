@@ -1171,68 +1171,80 @@ export default function Shipments() {
         return i;
       });
 
-      const targetItem = shipment.items.find(i => i.id === itemId);
-      if (targetItem) {
-        const previousStatus = targetItem.status || 'Pendente';
-
-        // 1. Monitoramento de Estoque de reposição automático
-        if (targetItem.customerId === 'estoque' && nextStatus === 'Recebido' && previousStatus !== 'Recebido') {
-          const prodRef = doc(db, 'products', targetItem.productId);
-          const prodSnap = await getDoc(prodRef);
-          if (prodSnap.exists()) {
-            const productData = { id: prodSnap.id, ...prodSnap.data() } as Product;
-            const updatedVariations = (productData.variations || []).map(v => {
-              if (v.id === targetItem.variationId) {
-                return { ...v, stock: (v.stock || 0) + targetItem.quantity };
-              }
-              return v;
-            });
-            const totalStock = updatedVariations.reduce((acc, v) => acc + (v.stock || 0), 0);
-            await updateDoc(prodRef, {
-              variations: updatedVariations,
-              totalStock,
-              updatedAt: serverTimestamp()
-            });
-          }
-        }
-
-        // 2. Faturamento Automático da Sale integrada + Registro financeiro na Compensação
-        if (nextStatus === 'Faturado' && previousStatus !== 'Faturado') {
-          const amount = targetItem.price * targetItem.quantity;
-          if (amount > 0) {
-            let pMethod: any = 'Dinheiro';
-            
-            if (targetItem.saleId) {
-              const saleRef = doc(db, 'sales', targetItem.saleId);
-              const saleSnap = await getDoc(saleRef);
-              if (saleSnap.exists()) {
-                const saleData = saleSnap.data() as Sale;
-                pMethod = saleData.paymentMethod || 'Dinheiro';
-                if (saleData.status === 'Pendente' || saleData.status === 'Pré-venda') {
-                  await updateDoc(saleRef, {
-                    status: 'Concluída',
-                    updatedAt: serverTimestamp()
-                  });
-                }
-              }
-            }
-
-            await addDoc(collection(db, 'transactions'), {
-              customerId: targetItem.customerId || 'Consumidor Final',
-              amount: amount,
-              type: 'payment',
-              paymentMethod: pMethod === 'Fiado' ? 'Dinheiro' : pMethod,
-              saleId: targetItem.saleId || null,
-              createdAt: serverTimestamp()
-            });
-          }
-        }
-      }
-
+      // Update the shipment status first! This guarantees swiftness and that the status change is saved immediately to Firestore
       await updateDoc(doc(db, 'shipments', shipmentId), {
         items: updatedItems,
         updatedAt: serverTimestamp()
       });
+
+      // Safely process background side-effects inside individual isolated try-catch blocks
+      const targetItem = shipment.items.find(i => i.id === itemId);
+      if (targetItem) {
+        const previousStatus = targetItem.status || 'Pendente';
+
+        // 1. Replenishment stock automatic check
+        if (targetItem.customerId === 'estoque' && nextStatus === 'Recebido' && previousStatus !== 'Recebido') {
+          if (targetItem.productId && targetItem.productId.trim()) {
+            try {
+              const prodRef = doc(db, 'products', targetItem.productId);
+              const prodSnap = await getDoc(prodRef);
+              if (prodSnap.exists()) {
+                const productData = { id: prodSnap.id, ...prodSnap.data() } as Product;
+                const updatedVariations = (productData.variations || []).map(v => {
+                  if (v.id === targetItem.variationId) {
+                    return { ...v, stock: (v.stock || 0) + targetItem.quantity };
+                  }
+                  return v;
+                });
+                const totalStock = updatedVariations.reduce((acc, v) => acc + (v.stock || 0), 0);
+                await updateDoc(prodRef, {
+                  variations: updatedVariations,
+                  totalStock,
+                  updatedAt: serverTimestamp()
+                });
+              }
+            } catch (err) {
+              console.error("Erro background ao atualizar estoque de peca única:", targetItem.productId, err);
+            }
+          }
+        }
+
+        // 2. Automated purchase flow status update and transaction registering
+        if (nextStatus === 'Faturado' && previousStatus !== 'Faturado') {
+          try {
+            const amount = targetItem.price * targetItem.quantity;
+            if (amount > 0) {
+              let pMethod: any = 'Dinheiro';
+              
+              if (targetItem.saleId && targetItem.saleId.trim()) {
+                const saleRef = doc(db, 'sales', targetItem.saleId);
+                const saleSnap = await getDoc(saleRef);
+                if (saleSnap.exists()) {
+                  const saleData = saleSnap.data() as Sale;
+                  pMethod = saleData.paymentMethod || 'Dinheiro';
+                  if (saleData.status === 'Pendente' || saleData.status === 'Pré-venda') {
+                    await updateDoc(saleRef, {
+                      status: 'Concluída',
+                      updatedAt: serverTimestamp()
+                    });
+                  }
+                }
+              }
+
+              await addDoc(collection(db, 'transactions'), {
+                customerId: targetItem.customerId || 'Consumidor Final',
+                amount: amount,
+                type: 'payment',
+                paymentMethod: pMethod === 'Fiado' ? 'Dinheiro' : pMethod,
+                saleId: targetItem.saleId || null,
+                createdAt: serverTimestamp()
+              });
+            }
+          } catch (err) {
+            console.error("Erro background faturamento automático da sale:", targetItem.saleId, err);
+          }
+        }
+      }
     } catch (err) {
       console.error("Erro ao atualizar status do item correspondente:", err);
       handleFirestoreError(err, OperationType.WRITE, 'shipments');
@@ -1251,6 +1263,13 @@ export default function Shipments() {
         return i;
       });
 
+      // Update the shipment status first to make the front-end react immediately
+      await updateDoc(doc(db, 'shipments', shipmentId), {
+        items: updatedItems,
+        updatedAt: serverTimestamp()
+      });
+
+      // Process side effects sequentially or asynchronously in a highly decoupled, non-blocking manner
       const customerItems = shipment.items.filter(i => i.customerId === customerId);
       for (const item of customerItems) {
         const previousStatus = item.status || 'Pendente';
@@ -1258,62 +1277,67 @@ export default function Shipments() {
 
         // 1. Monitoramento de Estoque de reposição automático
         if (item.customerId === 'estoque' && nextStatus === 'Recebido') {
-          const prodRef = doc(db, 'products', item.productId);
-          const prodSnap = await getDoc(prodRef);
-          if (prodSnap.exists()) {
-            const productData = { id: prodSnap.id, ...prodSnap.data() } as Product;
-            const updatedVariations = (productData.variations || []).map(v => {
-              if (v.id === item.variationId) {
-                return { ...v, stock: (v.stock || 0) + item.quantity };
+          if (item.productId && item.productId.trim()) {
+            try {
+              const prodRef = doc(db, 'products', item.productId);
+              const prodSnap = await getDoc(prodRef);
+              if (prodSnap.exists()) {
+                const productData = { id: prodSnap.id, ...prodSnap.data() } as Product;
+                const updatedVariations = (productData.variations || []).map(v => {
+                  if (v.id === item.variationId) {
+                    return { ...v, stock: (v.stock || 0) + item.quantity };
+                  }
+                  return v;
+                });
+                const totalStock = updatedVariations.reduce((acc, v) => acc + (v.stock || 0), 0);
+                await updateDoc(prodRef, {
+                  variations: updatedVariations,
+                  totalStock,
+                  updatedAt: serverTimestamp()
+                });
               }
-              return v;
-            });
-            const totalStock = updatedVariations.reduce((acc, v) => acc + (v.stock || 0), 0);
-            await updateDoc(prodRef, {
-              variations: updatedVariations,
-              totalStock,
-              updatedAt: serverTimestamp()
-            });
+            } catch (err) {
+              console.error("Erro ao atualizar estoque automático para lote:", item.productId, err);
+            }
           }
         }
 
         // 2. Faturamento Automático da Sale integrada + Registro financeiro na Compensação
         if (nextStatus === 'Faturado') {
-          const amount = item.price * item.quantity;
-          if (amount > 0) {
-            let pMethod: any = 'Dinheiro';
-            
-            if (item.saleId) {
-              const saleRef = doc(db, 'sales', item.saleId);
-              const saleSnap = await getDoc(saleRef);
-              if (saleSnap.exists()) {
-                const saleData = saleSnap.data() as Sale;
-                pMethod = saleData.paymentMethod || 'Dinheiro';
-                if (saleData.status === 'Pendente' || saleData.status === 'Pré-venda') {
-                  await updateDoc(saleRef, {
-                    status: 'Concluída',
-                    updatedAt: serverTimestamp()
-                  });
+          try {
+            const amount = item.price * item.quantity;
+            if (amount > 0) {
+              let pMethod: any = 'Dinheiro';
+              
+              if (item.saleId && item.saleId.trim()) {
+                const saleRef = doc(db, 'sales', item.saleId);
+                const saleSnap = await getDoc(saleRef);
+                if (saleSnap.exists()) {
+                  const saleData = saleSnap.data() as Sale;
+                  pMethod = saleData.paymentMethod || 'Dinheiro';
+                  if (saleData.status === 'Pendente' || saleData.status === 'Pré-venda') {
+                    await updateDoc(saleRef, {
+                      status: 'Concluída',
+                      updatedAt: serverTimestamp()
+                    });
+                  }
                 }
               }
-            }
 
-            await addDoc(collection(db, 'transactions'), {
-              customerId: item.customerId || 'Consumidor Final',
-              amount: amount,
-              type: 'payment',
-              paymentMethod: pMethod === 'Fiado' ? 'Dinheiro' : pMethod,
-              saleId: item.saleId || null,
-              createdAt: serverTimestamp()
-            });
+              await addDoc(collection(db, 'transactions'), {
+                customerId: item.customerId || 'Consumidor Final',
+                amount: amount,
+                type: 'payment',
+                paymentMethod: pMethod === 'Fiado' ? 'Dinheiro' : pMethod,
+                saleId: item.saleId || null,
+                createdAt: serverTimestamp()
+              });
+            }
+          } catch (err) {
+            console.error("Erro ao faturamento automático para lote de sale:", item.saleId, err);
           }
         }
       }
-
-      await updateDoc(doc(db, 'shipments', shipmentId), {
-        items: updatedItems,
-        updatedAt: serverTimestamp()
-      });
     } catch (err) {
       console.error("Erro ao atualizar lote de status do cliente:", err);
       handleFirestoreError(err, OperationType.WRITE, 'shipments');

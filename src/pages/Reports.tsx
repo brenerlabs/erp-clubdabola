@@ -24,6 +24,8 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 export default function Reports() {
   const [sales, setSales] = useState<Sale[]>([]);
@@ -377,6 +379,126 @@ export default function Reports() {
     window.open(whatsappUrl, '_blank');
   };
 
+  const handleDownloadPDF = () => {
+    const doc = new jsPDF();
+    
+    // Header section decoration
+    doc.setFillColor(153, 27, 27); // #991b1b
+    doc.rect(0, 0, 210, 32, 'F');
+    
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(16);
+    doc.text("ERP CLUB DA BOLA", 14, 14);
+    
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.text("SISTEMA DE GESTÃO - RELATÓRIO DE PERFORMANCE", 14, 22);
+    
+    const runDate = new Date().toLocaleString('pt-BR');
+    doc.setFontSize(7.5);
+    doc.text(`Gerado em: ${runDate}`, 154, 14);
+    
+    doc.setTextColor(30, 41, 59); // Slate-800
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    
+    let reportTitle = "";
+    let headers: string[][] = [];
+    let body: any[][] = [];
+    
+    if (activeTab === 'all') {
+      reportTitle = "Rastreamento Geral (Transações & Encomendas)";
+      headers = [['ID Único', 'Data', 'Cliente', 'Operação', 'Produtos Adquiridos', 'Preço / Total', 'Lote Correios']];
+      body = filteredRecords.map(rec => [
+        rec.id,
+        formatDateShort(rec.date),
+        rec.customerName,
+        rec.type,
+        rec.itemsSummary.map(it => `${it.qty}x ${it.name}`).join('\n'),
+        formatCurrency(rec.amount),
+        rec.linkedTrackingCode ? `${rec.linkedTrackingCode} (${rec.linkedShipmentStatus || 'Postado'})` : '-'
+      ]);
+    } else if (activeTab === 'products') {
+      reportTitle = "Estatísticas de Desempenho de Produtos";
+      headers = [['Métrica', 'Produto', 'Unidades Vendidas', 'Total Faturado', 'Vendas Cruzadas']];
+      body = productStats
+        .filter(p => !searchQuery || p.name.toLowerCase().includes(searchQuery.toLowerCase()))
+        .map((it, idx) => [
+          `#${idx + 1}`,
+          it.name,
+          String(it.qtySold),
+          formatCurrency(it.revenue),
+          `${it.buyers.size} compradores / ${it.uniqueSaleIds.size} vendas`
+        ]);
+    } else {
+      reportTitle = "Histórico de Performance e LTV de Clientes";
+      headers = [['Cliente', 'Totais Gastos (LTV)', 'Pedidos Concluídos', 'Itens Comprados', 'Última Compra']];
+      body = customerStats
+        .filter(c => !searchQuery || c.name.toLowerCase().includes(searchQuery.toLowerCase()))
+        .map(cStat => [
+          cStat.name,
+          formatCurrency(cStat.spentTotal),
+          `${cStat.ordersCount} pedido(s)`,
+          `${cStat.productsCount} unidade(s)`,
+          cStat.lastPurchaseDate ? formatDateShort(cStat.lastPurchaseDate) : '-'
+        ]);
+    }
+    
+    doc.text(reportTitle.toUpperCase(), 14, 42);
+    
+    // Subtitle filters
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    const filterText = `Parâmetros: Filtro de Busca: "${searchQuery || 'Nenhum'}" | Período: [${startDate || 'Início'} - ${endDate || 'Hoje'}]`;
+    doc.text(filterText, 14, 48);
+    
+    // Summary panel in PDF
+    doc.setFillColor(248, 250, 252); 
+    doc.rect(14, 52, 182, 15, 'F');
+    doc.setDrawColor(226, 232, 240);
+    doc.rect(14, 52, 182, 15, 'S');
+    
+    doc.setTextColor(100, 116, 139);
+    doc.setFontSize(7.5);
+    doc.text("VOLUME TOTAL SELECIONADO", 18, 57);
+    doc.text("REGISTROS EXPORTADOS", 85, 57);
+    doc.text("VALOR MÉDIO DO TICKET", 145, 57);
+    
+    doc.setTextColor(15, 23, 42);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.text(formatCurrency(metrics.totalAmount), 18, 63);
+    doc.text(`${metrics.count} registro(s)`, 85, 63);
+    doc.text(formatCurrency(metrics.avgTicket), 145, 63);
+    
+    autoTable(doc, {
+      startY: 72,
+      head: headers,
+      body: body,
+      theme: 'striped',
+      headStyles: { 
+        fillColor: [153, 27, 27], 
+        textColor: 255, 
+        fontSize: 8, 
+        fontStyle: 'bold',
+        halign: 'left'
+      },
+      bodyStyles: { 
+        fontSize: 7.5,
+        textColor: [51, 65, 85],
+        cellPadding: 3.5
+      },
+      alternateRowStyles: {
+        fillColor: [250, 250, 250]
+      },
+      margin: { left: 14, right: 14 }
+    });
+    
+    const cleanFileName = `relatorio-${activeTab}-${new Date().toISOString().substring(0, 10)}.pdf`;
+    doc.save(cleanFileName);
+  };
+
   return (
     <div className="space-y-6 pb-12">
       {/* Header design following elegant visual system */}
@@ -390,12 +512,23 @@ export default function Reports() {
         
         <div className="flex items-center gap-2">
           <button 
+            type="button"
             onClick={handleShareReport}
-            className="flex items-center gap-2 px-5 py-3 bg-red-800 hover:bg-black text-white font-black uppercase text-[10px] tracking-widest rounded-2xl transition-all shadow-md active:scale-95"
+            className="flex items-center gap-2 px-5 py-3 bg-amber-600 hover:bg-amber-700 text-white font-black uppercase text-[10px] tracking-widest rounded-2xl transition-all shadow-md active:scale-95 cursor-pointer"
             id="btn-share-report"
           >
             <Download size={14} />
-            Compartilhar Relatório
+            Compartilhar WhatsApp
+          </button>
+
+          <button 
+            type="button"
+            onClick={handleDownloadPDF}
+            className="flex items-center gap-2 px-5 py-3 bg-red-800 hover:bg-black text-white font-black uppercase text-[10px] tracking-widest rounded-2xl transition-all shadow-md active:scale-95 cursor-pointer"
+            id="btn-download-pdf"
+          >
+            <Download size={14} />
+            Exportar em PDF
           </button>
         </div>
       </div>
