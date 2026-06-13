@@ -1257,15 +1257,15 @@ export default function PDV() {
                   }
                 }}
                 className={cn(
-                  "bg-white p-3 rounded-xl border shadow-sm flex flex-col group hover:-translate-y-1 hover:shadow-md transition-all duration-300 ease-out relative overflow-hidden",
+                  "bg-white p-3.5 rounded-xl border flex flex-col justify-between group hover:-translate-y-1 hover:shadow-md transition-all duration-300 ease-out relative overflow-hidden min-h-[170px]",
                   isNoVar ? "cursor-pointer" : "",
                   clickedProductId === product.id 
                     ? "ring-2 ring-emerald-500 border-emerald-500 scale-95 shadow-lg shadow-emerald-500/10" 
                     : "border-slate-100 hover:border-red-800/30"
                 )}
               >
-                <div className="mb-2">
-                  <div className="flex items-center justify-between gap-2">
+                <div>
+                  <div className="flex items-center justify-between gap-2 mb-1.5">
                     <span className="px-1.5 py-0.5 bg-slate-100 text-[8px] font-black text-slate-400 rounded uppercase tracking-wider">{product.category}</span>
                     {product.gender && (
                       <span className={cn(
@@ -1278,9 +1278,9 @@ export default function PDV() {
                       </span>
                     )}
                   </div>
-                  <h4 className="font-sans font-black text-slate-900 mt-1 line-clamp-1 leading-none text-xs uppercase tracking-tight">{product.name}</h4>
+                  <h4 className="font-sans font-black text-slate-900 line-clamp-2 leading-tight text-xs uppercase tracking-tight">{product.name}</h4>
                 </div>
-                <div className="mt-auto space-y-2">
+                <div className="space-y-2 mt-3">
                   <div className="text-xs md:text-sm font-black text-red-800 font-display tabular-nums leading-none">{formatCurrency(product.sellingPrice)}</div>
                   <div className="flex flex-wrap gap-1 items-stretch justify-start">
                     {isNoVar ? (

@@ -1124,9 +1124,9 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:divide-x md:divide-slate-250/20">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {/* Pillar 1: Faturamento & Rentabilidade */}
-          <div className="space-y-4">
+          <div className="space-y-4 md:pr-8 md:border-r border-slate-100">
             <div className="flex justify-between items-center">
               <span className="text-[9px] font-black tracking-widest uppercase text-slate-400">01. Desempenho Comercial</span>
               <div className="size-8 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center font-bold">
@@ -1169,7 +1169,7 @@ export default function Dashboard() {
           </div>
 
           {/* Pillar 2: Controle de Crédito & Liquidez (Fiados) */}
-          <div className="space-y-4 md:pl-8">
+          <div className="space-y-4 md:px-8 md:border-r border-slate-100">
             <div className="flex justify-between items-center">
               <span className="text-[9px] font-black tracking-widest uppercase text-slate-400">02. Crédito & Liquidez</span>
               <div className={cn(
