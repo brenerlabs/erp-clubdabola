@@ -522,6 +522,30 @@ export default function Dashboard() {
 
   const debtors = customers.filter(c => (c.totalDebt || 0) > 0).sort((a, b) => (b.totalDebt || 0) - (a.totalDebt || 0));
   
+  const topGiroProducts = React.useMemo(() => {
+    const counts: Record<string, { id: string; name: string; category: string; quantity: number; revenue: number }> = {};
+    filteredSales.forEach(sale => {
+      sale.items.forEach(item => {
+        const prod = products.find(p => p.id === item.productId);
+        if (prod) {
+          const key = item.productId;
+          if (!counts[key]) {
+            counts[key] = {
+              id: item.productId,
+              name: prod.name,
+              category: prod.category || 'Geral',
+              quantity: 0,
+              revenue: 0
+            };
+          }
+          counts[key].quantity += item.quantity;
+          counts[key].revenue += item.price * item.quantity;
+        }
+      });
+    });
+    return Object.values(counts).sort((a, b) => b.quantity - a.quantity).slice(0, 4);
+  }, [filteredSales, products]);
+  
   const businessInsights = React.useMemo(() => {
     const list: { id: string; type: 'warning' | 'success' | 'info'; title: string; desc: string }[] = [];
 
@@ -1077,106 +1101,79 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* Consolidated Dual-Metric KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {/* Card 1: Faturamento & Rentabilidade */}
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.98, y: 12 }}
-          whileInView={{ opacity: 1, scale: 1, y: 0 }}
-          whileHover={{ scale: 1.03, y: -6, boxShadow: '0 25px 30px -5px rgba(16, 185, 129, 0.08), 0 10px 15px -6px rgba(16, 185, 129, 0.04)' }}
-          animate={{
-            boxShadow: ["0 1px 2px 0 rgba(0,0,0,0.05)", "0 10px 20px -3px rgba(16, 185, 129, 0.02)", "0 1px 2px 0 rgba(0,0,0,0.05)"]
-          }}
-          transition={{ 
-            boxShadow: { duration: 3, repeat: Infinity, ease: "easeInOut" },
-            scale: { duration: 0.2 },
-            y: { duration: 0.2 }
-          }}
-          viewport={{ once: true }}
-          className="bg-white p-6 rounded-[28px] border border-slate-200 shadow-sm transition-all flex flex-col justify-between group h-full relative overflow-hidden"
-        >
+      {/* Grade Modular de Desempenho Econômico, Liquidez e Giro (Bento Grid) */}
+      <motion.div 
+        initial={{ opacity: 0, y: 15 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="bg-white rounded-[32px] border border-slate-200/60 p-6 md:p-8 shadow-sm flex flex-col gap-6 relative overflow-hidden mb-6"
+      >
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-5 border-b border-slate-100">
           <div>
-            <div className="flex justify-between items-center mb-4">
-              <div className="flex items-center gap-2">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-450 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                </span>
-                <span className="text-[9px] font-black tracking-widest uppercase text-slate-400">Desempenho Comercial</span>
-              </div>
-              <div className="size-8 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center font-bold transition-transform group-hover:scale-110">
+            <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-800"></span>
+              </span>
+              Grade Modular de Desempenho Econômico e Giro
+            </h3>
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">Sincronização em tempo real de faturamento, liquidez de carteira e preferências do consumidor</p>
+          </div>
+          <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100">
+            {filteredSales.length} OPERAÇÕES ATIVAS
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:divide-x md:divide-slate-250/20">
+          {/* Pillar 1: Faturamento & Rentabilidade */}
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <span className="text-[9px] font-black tracking-widest uppercase text-slate-400">01. Desempenho Comercial</span>
+              <div className="size-8 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center font-bold">
                 <TrendingUp size={16} />
               </div>
             </div>
             
             <div className="space-y-1">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Faturamento Bruto</span>
-              <h3 className="text-2xl font-black text-slate-900 font-display tracking-tight leading-none uppercase tabular-nums">
+              <h3 className="text-3xl font-black text-slate-900 font-display tracking-tight leading-none uppercase tabular-nums">
                 {formatCurrency(stats.totalRevenue)}
               </h3>
             </div>
+
+            <div className="space-y-3 pt-3 border-t border-slate-100/70">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Lucro Líquido Real</span>
+                  <span className="text-xs font-black text-emerald-600 font-mono tracking-tight tabular-nums">
+                    {formatCurrency(stats.totalProfit)}
+                  </span>
+                </div>
+                {stats.totalRevenue > 0 && (
+                  <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 text-[10px] font-black rounded-lg uppercase tracking-wider font-mono">
+                    {((stats.totalProfit / stats.totalRevenue) * 100).toFixed(1)}% Mg
+                  </span>
+                )}
+              </div>
+
+              {/* Custom Profitability Progress Bar */}
+              <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                <motion.div 
+                  initial={{ width: 0 }}
+                  animate={{ width: `${stats.totalRevenue > 0 ? Math.min(100, Math.max(0, (stats.totalProfit / stats.totalRevenue) * 100)) : 0}%` }}
+                  transition={{ duration: 1, ease: 'easeOut' }}
+                  className="h-full bg-emerald-500 rounded-full"
+                />
+              </div>
+            </div>
           </div>
 
-          <div className="mt-5 space-y-3 pt-4 border-t border-slate-100/70">
-            <div className="flex items-center justify-between">
-              <div>
-                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Lucro Líquido Real</span>
-                <span className="text-xs font-black text-emerald-600 font-mono tracking-tight tabular-nums">
-                  {formatCurrency(stats.totalProfit)}
-                </span>
-              </div>
-              {stats.totalRevenue > 0 && (
-                <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 text-[10px] font-black rounded-lg uppercase tracking-wider font-mono">
-                  {((stats.totalProfit / stats.totalRevenue) * 100).toFixed(1)}% Margem
-                </span>
-              )}
-            </div>
-
-            {/* Custom Profitability Progress Bar */}
-            <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-              <motion.div 
-                initial={{ width: 0 }}
-                animate={{ width: `${stats.totalRevenue > 0 ? Math.min(100, Math.max(0, (stats.totalProfit / stats.totalRevenue) * 100)) : 0}%` }}
-                transition={{ duration: 1, ease: 'easeOut' }}
-                className="h-full bg-emerald-500 rounded-full"
-              />
-            </div>
-          </div>
-        </motion.div>
-
-        {/* Card 2: Controle de Crédito & Liquidez */}
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.98, y: 12 }}
-          whileInView={{ opacity: 1, scale: 1, y: 0 }}
-          whileHover={{ scale: 1.03, y: -6, boxShadow: '0 25px 30px -5px rgba(245, 158, 11, 0.08), 0 10px 15px -6px rgba(245, 158, 11, 0.04)' }}
-          animate={stats.totalDebt > 0 ? {
-            boxShadow: ["0 1px 2px 0 rgba(0,0,0,0.05)", "0 10px 20px -3px rgba(245, 158, 11, 0.04)", "0 1px 2px 0 rgba(0,0,0,0.05)"]
-          } : {}}
-          transition={{ 
-            boxShadow: { duration: 2.5, repeat: Infinity, ease: "easeInOut" },
-            scale: { duration: 0.2 },
-            y: { duration: 0.2 }
-          }}
-          viewport={{ once: true }}
-          className="bg-white p-6 rounded-[28px] border border-slate-200 shadow-sm transition-all flex flex-col justify-between group h-full relative overflow-hidden"
-        >
-          <div>
-            <div className="flex justify-between items-center mb-4">
-              <div className="flex items-center gap-2">
-                <span className="relative flex h-2 w-2">
-                  <span className={cn(
-                    "animate-ping absolute inline-flex h-full w-full rounded-full opacity-75",
-                    stats.totalDebt > 0 ? "bg-amber-400" : "bg-emerald-400"
-                  )}></span>
-                  <span className={cn(
-                    "relative inline-flex rounded-full h-2 w-2",
-                    stats.totalDebt > 0 ? "bg-amber-500" : "bg-emerald-500"
-                  )}></span>
-                </span>
-                <span className="text-[9px] font-black tracking-widest uppercase text-slate-400">Crédito & Liquidez</span>
-              </div>
+          {/* Pillar 2: Controle de Crédito & Liquidez (Fiados) */}
+          <div className="space-y-4 md:pl-8">
+            <div className="flex justify-between items-center">
+              <span className="text-[9px] font-black tracking-widest uppercase text-slate-400">02. Crédito & Liquidez</span>
               <div className={cn(
-                "size-8 rounded-xl flex items-center justify-center font-bold transition-transform group-hover:scale-110",
+                "size-8 rounded-xl flex items-center justify-center font-bold",
                 stats.totalDebt > 0 ? "bg-amber-50 text-amber-600" : "bg-emerald-50 text-emerald-600"
               )}>
                 <Wallet size={16} />
@@ -1185,57 +1182,83 @@ export default function Dashboard() {
             
             <div className="space-y-1">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Contas a Receber (Fiado)</span>
-              <h3 className="text-2xl font-black text-slate-900 font-display tracking-tight leading-none uppercase tabular-nums">
+              <h3 className="text-3xl font-black text-slate-900 font-display tracking-tight leading-none uppercase tabular-nums">
                 {formatCurrency(stats.totalDebt)}
               </h3>
             </div>
-          </div>
 
-          <div className="mt-5 pt-4 border-t border-slate-100/70 space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Eficiência de Caixa</span>
-                <span className={cn(
-                  "text-xs font-black font-mono tracking-tight",
-                  stats.efficiencyRatio > 85 ? "text-emerald-600" : "text-amber-600"
-                )}>
-                  {stats.efficiencyRatio.toFixed(1)}% Liquidado
+            <div className="space-y-3 pt-3 border-t border-slate-100/70">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Eficiência de Caixa</span>
+                  <span className={cn(
+                    "text-xs font-black font-mono tracking-tight",
+                    stats.efficiencyRatio > 85 ? "text-emerald-600" : "text-amber-600"
+                  )}>
+                    {stats.efficiencyRatio.toFixed(1)}% Liquidado
+                  </span>
+                </div>
+                <span className="text-[9px] font-black text-slate-500 uppercase tracking-wider bg-slate-50 px-2 py-0.5 rounded-md">
+                  {debtors.length} Contas
                 </span>
               </div>
-              <span className="text-[9px] font-black text-slate-500 uppercase tracking-wider bg-slate-50 px-2 py-0.5 rounded-md">
-                {debtors.length} Contas
-              </span>
-            </div>
-            {/* Soft inline progress bar with pulsating progress */}
-            <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden relative">
-              <motion.div 
-                initial={{ width: 0 }}
-                animate={{ width: `${stats.efficiencyRatio}%` }}
-                transition={{ duration: 1.2, ease: 'easeOut' }}
-                className={cn(
-                  "h-full rounded-full relative",
-                  stats.efficiencyRatio > 85 ? "bg-emerald-500" : "bg-amber-500"
-                )}
-              />
+              <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden relative">
+                <motion.div 
+                  initial={{ width: 0 }}
+                  animate={{ width: `${stats.efficiencyRatio}%` }}
+                  transition={{ duration: 1.2, ease: 'easeOut' }}
+                  className={cn(
+                    "h-full rounded-full relative",
+                    stats.efficiencyRatio > 85 ? "bg-emerald-500" : "bg-amber-500"
+                  )}
+                />
+              </div>
             </div>
           </div>
-        </motion.div>
 
+          {/* Pillar 3: Produtos de Alto Giro (Best Sellers) */}
+          <div className="space-y-3 md:pl-8">
+            <div className="flex justify-between items-center mb-1">
+              <span className="text-[9px] font-black tracking-widest uppercase text-slate-400">03. Produtos de Alto Giro</span>
+              <div className="size-8 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center font-bold">
+                <Sparkles size={14} className="text-blue-500 animate-spin" />
+              </div>
+            </div>
+
+            <div className="space-y-2.5 max-h-[160px] overflow-y-auto pr-1">
+              {topGiroProducts.length === 0 ? (
+                <div className="py-6 text-center text-slate-350 text-[10px] font-bold uppercase tracking-wider">Nenhum giro registrado</div>
+              ) : (
+                topGiroProducts.map((p, idx) => {
+                  const maxQty = topGiroProducts[0].quantity || 1;
+                  const percentOfTop = (p.quantity / maxQty) * 100;
+                  return (
+                    <div key={p.id} className="space-y-1">
+                      <div className="flex justify-between items-center text-[10px] font-black uppercase text-slate-700 leading-none">
+                        <span className="truncate max-w-[130px] tracking-tight">{idx + 1}. {p.name}</span>
+                        <span className="tabular-nums font-mono text-slate-500">{p.quantity} un <span className="opacity-40">({formatCurrency(p.revenue)})</span></span>
+                      </div>
+                      <div className="w-full h-1 bg-slate-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-blue-500 rounded-full" style={{ width: `${percentOfTop}%` }} />
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Outras Métricas Operacionais */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
         {/* Card 3: Operacional & Despesas */}
         <motion.div 
           initial={{ opacity: 0, scale: 0.98, y: 12 }}
           whileInView={{ opacity: 1, scale: 1, y: 0 }}
-          whileHover={{ scale: 1.03, y: -6, boxShadow: '0 25px 30px -5px rgba(59, 130, 246, 0.08), 0 10px 15px -6px rgba(59, 130, 246, 0.04)' }}
-          animate={{
-            boxShadow: ["0 1px 2px 0 rgba(0,0,0,0.05)", "0 10px 20px -3px rgba(59, 130, 246, 0.02)", "0 1px 2px 0 rgba(0,0,0,0.05)"]
-          }}
-          transition={{ 
-            boxShadow: { duration: 3.2, repeat: Infinity, ease: "easeInOut" },
-            scale: { duration: 0.2 },
-            y: { duration: 0.2 }
-          }}
+          whileHover={{ scale: 1.02, y: -4, boxShadow: '0 20px 25px -5px rgba(59, 130, 246, 0.05), 0 10px 10px -5px rgba(59, 130, 246, 0.02)' }}
           viewport={{ once: true }}
-          className="bg-white p-6 rounded-[28px] border border-slate-200 shadow-sm transition-all flex flex-col justify-between group h-full relative overflow-hidden"
+          className="bg-white p-6 rounded-[28px] border border-slate-200/80 shadow-sm transition-all flex flex-col justify-between group h-full relative overflow-hidden"
         >
           <div>
             <div className="flex justify-between items-center mb-4">
@@ -1287,7 +1310,7 @@ export default function Dashboard() {
               <div>
                 <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Despesas Operacionais</span>
                 <span className="text-xs font-black text-slate-700 font-mono tracking-tight tabular-nums">
-                  {formatCurrency(stats.totalExpenses)}
+                   {formatCurrency(stats.totalExpenses)}
                 </span>
               </div>
               {stats.totalRevenue > 0 && (
@@ -1297,7 +1320,6 @@ export default function Dashboard() {
               )}
             </div>
 
-            {/* Expenses vs Revenue Progress Bar */}
             <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
               <motion.div 
                 initial={{ width: 0 }}
@@ -1313,17 +1335,9 @@ export default function Dashboard() {
         <motion.div 
           initial={{ opacity: 0, scale: 0.98, y: 12 }}
           whileInView={{ opacity: 1, scale: 1, y: 0 }}
-          whileHover={{ scale: 1.03, y: -6, boxShadow: '0 25px 30px -5px rgba(124, 58, 237, 0.08), 0 10px 15px -6px rgba(124, 58, 237, 0.04)' }}
-          animate={{
-            boxShadow: ["0 1px 2px 0 rgba(0,0,0,0.05)", "0 10px 20px -3px rgba(124, 58, 237, 0.02)", "0 1px 2px 0 rgba(0,0,0,0.05)"]
-          }}
-          transition={{ 
-            boxShadow: { duration: 3.5, repeat: Infinity, ease: "easeInOut" },
-            scale: { duration: 0.2 },
-            y: { duration: 0.2 }
-          }}
+          whileHover={{ scale: 1.02, y: -4, boxShadow: '0 20px 25px -5px rgba(124, 58, 237, 0.05), 0 10px 10px -5px rgba(124, 58, 237, 0.02)' }}
           viewport={{ once: true }}
-          className="bg-white p-6 rounded-[28px] border border-slate-200 shadow-sm transition-all flex flex-col justify-between group h-full relative overflow-hidden"
+          className="bg-white p-6 rounded-[28px] border border-slate-200/80 shadow-sm transition-all flex flex-col justify-between group h-full relative overflow-hidden"
         >
           <div>
             <div className="flex justify-between items-center mb-4">
@@ -1362,7 +1376,6 @@ export default function Dashboard() {
               )}
             </div>
 
-            {/* Logistics Status Progress Bar */}
             <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
               <motion.div 
                 initial={{ width: 0 }}

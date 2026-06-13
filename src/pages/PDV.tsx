@@ -32,6 +32,7 @@ export default function PDV() {
   const [showSizeGuideModal, setShowSizeGuideModal] = useState(false);
   const [lastSale, setLastSale] = useState<any>(null);
   const [sendWhatsAppOnFinish, setSendWhatsAppOnFinish] = useState(true);
+  const [clickedProductId, setClickedProductId] = useState<string | null>(null);
 
   useEffect(() => {
     setIsSidebarOpen(false);
@@ -1242,81 +1243,95 @@ export default function PDV() {
         </div>
 
         <div className="flex-1 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 pb-4">
-          {filteredProducts.map(product => (
-            <div 
-              key={product.id} 
-              onClick={() => {
-                if (!product.variations || product.variations.length === 0) {
-                  addToCart(product, { id: 'unica', size: 'ÚNICA', color: '', stock: product.totalStock || 0 });
-                }
-              }}
-              className={cn(
-                "bg-white p-3 rounded-xl border border-slate-100 shadow-sm flex flex-col group hover:-translate-y-1 hover:shadow-md hover:border-red-800/30 transition-all duration-300 ease-out",
-                (!product.variations || product.variations.length === 0) && "cursor-pointer"
-              )}
-            >
-              <div className="mb-2">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="px-1.5 py-0.5 bg-slate-100 text-[8px] font-black text-slate-400 rounded uppercase tracking-wider">{product.category}</span>
-                  {product.gender && (
-                    <span className={cn(
-                      "px-1.5 py-0.5 text-[8px] font-black rounded uppercase tracking-wider",
-                      product.gender === 'Masculino' ? "bg-blue-50 text-blue-600" : 
-                      product.gender === 'Feminino' ? "bg-pink-50 text-pink-600" : 
-                      "bg-slate-50 text-slate-400"
-                    )}>
-                      {product.gender === 'Ambos' ? 'UNI' : product.gender.substring(0, 3)}
-                    </span>
-                  )}
+          {filteredProducts.map(product => {
+            const isNoVar = !product.variations || product.variations.length === 0;
+            return (
+              <div 
+                key={product.id} 
+                onClick={() => {
+                  if (isNoVar) {
+                    if (!product.isDropshipping && (product.totalStock || 0) <= 0) return;
+                    setClickedProductId(product.id!);
+                    setTimeout(() => setClickedProductId(null), 600);
+                    addToCart(product, { id: 'unica', size: 'ÚNICA', color: '', stock: product.totalStock || 0 });
+                  }
+                }}
+                className={cn(
+                  "bg-white p-3 rounded-xl border shadow-sm flex flex-col group hover:-translate-y-1 hover:shadow-md transition-all duration-300 ease-out relative overflow-hidden",
+                  isNoVar ? "cursor-pointer" : "",
+                  clickedProductId === product.id 
+                    ? "ring-2 ring-emerald-500 border-emerald-500 scale-95 shadow-lg shadow-emerald-500/10" 
+                    : "border-slate-100 hover:border-red-800/30"
+                )}
+              >
+                <div className="mb-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="px-1.5 py-0.5 bg-slate-100 text-[8px] font-black text-slate-400 rounded uppercase tracking-wider">{product.category}</span>
+                    {product.gender && (
+                      <span className={cn(
+                        "px-1.5 py-0.5 text-[8px] font-black rounded uppercase tracking-wider",
+                        product.gender === 'Masculino' ? "bg-blue-50 text-blue-600" : 
+                        product.gender === 'Feminino' ? "bg-pink-50 text-pink-600" : 
+                        "bg-slate-50 text-slate-400"
+                      )}>
+                        {product.gender === 'Ambos' ? 'UNI' : product.gender.substring(0, 3)}
+                      </span>
+                    )}
+                  </div>
+                  <h4 className="font-sans font-black text-slate-900 mt-1 line-clamp-1 leading-none text-xs uppercase tracking-tight">{product.name}</h4>
                 </div>
-                <h4 className="font-sans font-black text-slate-900 mt-1 line-clamp-1 leading-none text-xs uppercase tracking-tight">{product.name}</h4>
-              </div>
-              <div className="mt-auto space-y-2">
-                <div className="text-xs md:text-sm font-black text-red-800 font-display tabular-nums leading-none">{formatCurrency(product.sellingPrice)}</div>
-                <div className="flex flex-wrap gap-1 items-stretch justify-start">
-                  {!product.variations || product.variations.length === 0 ? (
-                    <button 
-                      type="button"
-                      disabled={!product.isDropshipping && (product.totalStock || 0) <= 0}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        addToCart(product, { id: 'unica', size: 'ÚNICA', color: '', stock: product.totalStock || 0 });
-                      }}
-                      className={cn(
-                        "text-[9px] px-2 py-1.5 border rounded font-black transition-all truncate uppercase relative flex-1 min-w-[45%] text-center",
-                        (!product.isDropshipping && (product.totalStock || 0) <= 0) 
-                          ? "bg-gray-50 border-gray-100 text-gray-200 cursor-not-allowed opacity-40 shadow-none scale-100" 
-                          : "bg-white border-slate-200 text-slate-600 hover:border-red-800 hover:bg-red-50 hover:text-red-800 active:scale-95 shadow-sm",
-                        product.isDropshipping && "border-amber-100 text-amber-600 bg-amber-50/20"
-                      )}
-                    >
-                      Selecionar <span className="opacity-40">{product.isDropshipping ? 'DS' : (product.totalStock || 0)}</span>
-                    </button>
-                  ) : (
-                    product.variations.map(v => (
+                <div className="mt-auto space-y-2">
+                  <div className="text-xs md:text-sm font-black text-red-800 font-display tabular-nums leading-none">{formatCurrency(product.sellingPrice)}</div>
+                  <div className="flex flex-wrap gap-1 items-stretch justify-start">
+                    {isNoVar ? (
                       <button 
-                        key={v.id}
-                        disabled={!product.isDropshipping && v.stock <= 0}
+                        type="button"
+                        disabled={!product.isDropshipping && (product.totalStock || 0) <= 0}
                         onClick={(e) => {
                           e.stopPropagation();
-                          addToCart(product, v);
+                          if (!product.isDropshipping && (product.totalStock || 0) <= 0) return;
+                          setClickedProductId(product.id!);
+                          setTimeout(() => setClickedProductId(null), 600);
+                          addToCart(product, { id: 'unica', size: 'ÚNICA', color: '', stock: product.totalStock || 0 });
                         }}
                         className={cn(
                           "text-[9px] px-2 py-1.5 border rounded font-black transition-all truncate uppercase relative flex-1 min-w-[45%] text-center",
-                          (!product.isDropshipping && v.stock <= 0) 
+                          (!product.isDropshipping && (product.totalStock || 0) <= 0) 
                             ? "bg-gray-50 border-gray-100 text-gray-200 cursor-not-allowed opacity-40 shadow-none scale-100" 
-                            : "bg-white border-slate-200 text-slate-600 hover:border-red-800 hover:bg-red-50 hover:text-red-800 active:scale-95 shadow-sm",
+                            : clickedProductId === product.id
+                              ? "bg-emerald-500 border-emerald-500 text-white shadow-none scale-95"
+                              : "bg-white border-slate-200 text-slate-600 hover:border-red-800 hover:bg-red-50 hover:text-red-800 active:scale-95 shadow-sm",
                           product.isDropshipping && "border-amber-100 text-amber-600 bg-amber-50/20"
                         )}
                       >
-                        {[v.size, v.color].map(x => x?.trim()).filter(x => x && x !== '' && x.toUpperCase() !== 'N/A').join(' - ')} <span className="opacity-40">{product.isDropshipping ? 'DS' : v.stock}</span>
+                        {clickedProductId === product.id ? 'Adicionado! ✓' : 'Selecionar'} <span className="opacity-40">{product.isDropshipping ? 'DS' : (product.totalStock || 0)}</span>
                       </button>
-                    ))
-                  )}
+                    ) : (
+                      product.variations.map(v => (
+                        <button 
+                          key={v.id}
+                          disabled={!product.isDropshipping && v.stock <= 0}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            addToCart(product, v);
+                          }}
+                          className={cn(
+                            "text-[9px] px-2 py-1.5 border rounded font-black transition-all truncate uppercase relative flex-1 min-w-[45%] text-center",
+                            (!product.isDropshipping && v.stock <= 0) 
+                              ? "bg-gray-50 border-gray-100 text-gray-200 cursor-not-allowed opacity-40 shadow-none scale-100" 
+                              : "bg-white border-slate-200 text-slate-600 hover:border-red-800 hover:bg-red-50 hover:text-red-800 active:scale-95 shadow-sm",
+                            product.isDropshipping && "border-amber-100 text-amber-600 bg-amber-50/20"
+                          )}
+                        >
+                          {[v.size, v.color].map(x => x?.trim()).filter(x => x && x !== '' && x.toUpperCase() !== 'N/A').join(' - ')} <span className="opacity-40">{product.isDropshipping ? 'DS' : v.stock}</span>
+                        </button>
+                      ))
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
@@ -1561,6 +1576,64 @@ export default function PDV() {
 
                   {/* Cart Items List */}
                   <div className="space-y-3">
+                    {/* Real-time Profitability/Margin Status Bar */}
+                    {(() => {
+                      if (cart.length === 0) return null;
+                      let totalCost = 0;
+                      cart.forEach(item => {
+                        const p = products.find(prod => prod.id === item.productId);
+                        totalCost += (p?.costPrice || 0) * item.quantity;
+                      });
+                      
+                      const cartSubtotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+                      const cartTotal = Math.max(0, cartSubtotal - safeFloat(discountVal));
+                      const profit = cartTotal - totalCost;
+                      const avgMargin = cartTotal > 0 ? (profit / cartTotal) * 100 : 0;
+                      const avgMarkup = totalCost > 0 ? (profit / totalCost) * 105 : 0; // Wait, let's calculate exact markup: (Profit / Cost) * 100
+                      const exactMarkup = totalCost > 0 ? (profit / totalCost) * 100 : 0;
+
+                      let badgeColor = "bg-slate-900/40 border-slate-800 text-slate-400";
+                      let statusText = "Margem Neutra";
+
+                      if (avgMargin < 15) {
+                        badgeColor = "bg-rose-950/30 border-rose-900/30 text-rose-400 animate-pulse";
+                        statusText = "Margem Crítica ⚠️";
+                      } else if (avgMargin >= 15 && avgMargin < 30) {
+                        badgeColor = "bg-amber-950/30 border-amber-900/30 text-amber-400";
+                        statusText = "Margem Moderada";
+                      } else if (avgMargin >= 30) {
+                        badgeColor = "bg-emerald-950/35 border-emerald-900/30 text-emerald-400";
+                        statusText = "Altamente Lucrativo 🚀";
+                      }
+
+                      return (
+                        <motion.div 
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className={cn("p-4 border rounded-2xl flex flex-col gap-2 mb-4 transition-all duration-300", badgeColor)}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-[9px] font-black uppercase tracking-widest text-white/50">Saúde da Venda (Real-time)</span>
+                            <span className="text-[10px] font-bold uppercase tracking-wider">{statusText}</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 mt-1">
+                            <div className="bg-black/40 p-2 rounded-xl border border-white/5 text-center">
+                              <p className="text-[8px] font-black text-white/40 uppercase tracking-widest">Margem Média</p>
+                              <p className="text-sm font-black text-white mt-1 tabular-nums">{avgMargin.toFixed(1)}%</p>
+                            </div>
+                            <div className="bg-black/40 p-2 rounded-xl border border-white/5 text-center">
+                              <p className="text-[8px] font-black text-white/40 uppercase tracking-widest leading-none">Markup Médio</p>
+                              <p className="text-sm font-black text-white mt-1 tabular-nums">{exactMarkup.toFixed(1)}%</p>
+                            </div>
+                          </div>
+                          <div className="flex justify-between text-[9px] font-black uppercase text-white/40 tracking-wider pt-1 border-t border-white/5">
+                            <span>Pontos de Custo: {formatCurrency(totalCost)}</span>
+                            <span>Lucro Estimado: {formatCurrency(profit)}</span>
+                          </div>
+                        </motion.div>
+                      );
+                    })()}
+
                     <div className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-2">Itens no Carrinho ({cart.length})</div>
                     
                     {/* Shipping Upselling Intelligence Alerts */}
