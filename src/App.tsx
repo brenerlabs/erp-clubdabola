@@ -228,35 +228,19 @@ export default function App() {
   return (
     <SidebarContext.Provider value={{ isSidebarOpen, setIsSidebarOpen }}>
       <div className="flex h-screen font-sans overflow-hidden relative bg-slate-50 text-slate-900">
-        {/* Mobile Drawer Overlay */}
-      <AnimatePresence>
-        {isMobileMenuOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setIsMobileMenuOpen(false)}
-            className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[80] md:hidden"
-          />
-        )}
-      </AnimatePresence>
-
-      {/* Modern Sidebar - Responsive */}
+      
+      {/* Modern Sidebar - Strictly for Desktop (hidden on mobile) */}
       <AnimatePresence mode="wait">
-        {(isSidebarOpen || isMobileMenuOpen) && (
+        {isSidebarOpen && (
           <motion.aside 
-            initial={isMobileMenuOpen ? { x: -300 } : false}
+            initial={{ width: 0, opacity: 0 }}
             animate={{ 
-              width: isMobileMenuOpen ? 280 : (isSidebarOpen ? 260 : 80),
-              x: 0,
-              position: isMobileMenuOpen ? 'fixed' : 'relative',
+              width: 260,
+              opacity: 1,
             }}
-            exit={isMobileMenuOpen ? { x: -300 } : undefined}
-            className={cn(
-              "flex flex-col shrink-0 shadow-2xl z-[90] transition-all duration-300 h-full border-r bg-slate-900 border-slate-800",
-              !isMobileMenuOpen && "hidden md:flex",
-              isMobileMenuOpen && "fixed top-0 left-0"
-            )}
+            exit={{ width: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="hidden md:flex flex-col shrink-0 shadow-2xl z-[90] h-full border-r bg-slate-900 border-slate-800 relative"
           >
             <div className="p-6 flex items-center justify-between border-b border-slate-800/50">
               <motion.div 
@@ -278,21 +262,12 @@ export default function App() {
                   )}
                 </div>
 
-                {(isSidebarOpen || isMobileMenuOpen) && (
+                {isSidebarOpen && (
                   <h1 className="text-white font-bold tracking-tight leading-none text-sm font-display">
                     ERP CLUB DA <span className="text-amber-500 uppercase font-display">BOLA</span>
                   </h1>
                 )}
               </motion.div>
-              
-              {isMobileMenuOpen && (
-                <button 
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className="p-2 text-slate-400 hover:text-white bg-white/5 rounded-xl transition-colors md:hidden"
-                >
-                  <X size={18} />
-                </button>
-              )}
             </div>
 
             <nav className="flex-1 mt-8 px-4 space-y-1.5 overflow-y-auto custom-scrollbar">
@@ -301,7 +276,6 @@ export default function App() {
                   key={item.id}
                   onClick={() => {
                     setActivePage(item.id as Page);
-                    if (isMobileMenuOpen) setIsMobileMenuOpen(false);
                   }}
                   className={cn(
                     "w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all text-sm font-bold group",
@@ -311,8 +285,8 @@ export default function App() {
                   )}
                 >
                   <item.icon size={20} className={cn(activePage === item.id ? 'text-white' : 'text-slate-500 group-hover:text-amber-500 transition-colors')} />
-                  {(isSidebarOpen || isMobileMenuOpen) && <span className="tracking-tight">{item.label}</span>}
-                  {(isSidebarOpen || isMobileMenuOpen) && activePage === item.id && (
+                  {isSidebarOpen && <span className="tracking-tight">{item.label}</span>}
+                  {isSidebarOpen && activePage === item.id && (
                     <motion.div layoutId="activeIndicator" className="ml-auto w-1.5 h-1.5 bg-white rounded-full shadow-glow" />
                   )}
                 </button>
@@ -320,7 +294,7 @@ export default function App() {
             </nav>
 
             <div className="p-4 mt-auto border-t border-slate-800/50 space-y-4">
-              {(isSidebarOpen || isMobileMenuOpen) && (
+              {isSidebarOpen && (
                 <div className="bg-amber-500/5 p-4 rounded-2xl border border-amber-500/10">
                   <p className="text-[10px] uppercase font-black text-amber-500 mb-1 tracking-widest">Base de Dados</p>
                   <button 
@@ -336,7 +310,7 @@ export default function App() {
                 className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl hover:bg-rose-500/10 hover:text-rose-400 transition-all text-slate-500 text-sm font-bold group"
               >
                 <LogOut size={20} className="group-hover:translate-x-1 transition-transform" />
-                {(isSidebarOpen || isMobileMenuOpen) && <span>Sair do Sistema</span>}
+                {isSidebarOpen && <span>Sair do Sistema</span>}
               </button>
             </div>
           </motion.aside>
@@ -347,15 +321,7 @@ export default function App() {
       <main className="flex-1 flex flex-col overflow-hidden relative">
          <header className="h-16 md:h-20 border-b flex items-center justify-between px-4 md:px-10 shrink-0 z-50 bg-white border-slate-100">
           <div className="flex items-center gap-4">
-             {/* Hamburger Menu - 3 Bars */}
-             <button 
-               onClick={() => setIsMobileMenuOpen(true)}
-               className="p-2.5 rounded-xl transition-all md:hidden border shadow-sm text-slate-600 bg-slate-50 border-slate-100 hover:bg-slate-100"
-             >
-               <Menu size={20} />
-             </button>
-
-             {/* Sidebar Toggle - Desktop */}
+             {/* Sidebar Toggle - Only on Desktop, no Hamburger Menu trigger on mobile */}
              <button 
                 onClick={() => setIsSidebarOpen(!isSidebarOpen)}
                 className="hidden md:flex p-2.5 rounded-xl transition-all border text-slate-400 bg-slate-50 border-slate-100 hover:text-slate-900"
@@ -433,7 +399,7 @@ export default function App() {
         </div>
 
         {/* Bottom Navigation for Native Mobile Feel */}
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-slate-950 border-t border-slate-800/60 z-50 flex items-center select-none shadow-[0_-8px_24px_rgba(0,0,0,0.3)]">
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-slate-900 border-t border-slate-800/50 z-50 flex items-center select-none shadow-xl">
           <div className="flex-1 flex items-center gap-2 overflow-x-auto no-scrollbar scroll-smooth px-4 h-full items-center">
             {menuItems.map((item) => {
               const IsActive = activePage === item.id;
@@ -442,15 +408,15 @@ export default function App() {
                   key={item.id}
                   onClick={() => {
                     setActivePage(item.id as Page);
-                    if (isMobileMenuOpen) setIsMobileMenuOpen(false);
                   }}
-                  className="flex items-center gap-2 h-10 px-4.5 rounded-[14px] transition-all whitespace-nowrap text-[10px] font-black uppercase tracking-[0.08em] shrink-0 duration-200"
-                  style={{
-                    backgroundColor: IsActive ? '#991b1b' : 'transparent',
-                    color: IsActive ? '#ffffff' : '#94a3b8'
-                  }}
+                  className={cn(
+                    "flex items-center gap-2 h-10 px-4 rounded-xl transition-all whitespace-nowrap text-[10px] font-bold uppercase tracking-wider shrink-0 duration-200",
+                    IsActive 
+                      ? "bg-red-800 text-white shadow-md shadow-red-900/10" 
+                      : "text-slate-400 hover:text-slate-200"
+                  )}
                 >
-                  <item.icon size={15} className={IsActive ? 'text-white' : 'text-slate-500'} />
+                  <item.icon size={14} className={IsActive ? 'text-white' : 'text-slate-500'} />
                   <span>{item.label.split(' ')[0]}</span>
                 </button>
               );

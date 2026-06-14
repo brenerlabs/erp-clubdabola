@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, where, orderBy, writeBatch } from 'firebase/firestore';
 import { Customer, Transaction, Sale, Product } from '../types';
-import { Plus, Search, Edit2, Trash2, Copy, User, Phone, Wallet, History, ArrowDownCircle, ArrowUpCircle, X, ShoppingBag, Star, FileText } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Copy, User, Phone, Wallet, History, ArrowDownCircle, ArrowUpCircle, X, ShoppingBag, Star, FileText, Sparkles } from 'lucide-react';
 import { formatCurrency, cn, cleanVariationName, cleanProductNameWithVariation, formatVariationWithGender, formatProductNameWithGender } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { SidebarContext } from '../App';
@@ -1178,9 +1178,17 @@ export default function Customers() {
                           {sale.items.map((item, idx) => {
                             const iGender = item.gender || products.find(p => p.id === item.productId)?.gender || 'Ambos';
                             return (
-                              <div key={idx} className="flex justify-between text-[10px] font-bold uppercase text-slate-500">
-                                <span>{item.quantity}x {formatProductNameWithGender(item.name, iGender)}</span>
-                                <span>{formatCurrency(item.price * item.quantity)}</span>
+                              <div key={idx} className="space-y-1.5 py-1.5 border-b border-dashed border-slate-100 last:border-0">
+                                <div className="flex justify-between text-[11px] font-bold uppercase text-slate-700">
+                                  <span>{item.quantity}x {formatProductNameWithGender(item.name, iGender)} {item.variationName && `[${item.variationName}]`}</span>
+                                  <span className="font-semibold text-slate-500">{formatCurrency(item.price * item.quantity)}</span>
+                                </div>
+                                {item.isCustomized && item.customName && (
+                                  <div className="flex items-center gap-1 text-[8.5px] font-black text-rose-700 bg-rose-50/50 border border-rose-100/35 rounded-lg px-2 py-0.5 w-fit">
+                                    <Sparkles size={10} className="text-rose-500" />
+                                    <span>Personalizado: {item.customName} | Nº: {item.customNumber || 'S/N'}</span>
+                                  </div>
+                                )}
                               </div>
                             );
                           })}

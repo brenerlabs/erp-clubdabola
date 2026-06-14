@@ -1106,9 +1106,9 @@ export default function Dashboard() {
         initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="bg-white rounded-[32px] border border-slate-200/60 p-6 md:p-8 shadow-sm flex flex-col gap-6 relative overflow-hidden mb-6"
+        className="bg-white rounded-[32px] border border-slate-200/50 p-6 md:p-8 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.06),0_1px_4px_rgba(0,0,0,0.01)] hover:shadow-[0_24px_60px_-10px_rgba(0,0,0,0.09),0_1px_6px_rgba(0,0,0,0.02)] transition-all duration-300 flex flex-col gap-6 relative overflow-hidden mb-6"
       >
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-5 border-b border-slate-100">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2">
           <div>
             <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
               <span className="relative flex h-2 w-2">
@@ -1123,6 +1123,8 @@ export default function Dashboard() {
             {filteredSales.length} OPERAÇÕES ATIVAS
           </div>
         </div>
+
+        <div className="h-px w-full bg-gradient-to-r from-transparent via-slate-200/80 to-transparent" />
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {/* Pillar 1: Faturamento & Rentabilidade */}
@@ -1141,7 +1143,9 @@ export default function Dashboard() {
               </h3>
             </div>
 
-            <div className="space-y-3 pt-3 border-t border-slate-100/70">
+            <div className="h-px w-full bg-gradient-to-r from-transparent via-slate-200/60 to-transparent" />
+            
+            <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <div>
                   <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Lucro Líquido Real</span>
@@ -1187,7 +1191,9 @@ export default function Dashboard() {
               </h3>
             </div>
 
-            <div className="space-y-3 pt-3 border-t border-slate-100/70">
+            <div className="h-px w-full bg-gradient-to-r from-transparent via-slate-200/60 to-transparent" />
+
+            <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <div>
                   <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Eficiência de Caixa</span>
@@ -1256,9 +1262,9 @@ export default function Dashboard() {
         <motion.div 
           initial={{ opacity: 0, scale: 0.98, y: 12 }}
           whileInView={{ opacity: 1, scale: 1, y: 0 }}
-          whileHover={{ scale: 1.02, y: -4, boxShadow: '0 20px 25px -5px rgba(59, 130, 246, 0.05), 0 10px 10px -5px rgba(59, 130, 246, 0.02)' }}
+          whileHover={{ y: -5 }}
           viewport={{ once: true }}
-          className="bg-white p-6 rounded-[28px] border border-slate-200/80 shadow-sm transition-all flex flex-col justify-between group h-full relative overflow-hidden"
+          className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200/50 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.06),0_1px_4px_rgba(0,0,0,0.01)] hover:shadow-[0_24px_60px_-10px_rgba(0,0,0,0.09),0_1px_6px_rgba(0,0,0,0.02)] transition-all duration-300 flex flex-col justify-between group h-full relative overflow-hidden"
         >
           <div>
             <div className="flex justify-between items-center mb-4">
@@ -1286,7 +1292,9 @@ export default function Dashboard() {
                 <p className="text-[8px] text-slate-400 font-bold uppercase leading-tight">Receita total dividida pelo nº de pedidos</p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 pt-3 border-t border-slate-100">
+              <div className="h-px w-full bg-gradient-to-r from-transparent via-slate-200/60 to-transparent my-1" />
+
+              <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-0.5">
                   <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Preço Médio p/ Peça</span>
                   <p className="text-sm font-black text-slate-800 tracking-tight tabular-nums">
@@ -1305,7 +1313,9 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="mt-5 space-y-3 pt-4 border-t border-slate-100/70">
+          <div className="h-px w-full bg-gradient-to-r from-transparent via-slate-200/60 to-transparent mt-5 mb-3" />
+
+          <div className="space-y-3">
             <div className="flex items-center justify-between">
               <div>
                 <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Despesas Operacionais</span>
@@ -1335,9 +1345,9 @@ export default function Dashboard() {
         <motion.div 
           initial={{ opacity: 0, scale: 0.98, y: 12 }}
           whileInView={{ opacity: 1, scale: 1, y: 0 }}
-          whileHover={{ scale: 1.02, y: -4, boxShadow: '0 20px 25px -5px rgba(124, 58, 237, 0.05), 0 10px 10px -5px rgba(124, 58, 237, 0.02)' }}
+          whileHover={{ y: -5 }}
           viewport={{ once: true }}
-          className="bg-white p-6 rounded-[28px] border border-slate-200/80 shadow-sm transition-all flex flex-col justify-between group h-full relative overflow-hidden"
+          className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200/50 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.06),0_1px_4px_rgba(0,0,0,0.01)] hover:shadow-[0_24px_60px_-10px_rgba(0,0,0,0.09),0_1px_6px_rgba(0,0,0,0.02)] transition-all duration-300 flex flex-col justify-between group h-full relative overflow-hidden"
         >
           <div>
             <div className="flex justify-between items-center mb-4">
@@ -1361,7 +1371,9 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="mt-5 space-y-3 pt-4 border-t border-slate-100/70">
+          <div className="h-px w-full bg-gradient-to-r from-transparent via-slate-200/60 to-transparent mt-5 mb-3" />
+
+          <div className="space-y-3">
             <div className="flex items-center justify-between">
               <div>
                 <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Logística Ativa</span>
@@ -2194,7 +2206,7 @@ function StatCard({ title, value, icon: Icon, trend, positive, variant = 'glass'
       viewport={{ once: true }}
       transition={{ duration: 0.4 }}
       className={cn(
-        "analytical-card p-5 rounded-2xl border relative overflow-hidden transition-all duration-300 group",
+        "analytical-card p-6 rounded-[32px] border relative overflow-hidden transition-all duration-300 group shadow-md hover:shadow-xl hover:translate-y-[-2px]",
         containerVariants[variant as keyof typeof containerVariants]
       )}
     >
@@ -2221,7 +2233,9 @@ function StatCard({ title, value, icon: Icon, trend, positive, variant = 'glass'
         <h3 className="text-2xl font-bold tracking-tight leading-none font-display tabular-nums uppercase">{value}</h3>
       </div>
 
-      <div className="mt-4 pt-3 border-t border-current/5 flex items-center justify-between">
+      <div className="h-px w-full bg-gradient-to-r from-transparent via-slate-200/60 to-transparent my-3.5" />
+
+      <div className="flex items-center justify-between">
         <p className={cn(
           "text-[9px] font-bold flex items-center gap-1.5",
           variant === 'glass' ? "text-slate-500" : "text-white/70"

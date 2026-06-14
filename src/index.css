@@ -1,29 +1,31 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Space+Grotesk:wght@300..700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Orbitron:wght@400..900&family=Outfit:wght@300..900&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=JetBrains+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
 
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
-  --font-display: "Space Grotesk", sans-serif;
-  --color-primary: #8c2828;
-  --color-accent: #c69c3a;
-  --color-sidebar: #0f172a;
+  --font-display: "Outfit", sans-serif;
+  --font-serif: "Playfair Display", Georgia, serif;
+  --color-primary: #7a1619;
+  --color-accent: #b59247;
+  --color-sidebar: #090d16;
   --color-background: #f8fafc;
   
-  --color-red-500: #d45d5d;
-  --color-red-600: #c54a4a;
-  --color-red-700: #b33b3b;
-  --color-red-800: #8c2828;
-  --color-red-900: #5a1818;
+  --color-red-500: #cb4b4d;
+  --color-red-600: #b5383a;
+  --color-red-700: #9b282a;
+  --color-red-800: #7a1619;
+  --color-red-900: #4f0b0d;
 }
 
 body {
-  @apply font-sans text-slate-800 antialiased bg-[#f8fafc] selection:bg-rose-100 selection:text-rose-900;
+  @apply font-sans text-slate-800 antialiased bg-[#f6f8fa] selection:bg-rose-100 selection:text-rose-950;
 }
 
 /* Global Font Overrides for High-Fidelity Swiss Design Feel */
 h1, h2, h3, h4, h5, h6 {
-  font-family: "Space Grotesk", sans-serif !important;
+  font-family: "Outfit", sans-serif !important;
+  letter-spacing: -0.02em;
 }
 
 /* Universal Light Mode Styles - Clean & High Contrast */
@@ -45,19 +47,19 @@ header.bg-white, header img, div.bg-white, section.bg-white {
 
 /* High Contrast Readable Text Overrides to prevent low visibility */
 .text-slate-900, .text-slate-850, .text-slate-800 {
-  color: #0f172a !important; /* Strong dark charcoal for headings/text */
+  color: #0d121f !important; /* Strong dark charcoal for headings/text */
 }
 
 .text-slate-700, .text-slate-650, .text-slate-600 {
-  color: #334155 !important; /* Highly legible dark slate for secondary text */
+  color: #2c3a4e !important; /* Highly legible dark slate for secondary text */
 }
 
 .text-slate-500, .text-slate-400 {
-  color: #64748b !important; /* Muted slate gray for subtitles/labels */
+  color: #5d6f88 !important; /* Muted slate gray for subtitles/labels */
 }
 
 .border-slate-50, .border-slate-100, .border-slate-200, .border-slate-350, .border-slate-300 {
-  border-color: #cbd5e1 !important; /* Subtle light gray borders */
+  border-color: rgba(226, 232, 240, 0.75) !important; /* Translucent, delicate high-end borders */
 }
 
 /* Table Enhancements */
@@ -73,10 +75,10 @@ tr:hover {
 th {
   background-color: #f1f5f9 !important;
   color: #475569 !important;
-  font-family: "Space Grotesk", sans-serif !important;
+  font-family: "Outfit", sans-serif !important;
   text-transform: uppercase;
-  font-weight: 800;
-  letter-spacing: 0.1em;
+  font-weight: 600;
+  letter-spacing: 0.15em;
 }
 
 input, select, textarea {
@@ -98,16 +100,16 @@ input, select, textarea {
 
 input:focus, select:focus, textarea:focus {
   outline: none !important;
-  border-color: #8c2828 !important;
-  box-shadow: 0 0 0 1px #8c2828 !important;
+  border-color: #7a1619 !important;
+  box-shadow: 0 0 0 1px #7a1619 !important;
 }
 
 .bg-slate-900 input:focus, .bg-slate-900 select:focus, .bg-slate-900 textarea:focus,
 .bg-slate-950 input:focus, .bg-slate-950 select:focus, .bg-slate-950 textarea:focus,
 .dark input:focus, .dark select:focus, .dark textarea:focus {
   outline: none !important;
-  border-color: #c69c3a !important;
-  box-shadow: 0 0 0 1px #c69c3a !important;
+  border-color: #b59247 !important;
+  box-shadow: 0 0 0 1px #b59247 !important;
 }
 
 select option {
@@ -122,16 +124,25 @@ select option {
 
 /* Readability for status and metrics indicators */
 .text-red-800, .text-red-900, .text-red-700 {
-  color: #8c2828 !important;
+  color: #7a1619 !important;
 }
 
 td.text-red-800, span.text-red-800 {
-  color: #8c2828 !important;
+  color: #7a1619 !important;
 }
 
-/* Shadow Optimizations: smooth, modern, soft shadows */
-.shadow-xl, .shadow-2xl, .shadow-md, .shadow-sm {
-  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 2px 6px -1px rgba(0, 0, 0, 0.03) !important;
+/* Shadow Optimizations: beautiful deep, diffuse executive shadows */
+.shadow-sm {
+  box-shadow: 0 1px 3px rgba(9, 13, 22, 0.02), 0 1px 2px rgba(9, 13, 22, 0.01) !important;
+}
+.shadow-md {
+  box-shadow: 0 12px 32px -4px rgba(9, 13, 22, 0.04), 0 2px 8px -2px rgba(9, 13, 22, 0.02) !important;
+}
+.shadow-xl {
+  box-shadow: 0 24px 48px -8px rgba(9, 13, 22, 0.06), 0 4px 16px -4px rgba(9, 13, 22, 0.02) !important;
+}
+.shadow-2xl {
+  box-shadow: 0 40px 80px -16px rgba(9, 13, 22, 0.08), 0 8px 32px -8px rgba(9, 13, 22, 0.03) !important;
 }
 
 /* Custom Scrollbar Override for Light Mode */
@@ -159,7 +170,7 @@ td.text-red-800, span.text-red-800 {
 }
 
 .btn-primary {
-  @apply bg-amber-500 text-slate-950 px-5 py-2.5 rounded-xl font-black text-[11px] uppercase tracking-wider hover:bg-amber-400 transition-all shadow-md active:scale-95 border-0;
+  @apply bg-amber-500 text-slate-950 px-5 py-2.5 rounded-xl font-bold text-[11px] uppercase tracking-wider hover:bg-amber-400 transition-all shadow-md active:scale-95 border-0;
 }
 
 .label-analytical {
@@ -187,4 +198,16 @@ td.text-red-800, span.text-red-800 {
 .overflow-momentum {
   -webkit-overflow-scrolling: touch;
 }
+
+/* Global High-Fidelity Executive Font-Weight Map */
+.font-black, .font-extrabold {
+  font-weight: 700 !important; /* Elegant corporate bold instead of harsh/exaggerated black */
+}
+.font-bold {
+  font-weight: 600 !important; /* Refined semibold for subtle body hierarchy */
+}
+.font-semibold {
+  font-weight: 500 !important; /* Medium weight for beautiful metadata indicators */
+}
+
 

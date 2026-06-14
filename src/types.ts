@@ -38,6 +38,9 @@ export interface SaleItem {
   price: number;
   isDropshipping?: boolean;
   gender?: 'Masculino' | 'Feminino' | 'Ambos';
+  isCustomized?: boolean;
+  customName?: string;
+  customNumber?: string;
 }
 
 export interface Sale {
@@ -69,6 +72,9 @@ export interface ShipmentItem {
   isDropshipping?: boolean;
   gender?: 'Masculino' | 'Feminino' | 'Ambos';
   status?: 'Pendente' | 'Recebido' | 'Faturado';
+  isCustomized?: boolean;
+  customName?: string;
+  customNumber?: string;
 }
 
 export interface ShipmentStatusHistory {

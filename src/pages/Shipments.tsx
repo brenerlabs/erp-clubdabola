@@ -760,7 +760,10 @@ export default function Shipments() {
       price: item.price,
       isDropshipping: item.isDropshipping || false,
       gender: pGender,
-      status: 'Pendente'
+      status: 'Pendente',
+      isCustomized: item.isCustomized || false,
+      customName: item.customName || null,
+      customNumber: item.customNumber || null
     }]);
   };
 
@@ -792,7 +795,10 @@ export default function Shipments() {
         price: item.price,
         isDropshipping: item.isDropshipping || false,
         gender: pGender,
-        status: 'Pendente'
+        status: 'Pendente',
+        isCustomized: item.isCustomized || false,
+        customName: item.customName || null,
+        customNumber: item.customNumber || null
       });
     });
 
@@ -1956,20 +1962,27 @@ export default function Shipments() {
                                   >
                                     {customerItems.map(item => (
                                       <div key={item.id} className="p-1.5 px-2.5 border-b border-slate-50 last:border-0 flex justify-between items-center text-[9px] hover:bg-slate-50/50 transition-colors">
-                                        <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                                          <span className="text-slate-600 font-bold uppercase truncate tracking-tight">{formatProductNameWithGender(item.productName, item.gender || products.find(p => p.id === item.productId)?.gender)}</span>
-                                          {item.isDropshipping && (
-                                            <span className="text-[6px] font-black bg-amber-500 text-white px-1 rounded italic leading-none">DS</span>
-                                          )}
-                                          {customerId === 'estoque' && (
-                                            <span className={cn(
-                                              "text-[7px] font-black px-1.5 py-0.5 rounded leading-none shrink-0 uppercase tracking-wider border",
-                                              shipment.stockProcessed 
-                                                ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
-                                                : "bg-amber-50 text-amber-700 border-amber-200"
-                                            )}>
-                                              {shipment.stockProcessed ? '✓ No Estoque' : '⏳ Aguardando'}
-                                            </span>
+                                        <div className="flex flex-col min-w-0 flex-1">
+                                          <div className="flex items-center gap-1.5 min-w-0">
+                                            <span className="text-slate-600 font-bold uppercase truncate tracking-tight">{formatProductNameWithGender(item.productName, item.gender || products.find(p => p.id === item.productId)?.gender)}</span>
+                                            {item.isDropshipping && (
+                                              <span className="text-[6px] font-black bg-amber-500 text-white px-1 rounded italic leading-none">DS</span>
+                                            )}
+                                            {customerId === 'estoque' && (
+                                              <span className={cn(
+                                                "text-[7px] font-black px-1.5 py-0.5 rounded leading-none shrink-0 uppercase tracking-wider border",
+                                                shipment.stockProcessed 
+                                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
+                                                  : "bg-amber-50 text-amber-700 border-amber-200"
+                                              )}>
+                                                {shipment.stockProcessed ? '✓ No Estoque' : '⏳ Aguardando'}
+                                              </span>
+                                            )}
+                                          </div>
+                                          {item.isCustomized && item.customName && (
+                                            <div className="text-[7.5px] font-extrabold uppercase text-amber-600 tracking-wider flex items-center gap-1 mt-0.5 leading-none">
+                                              ✨ {item.customName} • Nº {item.customNumber || 'S/N'}
+                                            </div>
                                           )}
                                         </div>
                                         <div className="flex items-center gap-2 ml-2 shrink-0" onClick={e => e.stopPropagation()}>
@@ -2203,20 +2216,27 @@ export default function Shipments() {
                             >
                               {customerItems.map(item => (
                                 <div key={item.id} className="p-1.5 px-2.5 border-b border-slate-50 last:border-0 flex justify-between items-center text-[9px] hover:bg-slate-50/50 transition-colors">
-                                  <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                                    <span className="text-slate-600 font-bold uppercase truncate tracking-tight">{formatProductNameWithGender(item.productName, item.gender || products.find(p => p.id === item.productId)?.gender)}</span>
-                                    {item.isDropshipping && (
-                                      <span className="text-[6px] font-black bg-amber-500 text-white px-1 rounded italic leading-none">DS</span>
-                                    )}
-                                    {customerId === 'estoque' && (
-                                      <span className={cn(
-                                        "text-[7px] font-black px-1.5 py-0.5 rounded leading-none shrink-0 uppercase tracking-wider border",
-                                        shipment.stockProcessed 
-                                          ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
-                                          : "bg-amber-50 text-amber-700 border-amber-200"
-                                      )}>
-                                        {shipment.stockProcessed ? '✓ No Estoque' : '⏳ Aguardando'}
-                                      </span>
+                                  <div className="flex flex-col min-w-0 flex-1">
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                      <span className="text-slate-600 font-bold uppercase truncate tracking-tight">{formatProductNameWithGender(item.productName, item.gender || products.find(p => p.id === item.productId)?.gender)}</span>
+                                      {item.isDropshipping && (
+                                        <span className="text-[6px] font-black bg-amber-500 text-white px-1 rounded italic leading-none">DS</span>
+                                      )}
+                                      {customerId === 'estoque' && (
+                                        <span className={cn(
+                                          "text-[7px] font-black px-1.5 py-0.5 rounded leading-none shrink-0 uppercase tracking-wider border",
+                                          shipment.stockProcessed 
+                                            ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
+                                            : "bg-amber-50 text-amber-700 border-amber-200"
+                                        )}>
+                                          {shipment.stockProcessed ? '✓ No Estoque' : '⏳ Aguardando'}
+                                        </span>
+                                      )}
+                                    </div>
+                                    {item.isCustomized && item.customName && (
+                                      <div className="text-[7.5px] font-extrabold uppercase text-amber-600 tracking-wider flex items-center gap-1 mt-0.5 leading-none">
+                                        ✨ {item.customName} • Nº {item.customNumber || 'S/N'}
+                                      </div>
                                     )}
                                   </div>
                                   <div className="flex items-center gap-2 ml-2 shrink-0" onClick={e => e.stopPropagation()}>
@@ -3054,6 +3074,9 @@ export default function Shipments() {
                                   <div className="min-w-0 flex-1">
                                     <p className="text-[10px] font-black text-slate-900 truncate uppercase">{item.name}</p>
                                     <p className="text-[9px] text-slate-400 font-bold uppercase">{formatVariationWithGender(item.variationName, item.gender || products.find(p => p.id === item.productId)?.gender) || 'Sem variação'}</p>
+                                    {item.isCustomized && item.customName && (
+                                      <p className="text-[8px] font-black uppercase text-rose-700 bg-rose-50/50 border border-rose-100/30 px-1.5 py-0.5 mt-0.5 rounded-md w-fit flex items-center gap-0.5 leading-none">✨ {item.customName} • Num {item.customNumber || 'S/N'}</p>
+                                    )}
                                   </div>
                                   <div className="flex items-center gap-3 ml-4">
                                     <span className="text-[10px] font-black text-slate-900">x{item.quantity}</span>

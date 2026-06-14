@@ -105,6 +105,15 @@ export default function PDV() {
     }).filter(item => item.quantity > 0));
   };
 
+  const updateCustomization = (pId: string, vId: string, updates: Partial<SaleItem>) => {
+    setCart(cart.map(item => {
+      if (item.productId === pId && item.variationId === vId) {
+        return { ...item, ...updates };
+      }
+      return item;
+    }));
+  };
+
   const safeFloat = (val: string | number) => {
     const f = parseFloat(val.toString().replace(',', '.'));
     return isFinite(f) ? f : 0;
@@ -339,7 +348,10 @@ export default function PDV() {
           quantity: item.quantity || 0,
           price: item.price || 0,
           isDropshipping: !!item.isDropshipping,
-          gender: item.gender || null
+          gender: item.gender || null,
+          isCustomized: !!item.isCustomized,
+          customName: item.customName || null,
+          customNumber: item.customNumber || null
         })),
         subtotal,
         discount: finalDiscount,
@@ -494,7 +506,11 @@ export default function PDV() {
     
     const itemsText = sale.items.map((i: any) => {
       const itemGender = i.gender || products.find(p => p.id === i.productId || p.name === i.name)?.gender || 'Ambos';
-      return `- ${formatProductNameWithGender(i.name, itemGender)} x ${i.quantity}: ${formatCurrency(i.price * i.quantity)}`;
+      let row = `- ${formatProductNameWithGender(i.name, itemGender)} [${i.variationName}] x ${i.quantity}: ${formatCurrency(i.price * i.quantity)}`;
+      if (i.isCustomized && i.customName) {
+        row += `\n  └ 👕 Personalizado: NOME: "${i.customName}" | Nº: ${i.customNumber || 'S/N'}`;
+      }
+      return row;
     }).join('\n');
 
     const isPre = sale.status === 'Pré-venda';
@@ -519,7 +535,20 @@ export default function PDV() {
       `-------------------------------------------\n` +
       `${footer}`;
 
-    const encoded = encodeURIComponent(message);
+    const hasPixPayment = isPre || (sale.debtAmount && sale.debtAmount > 0);
+    const pixAmount = isPre ? sale.total : (sale.debtAmount || 0);
+
+    const pixSection = hasPixPayment ? (
+      `💳 *DADOS PARA PAGAMENTO VIA PIX:*\n` +
+      `• Chave Celular: *(91) 99324-9580*\n` +
+      `• Chave Copiar/Colar: \`91993249580\`\n` +
+      `• Titular: Club da Bola\n` +
+      `• Valor: *${formatCurrency(pixAmount)}*\n` +
+      `-------------------------------------------\n`
+    ) : '';
+
+    const messageWithPix = message.replace(footer, pixSection + footer);
+    const encoded = encodeURIComponent(messageWithPix);
     const phone = sale.customerContact ? sale.customerContact.replace(/\D/g, '') : '';
     let finalPhone = phone;
     
@@ -543,7 +572,11 @@ export default function PDV() {
 
     const textItems = cart.map((i: any) => {
       const itemGender = i.gender || products.find(p => p.id === i.productId || p.name === i.name)?.gender || 'Ambos';
-      return `- ${formatProductNameWithGender(i.name, itemGender)} x${i.quantity}: ${formatCurrency(i.price * i.quantity)}`;
+      let row = `- ${formatProductNameWithGender(i.name, itemGender)} [${i.variationName}] x${i.quantity}: ${formatCurrency(i.price * i.quantity)}`;
+      if (i.isCustomized && i.customName) {
+        row += `\n  └ 👕 Personalizado: NOME: "${i.customName}" | Nº: ${i.customNumber || 'S/N'}`;
+      }
+      return row;
     }).join('\n');
 
     const whatsappText = `⚽ *CLUB DA BOLA - Orçamento* ⚽\n` +
@@ -557,6 +590,12 @@ export default function PDV() {
       (discountValue > 0 ? `💵 *Subtotal:* ${formatCurrency(subtotal)}\n` : '') +
       (discountValue > 0 ? `💸 *Desconto Aplicado:* -${formatCurrency(discountValue)}\n` : '') +
       `💰 *VALOR TOTAL: ${formatCurrency(total)}*\n` +
+      `-------------------------------------------\n` +
+      `💳 *DADOS PARA PAGAMENTO VIA PIX:*\n` +
+      `• Chave Celular: *(91) 99324-9580*\n` +
+      `• Chave Copiar/Colar: \`91993249580\`\n` +
+      `• Titular: Club da Bola\n` +
+      `• Valor: *${formatCurrency(total)}*\n` +
       `-------------------------------------------\n` +
       `📞 *Contato Club da Bola:*\n` +
       `• WhatsApp: (91) 99324-9580\n\n` +
@@ -724,7 +763,12 @@ export default function PDV() {
       const qtyStr = `${item.quantity} UN`;
       const subtotalItemStr = formatCurrency(item.price * item.quantity);
 
-      return [pIdx, cleanProductNameWithVariation(item.name), variationName, qtyStr, unitPriceStr, subtotalItemStr];
+      let productName = cleanProductNameWithVariation(item.name);
+      if (item.isCustomized && item.customName) {
+        productName += `\n[Personalizado: NOME: ${item.customName} | Nº: ${item.customNumber || 'S/N'}]`;
+      }
+
+      return [pIdx, productName, variationName, qtyStr, unitPriceStr, subtotalItemStr];
     });
 
     autoTable(doc, {
@@ -964,9 +1008,20 @@ export default function PDV() {
                         <div key={idx} className="flex justify-between items-center p-4 bg-white rounded-3xl border border-slate-100 shadow-sm">
                            <div>
                               <p className="text-sm font-black text-slate-900 uppercase tracking-tight">{formatProductNameWithGender(item.name, itemGender)}</p>
-                              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">
-                                {`x ${item.quantity}`}
-                              </p>
+                              <div className="flex items-center gap-3">
+                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">
+                                  {`x ${item.quantity}`} {item.variationName ? `[${item.variationName}]` : ''}
+                                </p>
+                              </div>
+                              {item.isCustomized && item.customName && (
+                                <div className="mt-2 flex flex-wrap items-center gap-1.5 bg-amber-500/10 border border-amber-500/20 rounded-xl px-2.5 py-1 text-[9px] font-black uppercase text-amber-700 tracking-wider w-fit">
+                                  <Sparkles size={11} className="text-amber-500 animate-pulse" />
+                                  <span>👕 Personalizado:</span>
+                                  <span className="font-bold underline text-slate-900">{item.customName}</span>
+                                  <span>• Nº</span>
+                                  <span className="font-bold underline text-slate-900">{item.customNumber || 'S/N'}</span>
+                                </div>
+                              )}
                            </div>
                            <p className="text-sm font-black text-red-800">{formatCurrency(item.price * item.quantity)}</p>
                         </div>
@@ -1761,6 +1816,61 @@ export default function PDV() {
                               <Trash2 size={18} />
                             </button>
                           </div>
+
+                          {/* Customization Details (Executive Jersey Print) */}
+                          {(() => {
+                            const productObj = products.find(p => p.id === item.productId);
+                            const isCamisa = (productObj?.category || '').toLowerCase().includes('camisa') || 
+                                             (item.name || '').toLowerCase().includes('camisa');
+                            if (!isCamisa) return null;
+                            
+                            return (
+                              <div className="mt-3 pt-3 border-t border-white/5 space-y-2">
+                                <label className="flex items-center gap-2 cursor-pointer group/custom select-none">
+                                  <input 
+                                    type="checkbox"
+                                    checked={!!item.isCustomized}
+                                    onChange={(e) => updateCustomization(item.productId, item.variationId, { 
+                                      isCustomized: e.target.checked,
+                                      customName: e.target.checked ? (item.customName || '') : '',
+                                      customNumber: e.target.checked ? (item.customNumber || '') : ''
+                                    })}
+                                    className="rounded border-white/10 bg-black/40 text-red-600 focus:ring-red-650 focus:ring-offset-slate-900 size-3.5"
+                                  />
+                                  <span className="text-[10px] font-bold uppercase text-white/60 group-hover/custom:text-white transition-colors tracking-wider flex items-center gap-1">
+                                    <Sparkles size={11} className="text-amber-400" /> Deseja Personalizar Camisa?
+                                  </span>
+                                </label>
+
+                                {item.isCustomized && (
+                                  <div className="grid grid-cols-2 gap-3 mt-2 animate-fadeIn duration-200">
+                                    <div className="space-y-1">
+                                      <span className="text-[8px] font-bold uppercase text-white/40 tracking-wider block">Nome nas Costas</span>
+                                      <input 
+                                        type="text" 
+                                        placeholder="Ex: BRUNO" 
+                                        value={item.customName || ''}
+                                        onChange={(e) => updateCustomization(item.productId, item.variationId, { customName: e.target.value.toUpperCase() })}
+                                        maxLength={15}
+                                        className="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-1.5 text-[11px] font-bold uppercase text-white placeholder-white/20 focus:border-red-500/50"
+                                      />
+                                    </div>
+                                    <div className="space-y-1">
+                                      <span className="text-[8px] font-bold uppercase text-white/40 tracking-wider block">Número</span>
+                                      <input 
+                                        type="text" 
+                                        placeholder="Ex: 10" 
+                                        value={item.customNumber || ''}
+                                        onChange={(e) => updateCustomization(item.productId, item.variationId, { customNumber: e.target.value.replace(/[^0-9]/g, '') })}
+                                        maxLength={3}
+                                        className="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-1.5 text-[11px] font-bold uppercase text-white placeholder-white/20 focus:border-red-500/50 text-center"
+                                      />
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </motion.div>
                       ))}
                     </AnimatePresence>

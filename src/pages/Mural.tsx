@@ -226,7 +226,10 @@ export default function Mural() {
         const foundSale = sales.find(s => s.id === selectedSaleId);
         if (foundSale) {
           saleDateStr = foundSale.createdAt?.toDate ? foundSale.createdAt.toDate().toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR');
-          saleItemsStr = foundSale.items.map(it => `${it.quantity}x ${it.name}`).join(', ');
+          saleItemsStr = foundSale.items.map(it => {
+            const extra = (it.isCustomized && it.customName) ? ` (*Pers: ${it.customName} - Nº: ${it.customNumber || 'S/N'}*)` : '';
+            return `${it.quantity}x ${it.name}${extra}`;
+          }).join(', ');
         }
       }
 
@@ -1228,7 +1231,7 @@ export default function Mural() {
                       <option value="">Não vincular a uma venda específica</option>
                       {customerSales.map(sl => (
                         <option key={sl.id} value={sl.id}>
-                          {sl.createdAt?.toDate ? sl.createdAt.toDate().toLocaleDateString('pt-BR') : 'Data Indisp'}: {sl.items.map(it => `${it.quantity}x ${it.name}`).join(' | ')} ({formatCurrency(sl.total)})
+                          {sl.createdAt?.toDate ? sl.createdAt.toDate().toLocaleDateString('pt-BR') : 'Data Indisp'}: {sl.items.map(it => `${it.quantity}x ${it.name}${it.isCustomized && it.customName ? ` [Personalizado: ${it.customName}]` : ''}`).join(' | ')} ({formatCurrency(sl.total)})
                         </option>
                       ))}
                     </select>
