@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, query, onSnapshot, addDoc, updateDoc, doc, serverTimestamp, writeBatch, orderBy, deleteDoc } from 'firebase/firestore';
-import { Product, Customer, SaleItem, Variation, Sale } from '../types';
+import { Product, Customer, SaleItem, Variation, Sale, generatePixPayload, getCustomerLoyaltyTier } from '../types';
 import { Search, ShoppingCart, User, Plus, Minus, Trash2, CreditCard, Banknote, QrCode, ClipboardList, Send, X, CheckCircle2, MessageCircle, FileImage, Share2, Receipt, FileText, Sparkles, HelpCircle, Camera, TrendingUp, Truck } from 'lucide-react';
 import { formatCurrency, cn, cleanObject, cleanVariationName, cleanProductNameWithVariation, formatVariationWithGender, formatProductNameWithGender } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { SidebarContext } from '../App';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { JerseyPreview } from '../components/JerseyPreview';
 
 const formatLocalYMD = (date: Date) => {
   const year = date.getFullYear();
@@ -563,8 +564,9 @@ export default function PDV() {
       `-------------------------------------------\n` +
       `${footer}`;
 
-    const hasPixPayment = !isPre && sale.paymentMethod === 'Fiado';
+    const hasPixPayment = !isPre && (sale.paymentMethod === 'Fiado' || sale.paymentMethod === 'Pix');
     const pixAmount = sale.debtAmount || sale.total;
+    const pixPayload = hasPixPayment ? generatePixPayload(pixAmount) : '';
 
     const pixSection = hasPixPayment ? (
       `💳 *DADOS PARA PAGAMENTO VIA PIX:*\n` +
@@ -572,10 +574,11 @@ export default function PDV() {
       `• Beneficiário: *Brener Gomes*\n` +
       `• Chave Pix Celular: \`91993249580\`\n` +
       `• Valor: *${formatCurrency(pixAmount)}*\n` +
+      `• Pix Copia e Cola (Toque para Copiar):\n\`${pixPayload}\`\n` +
       `-------------------------------------------\n`
     ) : '';
 
-    const messageWithPix = message.replace(footer, pixSection + footer);
+    const messageWithPix = message.replace(footer, pixSection + footer) + `\n\n_Produzido por: Brener Gomes_`;
     const encoded = encodeURIComponent(messageWithPix);
     const phone = sale.customerContact ? sale.customerContact.replace(/\D/g, '') : '';
     let finalPhone = phone;
@@ -607,6 +610,7 @@ export default function PDV() {
       return row;
     }).join('\n');
 
+    const budgetPixPayload = generatePixPayload(total);
     const whatsappText = `⚽ *CLUB DA BOLA - Orçamento* ⚽\n` +
       `-------------------------------------------\n` +
       `👤 *Cliente:* ${selectedCustomer ? selectedCustomer.name : 'Consumidor Final'}\n` +
@@ -619,9 +623,14 @@ export default function PDV() {
       (discountValue > 0 ? `💸 *Desconto Aplicado:* -${formatCurrency(discountValue)}\n` : '') +
       `💰 *VALOR TOTAL: ${formatCurrency(total)}*\n` +
       `-------------------------------------------\n` +
+      `💳 *DADOS PARA PAGAMENTO VIA PIX:*\n` +
+      `• Beneficiário: *Brener Gomes*\n` +
+      `• Chave Celular: \`91993249580\`\n` +
+      `• Pix Copia e Cola (Toque para Copiar):\n\`${budgetPixPayload}\`\n` +
+      `-------------------------------------------\n` +
       `📞 *Contato Club da Bola:*\n` +
       `• WhatsApp: (91) 99324-9580\n\n` +
-      `*Atenção:* O PDF completo e detalhado do seu orçamento foi gerado e baixado no seu dispositivo. Favor anexá-lo a esta conversa para fechar seu pedido!`;
+      `*Atenção:* O PDF completo e detalhado do seu orçamento foi gerado e baixado no seu dispositivo. Favor anexá-lo a esta conversa para fechar seu pedido!\n\n_Produzido por: Brener Gomes_`;
 
     const encoded = encodeURIComponent(whatsappText);
     const phone = selectedCustomer?.contact ? selectedCustomer.contact.replace(/\D/g, '') : '';
@@ -686,7 +695,7 @@ export default function PDV() {
     doc.setFontSize(10);
     doc.setTextColor(203, 213, 225); // slate-300
     doc.text(`PROPOSTA COMERCIAL / PRÉ-VENDA COMERCIAL`, 14, 32);
-    doc.text(`Gerado em: ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR')}`, hasLogo ? 105 : 140, 32);
+    doc.text(`Gerado em: ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR')} | Produzido por: Brener Gomes`, hasLogo ? 65 : 100, 32);
 
     // Club da Bola info section on header right or subheader
     // Let's make an organization details card
@@ -949,7 +958,7 @@ export default function PDV() {
                       type="button"
                       onClick={() => {
                         const custName = lastSale?.customerName || 'Campeão';
-                        const message = `Fala, *${custName}*! Tudo bem? ⚽\n\nPassando para agradecer a preferência no *Club da Bola*! Seu manto já chegou e aposto que ficou daquele jeito! 🤩\n\nPoderia fortalecer nossa opinião tirando uma foto irada vestindo a camisa para nosso Mural de Clientes? 📸\n\nPra te premiar, na sua próxima compra você ganha 10% de desconto ou Frete Grátis com o cupom: *DESCONTO10*. Que tal?\n\nForte abraço! Tamo junto! 🔥🤙`;
+                        const message = `Fala, *${custName}*! Tudo bem? ⚽\n\nPassando para agradecer a preferência no *Club da Bola*! Seu manto já chegou e aposto que ficou daquele jeito! 🤩\n\nPoderia fortalecer nossa opinião tirando uma foto irada vestindo a camisa para nosso Mural de Clientes? 📸\n\nPra te premiar, na sua próxima compra você ganha 10% de desconto ou Frete Grátis com o cupom: *DESCONTO10*. Que tal?\n\nForte abraço! Tamo junto! 🔥🤙\n\n_Produzido por: Brener Gomes_`;
                         const phone = lastSale.customerContact ? lastSale.customerContact.replace(/\D/g, '') : '';
                         const finalPhone = phone && phone.length <= 11 ? '55' + phone : phone;
                         window.open(`https://wa.me/${finalPhone}?text=${encodeURIComponent(message)}`, '_blank');
@@ -1890,37 +1899,48 @@ export default function PDV() {
                                 </label>
 
                                 {item.isCustomized && (
-                                  <div className="grid grid-cols-2 gap-3 mt-2 animate-fadeIn duration-200">
-                                    <div className="space-y-1">
-                                      <span className="text-[8px] font-bold uppercase text-white/40 tracking-wider block">Nome nas Costas</span>
-                                      <input 
-                                        type="text" 
-                                        placeholder="Ex: BRUNO" 
-                                        value={item.customName || ''}
-                                        onChange={(e) => updateCustomization(item.productId, item.variationId, { customName: e.target.value.toUpperCase() })}
-                                        maxLength={15}
-                                        className="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-1.5 text-base md:text-[11px] font-bold uppercase text-white placeholder-white/20 focus:border-red-500/50"
-                                      />
-                                    </div>
-                                    <div className="space-y-1">
-                                      <span className="text-[8px] font-bold uppercase text-white/40 tracking-wider block">Número (0-99)</span>
-                                      <input 
-                                        type="text" 
-                                        placeholder="Ex: 10" 
-                                        value={item.customNumber || ''}
-                                        onChange={(e) => {
-                                          const cleanNum = e.target.value.replace(/[^0-9]/g, '');
-                                          if (cleanNum === '') {
-                                            updateCustomization(item.productId, item.variationId, { customNumber: '' });
-                                          } else {
-                                            const parsed = parseInt(cleanNum, 10);
-                                            if (parsed <= 99) {
-                                              updateCustomization(item.productId, item.variationId, { customNumber: cleanNum.slice(0, 2) });
+                                  <div className="space-y-3 mt-2 animate-fadeIn duration-200">
+                                    <div className="grid grid-cols-2 gap-3">
+                                      <div className="space-y-1">
+                                        <span className="text-[8px] font-bold uppercase text-white/40 tracking-wider block">Nome nas Costas</span>
+                                        <input 
+                                          type="text" 
+                                          placeholder="Ex: BRUNO" 
+                                          value={item.customName || ''}
+                                          onChange={(e) => updateCustomization(item.productId, item.variationId, { customName: e.target.value.toUpperCase() })}
+                                          maxLength={15}
+                                          className="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-1.5 text-base md:text-[11px] font-bold uppercase text-white placeholder-white/20 focus:border-red-500/50"
+                                        />
+                                      </div>
+                                      <div className="space-y-1">
+                                        <span className="text-[8px] font-bold uppercase text-white/40 tracking-wider block">Número (0-99)</span>
+                                        <input 
+                                          type="text" 
+                                          placeholder="Ex: 10" 
+                                          value={item.customNumber || ''}
+                                          onChange={(e) => {
+                                            const cleanNum = e.target.value.replace(/[^0-9]/g, '');
+                                            if (cleanNum === '') {
+                                              updateCustomization(item.productId, item.variationId, { customNumber: '' });
+                                            } else {
+                                              const parsed = parseInt(cleanNum, 10);
+                                              if (parsed <= 99) {
+                                                updateCustomization(item.productId, item.variationId, { customNumber: cleanNum.slice(0, 2) });
+                                              }
                                             }
-                                          }
-                                        }}
-                                        maxLength={2}
-                                        className="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-1.5 text-base md:text-[11px] font-bold uppercase text-white placeholder-white/20 focus:border-red-500/50 text-center"
+                                          }}
+                                          maxLength={2}
+                                          className="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-1.5 text-base md:text-[11px] font-bold uppercase text-white placeholder-white/20 focus:border-red-500/50 text-center"
+                                        />
+                                      </div>
+                                    </div>
+
+                                    {/* Manto Live Canvas Preview Box */}
+                                    <div className="pt-1.5">
+                                      <JerseyPreview 
+                                        name={item.customName || ''} 
+                                        number={item.customNumber || ''} 
+                                        productName={item.name}
                                       />
                                     </div>
                                   </div>

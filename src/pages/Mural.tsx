@@ -675,7 +675,7 @@ export default function Mural() {
                     <button
                       type="button"
                       onClick={() => {
-                        const message = `Fala, *${insightName}*! Tudo bem? ⚽\n\nPassando para agradecer a preferência no *Club da Bola*! Seu manto já chegou e aposto que ficou daquele jeito! 🤩\n\nPoderia fortalecer sua opinião tirando uma foto irada vestindo a camisa para nosso Mural de Clientes? 📸\n\nPra te premiar, na sua próxima compra você ganha 10% de desconto ou Frete Grátis com o cupom: *${insightVoucher}*. Que tal?\n\nForte abraço! Tamo junto! 🔥🤙`;
+                        const message = `Fala, *${insightName}*! Tudo bem? ⚽\n\nPassando para agradecer a preferência no *Club da Bola*! Seu manto já chegou e aposto que ficou daquele jeito! 🤩\n\nPoderia fortalecer sua opinião tirando uma foto irada vestindo a camisa para nosso Mural de Clientes? 📸\n\nPra te premiar, na sua próxima compra você ganha 10% de desconto ou Frete Grátis com o cupom: *${insightVoucher}*. Que tal?\n\nForte abraço! Tamo junto! 🔥🤙\n\n_Produzido por: Brener Gomes_`;
                         navigator.clipboard.writeText(message);
                         setIsCopied(true);
                         setTimeout(() => setIsCopied(false), 2000);

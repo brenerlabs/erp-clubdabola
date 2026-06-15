@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, where, orderBy, writeBatch } from 'firebase/firestore';
-import { Customer, Transaction, Sale, Product } from '../types';
+import { Customer, Transaction, Sale, Product, generatePixPayload, getCustomerLoyaltyTier } from '../types';
 import { Plus, Search, Edit2, Trash2, Copy, User, Phone, Wallet, History, ArrowDownCircle, ArrowUpCircle, X, ShoppingBag, Star, FileText, Sparkles } from 'lucide-react';
 import { formatCurrency, cn, cleanVariationName, cleanProductNameWithVariation, formatVariationWithGender, formatProductNameWithGender } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -275,7 +275,7 @@ export default function Customers() {
         `💵 *Valor Compensado:* ${formatCurrency(compAmount)}\n` +
         `📝 *Saldo Devedor Restante:* ${formatCurrency(remainingDebt)}\n` +
         `-------------------------------------------\n` +
-        `Obrigado! Seu pagamento foi registrado e seu saldo foi atualizado.`;
+        `Obrigado! Seu pagamento foi registrado e seu saldo foi atualizado.\n\n_Produzido por: Brener Gomes_`;
 
       const encoded = encodeURIComponent(message);
       const phone = selectedCustomer.contact ? selectedCustomer.contact.replace(/\D/g, '') : '';
@@ -338,7 +338,7 @@ export default function Customers() {
     doc.setFontSize(10);
     doc.setTextColor(203, 213, 225); // slate-300
     doc.text(`EXTRATO DE AUDITORIA E COMPRAS`, 14, 32);
-    doc.text(`Gerado em: ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR')}`, hasLogo ? 105 : 140, 32);
+    doc.text(`Gerado em: ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR')} | Produzido por: Brener Gomes`, hasLogo ? 65 : 100, 32);
 
     // Customer Identity Section
     doc.setDrawColor(226, 232, 240); // slate-200
@@ -715,93 +715,117 @@ export default function Customers() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
-            {filtered.map(customer => (
-              <tr key={customer.id} className="hover:bg-slate-50/80 transition-colors group">
-                <td className="px-8 py-5">
-                  <div className="flex flex-col">
-                    <div className="font-bold text-slate-900 text-base tracking-tight leading-tight font-display">{customer.name}</div>
-                    <div className="flex items-center gap-2 mt-2">
-                       <span className="px-2 py-0.5 bg-slate-100 text-slate-400 text-[8px] font-black uppercase rounded tracking-widest font-mono">ERP ID: {customer.id?.slice(-4)}</span>
-                       {customer.totalDebt > 0 ? (
-                         <span className="px-2 py-0.5 bg-red-800/10 text-red-800 text-[8px] font-black uppercase rounded border border-red-800/20 shadow-sm">Débito Ativo</span>
-                       ) : (
-                         <span className="px-2 py-0.5 bg-amber-500/10 text-amber-700 text-[8px] font-black uppercase rounded border border-amber-500/20 shadow-sm">Conta Confiável</span>
-                       )}
+            {filtered.map(customer => {
+              const totalPurchased = sales
+                .filter(s => s.customerId === customer.id && s.status !== 'Cancelada' && s.status !== 'Pré-venda')
+                .reduce((acc, s) => acc + s.total, 0);
+              const loyalty = getCustomerLoyaltyTier(totalPurchased);
+              return (
+                <tr key={customer.id} className="hover:bg-slate-50/80 transition-colors group">
+                  <td className="px-8 py-5">
+                    <div className="flex flex-col">
+                      <div className="flex items-center gap-2">
+                        <div className="font-bold text-slate-900 text-base tracking-tight leading-tight font-display">{customer.name}</div>
+                        <span className={cn("px-2 py-0.5 text-[8px] font-black uppercase rounded-lg tracking-wider font-sans border flex items-center gap-1", loyalty.badgeClass)}>
+                          <Sparkles size={8} className={loyalty.iconColor} />
+                          {loyalty.name}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 mt-2">
+                         <span className="px-2 py-0.5 bg-slate-100 text-slate-400 text-[8px] font-black uppercase rounded tracking-widest font-mono">ERP ID: {customer.id?.slice(-4)}</span>
+                         {customer.totalDebt > 0 ? (
+                           <span className="px-2 py-0.5 bg-red-800/10 text-red-800 text-[8px] font-black uppercase rounded border border-red-800/20 shadow-sm">Débito Ativo</span>
+                         ) : (
+                           <span className="px-2 py-0.5 bg-amber-500/10 text-amber-700 text-[8px] font-black uppercase rounded border border-amber-500/20 shadow-sm">Conta Confiável</span>
+                         )}
+                         <span className="text-[8.5px] text-slate-400 font-bold">Histórico: {formatCurrency(totalPurchased)}</span>
+                      </div>
                     </div>
-                  </div>
-                </td>
-                <td className="px-8 py-5">
-                  <div className="flex items-center gap-2.5 text-[11px] font-black text-slate-600 uppercase tracking-tight">
-                    <Phone size={14} className="text-amber-500" />
-                    {customer.contact}
-                  </div>
-                </td>
-                <td className="px-8 py-5 text-right font-display tabular-nums">
-                  <div className={cn(
-                    "text-xl font-bold tracking-tight",
-                    customer.totalDebt > 0 ? 'text-red-800' : 'text-slate-900'
-                  )}>
-                    {formatCurrency(customer.totalDebt)}
-                  </div>
-                  {customer.totalDebt > 0 && <div className="text-[8px] font-black text-white bg-red-800 rounded-lg px-2 py-0.5 inline-block uppercase tracking-widest mt-1">Atenção Necessária</div>}
-                </td>
-                <td className="px-8 py-5">
-                  <div className="flex items-center justify-end gap-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => openHistory(customer)} className="p-2.5 hover:bg-red-800 hover:text-white text-slate-900 rounded-xl transition-all shadow-sm bg-white border border-slate-100" title="Histórico / Pagamento">
-                      <Wallet size={16} />
-                    </button>
-                    <button onClick={() => openModal(customer, true)} className="p-2.5 hover:bg-red-800 hover:text-white text-slate-900 rounded-xl transition-all shadow-sm bg-white border border-slate-100" title="Duplicar">
-                      <Copy size={16} />
-                    </button>
-                    <button onClick={() => openModal(customer)} className="p-2.5 hover:bg-red-800 hover:text-white text-slate-900 rounded-xl transition-all shadow-sm bg-white border border-slate-100" title="Editar">
-                      <Edit2 size={16} />
-                    </button>
-                    <button onClick={() => deleteDoc(doc(db, 'customers', customer.id!))} className="p-2.5 hover:bg-slate-950 hover:text-white text-slate-900 rounded-xl transition-all shadow-sm bg-white border border-slate-100" title="Excluir">
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
+                  </td>
+                  <td className="px-8 py-5">
+                    <div className="flex items-center gap-2.5 text-[11px] font-black text-slate-600 uppercase tracking-tight">
+                      <Phone size={14} className="text-amber-500" />
+                      {customer.contact}
+                    </div>
+                  </td>
+                  <td className="px-8 py-5 text-right font-display tabular-nums">
+                    <div className={cn(
+                      "text-xl font-bold tracking-tight",
+                      customer.totalDebt > 0 ? 'text-red-800' : 'text-slate-900'
+                    )}>
+                      {formatCurrency(customer.totalDebt)}
+                    </div>
+                    {customer.totalDebt > 0 && <div className="text-[8px] font-black text-white bg-red-800 rounded-lg px-2 py-0.5 inline-block uppercase tracking-widest mt-1">Atenção Necessária</div>}
+                  </td>
+                  <td className="px-8 py-5">
+                    <div className="flex items-center justify-end gap-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => openHistory(customer)} className="p-2.5 hover:bg-red-800 hover:text-white text-slate-900 rounded-xl transition-all shadow-sm bg-white border border-slate-100" title="Histórico / Pagamento">
+                        <Wallet size={16} />
+                      </button>
+                      <button onClick={() => openModal(customer, true)} className="p-2.5 hover:bg-red-800 hover:text-white text-slate-900 rounded-xl transition-all shadow-sm bg-white border border-slate-100" title="Duplicar">
+                        <Copy size={16} />
+                      </button>
+                      <button onClick={() => openModal(customer)} className="p-2.5 hover:bg-red-800 hover:text-white text-slate-900 rounded-xl transition-all shadow-sm bg-white border border-slate-100" title="Editar">
+                        <Edit2 size={16} />
+                      </button>
+                      <button onClick={() => deleteDoc(doc(db, 'customers', customer.id!))} className="p-2.5 hover:bg-slate-950 hover:text-white text-slate-900 rounded-xl transition-all shadow-sm bg-white border border-slate-100" title="Excluir">
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
         </div>
 
         {/* Mobile Card View */}
         <div className="md:hidden divide-y divide-slate-100">
-          {filtered.map(customer => (
-            <div key={customer.id} className="p-4 space-y-3">
-              <div className="flex items-start justify-between">
-                <div>
-                  <h4 className="font-bold text-slate-900 text-sm">{customer.name}</h4>
-                  <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium">
-                    <Phone size={12} className="text-emerald-500" />
-                    {customer.contact}
+          {filtered.map(customer => {
+            const totalPurchased = sales
+              .filter(s => s.customerId === customer.id && s.status !== 'Cancelada' && s.status !== 'Pré-venda')
+              .reduce((acc, s) => acc + s.total, 0);
+            const loyalty = getCustomerLoyaltyTier(totalPurchased);
+            return (
+              <div key={customer.id} className="p-4 space-y-3 bg-white">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <h4 className="font-bold text-slate-900 text-sm leading-tight">{customer.name}</h4>
+                      <span className={cn("px-1.5 py-0.5 text-[7.5px] font-black uppercase rounded tracking-wider font-sans border", loyalty.badgeClass)}>
+                        {loyalty.name}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium mt-1">
+                      <Phone size={12} className="text-emerald-500" />
+                      {customer.contact}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Saldo</p>
+                    <p className={cn(
+                      "text-sm font-black",
+                      customer.totalDebt > 0 ? "text-rose-500" : "text-emerald-600"
+                    )}>
+                      {formatCurrency(customer.totalDebt)}
+                    </p>
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Saldo</p>
-                  <p className={cn(
-                    "text-sm font-black",
-                    customer.totalDebt > 0 ? "text-rose-500" : "text-emerald-600"
-                  )}>
-                    {formatCurrency(customer.totalDebt)}
-                  </p>
+                <div className="flex items-center justify-between pt-2 border-t border-slate-50">
+                  <div className="flex gap-2">
+                    <button onClick={() => openHistory(customer)} className="px-3 py-1.5 bg-amber-500/10 text-amber-700 rounded-lg text-[9px] font-black uppercase tracking-widest flex items-center gap-1 border border-amber-500/20">
+                      <Wallet size={12} /> Pagar / Extrato
+                    </button>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => openModal(customer)} className="p-2 bg-slate-100 text-slate-600 rounded-lg"><Edit2 size={14} /></button>
+                    <button onClick={() => deleteDoc(doc(db, 'customers', customer.id!))} className="p-2 bg-rose-50 text-rose-600 rounded-lg"><Trash2 size={14} /></button>
+                  </div>
                 </div>
               </div>
-              <div className="flex items-center justify-between pt-2">
-                <div className="flex gap-2">
-                  <button onClick={() => openHistory(customer)} className="px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-lg text-[9px] font-black uppercase tracking-widest flex items-center gap-1">
-                    <Wallet size={12} /> Pagar
-                  </button>
-                </div>
-                <div className="flex gap-2">
-                  <button onClick={() => openModal(customer)} className="p-2 bg-slate-100 text-slate-600 rounded-lg"><Edit2 size={14} /></button>
-                  <button onClick={() => deleteDoc(doc(db, 'customers', customer.id!))} className="p-2 bg-rose-50 text-rose-600 rounded-lg"><Trash2 size={14} /></button>
-                </div>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
@@ -950,116 +974,155 @@ export default function Customers() {
 
       {/* History Modal */}
       <AnimatePresence>
-        {isHistoryOpen && selectedCustomer && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={() => setIsHistoryOpen(false)}
-              className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" 
-            />
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-3xl shadow-2xl relative z-10 w-full max-w-2xl overflow-hidden flex flex-col max-h-[85vh] border border-slate-200 font-sans"
-            >
-              <div className="p-8 border-b border-amber-500 bg-slate-950 text-white relative overflow-hidden">
-                <div className="absolute top-0 right-0 p-8 opacity-5">
-                   <Wallet size={150} />
-                </div>
-                <div className="flex items-center justify-between mb-8 relative">
-                  <div className="flex items-center gap-4">
-                    <div className="size-12 bg-red-800 rounded-2xl flex items-center justify-center shadow-lg shadow-red-900/20 border border-white/10">
-                      <User size={24} />
+        {isHistoryOpen && selectedCustomer && (() => {
+          const totalPurchased = sales
+            .filter(s => s.customerId === selectedCustomer.id && s.status !== 'Cancelada' && s.status !== 'Pré-venda')
+            .reduce((acc, s) => acc + s.total, 0);
+          const loyalty = getCustomerLoyaltyTier(totalPurchased);
+          const numericPaymentAmount = parseFloat(paymentAmount) || 0;
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <motion.div 
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                onClick={() => setIsHistoryOpen(false)}
+                className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" 
+              />
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+                className="bg-white rounded-3xl shadow-2xl relative z-10 w-full max-w-2xl overflow-hidden flex flex-col max-h-[85vh] border border-slate-200 font-sans"
+              >
+                <div className="p-8 border-b border-amber-500 bg-slate-950 text-white relative overflow-hidden">
+                  <div className="absolute top-0 right-0 p-8 opacity-5">
+                     <Wallet size={150} />
+                  </div>
+                  <div className="flex items-center justify-between mb-8 relative">
+                    <div className="flex items-center gap-4">
+                      <div className="size-12 bg-red-800 rounded-2xl flex items-center justify-center shadow-lg shadow-red-900/20 border border-white/10">
+                        <User size={24} />
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-bold tracking-tight uppercase font-display">
+                          Cliente: <span className="text-amber-500">{selectedCustomer.name}</span>
+                        </h3>
+                        <div className="flex items-center gap-2 mt-2 flex-wrap">
+                          <span className={cn("px-2 py-0.5 text-[8.5px] font-black uppercase rounded-lg tracking-wider font-sans border shadow-sm flex items-center gap-1", loyalty.badgeClass)}>
+                            <Sparkles size={8} className={loyalty.iconColor} />
+                            Fidelidade: {loyalty.name}
+                          </span>
+                          <span className="text-white/40 text-[9px] font-black uppercase tracking-wider font-sans">
+                            Acumulado: {formatCurrency(totalPurchased)} (Cashback {loyalty.cashback * 100}%)
+                          </span>
+                        </div>
+                        <p className="text-amber-500 text-[9.5px] font-bold mt-1.5 uppercase tracking-wide">
+                          {loyalty.nextTierMessage}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="text-2xl font-bold tracking-tight uppercase font-display">Exibição de Status: <span className="text-amber-500">{selectedCustomer.name}</span></h3>
-                      <p className="text-white/40 text-[10px] font-black uppercase tracking-[0.3em] font-sans">{selectedCustomer.contact} • Auditoria de Inteligência</p>
+                    <div className="flex items-center gap-4">
+                      <button 
+                        onClick={exportCustomerPDF}
+                        className="px-4 py-2.5 bg-white/10 hover:bg-white/20 border border-white/10 text-white rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 active:scale-95"
+                        title="Exportar Extrato Consolidado PDF"
+                      >
+                        <FileText size={14} className="text-amber-500" />
+                        PDF
+                      </button>
+                      <div className="text-right">
+                        <p className="text-[10px] font-black uppercase opacity-60 tracking-widest mb-1">Dívida Acumulada</p>
+                        <p className="text-3xl font-black text-red-600 italic tracking-tighter">{formatCurrency(selectedCustomer.totalDebt)}</p>
+                      </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-4">
-                    <button 
-                      onClick={exportCustomerPDF}
-                      className="px-4 py-2.5 bg-white/10 hover:bg-white/20 border border-white/10 text-white rounded-xl text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-2 active:scale-95"
-                      title="Exportar Extrato Consolidado PDF"
-                    >
-                      <FileText size={14} className="text-amber-500" />
-                      PDF
-                    </button>
-                    <div className="text-right">
-                      <p className="text-[10px] font-black uppercase opacity-60 tracking-widest mb-1">Dívida Acumulada</p>
-                      <p className="text-3xl font-black text-red-600 italic tracking-tighter">{formatCurrency(selectedCustomer.totalDebt)}</p>
+                  
+                  <div className="bg-white/5 rounded-2xl p-5 border border-white/5 relative backdrop-blur-sm">
+                    <div className="flex items-center justify-between mb-3 text-[10px] font-black uppercase tracking-widest">
+                      <p className="text-amber-500">Processar Amortização de Saldo</p>
+                      <button 
+                        onClick={() => setPaymentAmount(selectedCustomer.totalDebt.toString())}
+                        className="text-white hover:text-amber-500 transition-colors"
+                      >
+                        Valor Total
+                      </button>
                     </div>
+                    <div className="flex gap-3">
+                      <div className="flex-1 relative">
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 font-black">R$</span>
+                        <input 
+                          type="text" value={paymentAmount} 
+                          inputMode="decimal"
+                          onChange={e => setPaymentAmount(e.target.value.replace(/[^0-9,.]/g, '').replace(',', '.'))}
+                          onFocus={e => e.target.value === '0' ? setPaymentAmount('') : null}
+                          onBlur={e => e.target.value === '' ? setPaymentAmount('0') : null}
+                          className="w-full bg-white/10 border border-white/10 rounded-xl pl-10 pr-4 py-3 outline-none font-black text-xl text-amber-500 focus:bg-white/20 transition-all placeholder:text-white/20 italic tracking-tighter"
+                          placeholder="0,00"
+                        />
+                      </div>
+                      <button 
+                        onClick={handlePayment}
+                        className="bg-red-800 text-white font-black px-8 rounded-xl hover:bg-black transition-all shadow-lg shadow-red-900/20 text-[10px] uppercase tracking-widest active:scale-95"
+                      >
+                        Amortização Direta
+                      </button>
+                    </div>
+
+                    {numericPaymentAmount > 0 && (
+                      <div className="mt-4 p-3 bg-white/5 rounded-xl border border-white/5 flex flex-col gap-2">
+                        <div className="flex justify-between items-center text-[8px] font-black uppercase text-amber-500 tracking-wider">
+                          <span>PIX COPIA E COLA AUTOMÁTICO</span>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(generatePixPayload(numericPaymentAmount));
+                              alert('Chave Copia e Cola Pix copiada com sucesso!');
+                            }}
+                            className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-black px-2 py-0.5 rounded transition-all text-[8px] uppercase tracking-wider"
+                          >
+                            Copiar Código
+                          </button>
+                        </div>
+                        <p className="text-[9.5px] break-all font-mono bg-black/40 p-2 rounded text-slate-300 border border-white/5 select-all focus:outline-none">
+                          {generatePixPayload(numericPaymentAmount)}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
                 
-                <div className="bg-white/5 rounded-2xl p-5 border border-white/5 relative backdrop-blur-sm">
-                  <div className="flex items-center justify-between mb-3 text-[10px] font-black uppercase tracking-widest">
-                    <p className="text-amber-500">Processar Amortização de Saldo</p>
+                <div className="flex-1 overflow-y-auto bg-slate-50">
+                  <div className="flex bg-white border-b border-slate-200">
                     <button 
-                      onClick={() => setPaymentAmount(selectedCustomer.totalDebt.toString())}
-                      className="text-white hover:text-amber-500 transition-colors"
+                      onClick={() => setHistoryTab('transacoes')}
+                      className={cn(
+                        "flex-1 py-4 text-[10px] font-black uppercase tracking-widest transition-all border-b-2",
+                        historyTab === 'transacoes' ? "border-red-800 text-red-800 bg-red-50/30" : "border-transparent text-slate-400 hover:text-slate-600"
+                      )}
                     >
-                      Valor Total
+                      <div className="flex items-center justify-center gap-2">
+                         <History size={14} /> Transações
+                      </div>
+                    </button>
+                    <button 
+                      onClick={() => setHistoryTab('pedidos')}
+                      className={cn(
+                        "flex-1 py-4 text-[10px] font-black uppercase tracking-widest transition-all border-b-2",
+                        historyTab === 'pedidos' ? "border-red-800 text-red-800 bg-red-50/30" : "border-transparent text-slate-400 hover:text-slate-600"
+                      )}
+                    >
+                      <div className="flex items-center justify-center gap-2">
+                         <ShoppingBag size={14} /> Pedidos
+                      </div>
+                    </button>
+                    <button 
+                      onClick={() => setHistoryTab('favoritos')}
+                      className={cn(
+                        "flex-1 py-4 text-[10px] font-black uppercase tracking-widest transition-all border-b-2",
+                        historyTab === 'favoritos' ? "border-red-800 text-red-800 bg-red-50/30" : "border-transparent text-slate-400 hover:text-slate-600"
+                      )}
+                    >
+                      <div className="flex items-center justify-center gap-2">
+                         <Star size={14} /> Favoritos
+                      </div>
                     </button>
                   </div>
-                  <div className="flex gap-3">
-                    <div className="flex-1 relative">
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 font-black">R$</span>
-                      <input 
-                        type="text" value={paymentAmount} 
-                        inputMode="decimal"
-                        onChange={e => setPaymentAmount(e.target.value.replace(/[^0-9,.]/g, '').replace(',', '.'))}
-                        onFocus={e => e.target.value === '0' ? setPaymentAmount('') : null}
-                        onBlur={e => e.target.value === '' ? setPaymentAmount('0') : null}
-                        className="w-full bg-white/10 border border-white/10 rounded-xl pl-10 pr-4 py-3 outline-none font-black text-xl text-amber-500 focus:bg-white/20 transition-all placeholder:text-white/20 italic tracking-tighter"
-                        placeholder="0,00"
-                      />
-                    </div>
-                    <button 
-                      onClick={handlePayment}
-                      className="bg-red-800 text-white font-black px-8 rounded-xl hover:bg-black transition-all shadow-lg shadow-red-900/20 text-[10px] uppercase tracking-widest active:scale-95"
-                    >
-                      Amortização Direta
-                    </button>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="flex-1 overflow-y-auto bg-slate-50">
-                <div className="flex bg-white border-b border-slate-200">
-                  <button 
-                    onClick={() => setHistoryTab('transacoes')}
-                    className={cn(
-                      "flex-1 py-4 text-[10px] font-black uppercase tracking-widest transition-all border-b-2",
-                      historyTab === 'transacoes' ? "border-red-800 text-red-800 bg-red-50/30" : "border-transparent text-slate-400 hover:text-slate-600"
-                    )}
-                  >
-                    <div className="flex items-center justify-center gap-2">
-                       <History size={14} /> Transações
-                    </div>
-                  </button>
-                  <button 
-                    onClick={() => setHistoryTab('pedidos')}
-                    className={cn(
-                      "flex-1 py-4 text-[10px] font-black uppercase tracking-widest transition-all border-b-2",
-                      historyTab === 'pedidos' ? "border-red-800 text-red-800 bg-red-50/30" : "border-transparent text-slate-400 hover:text-slate-600"
-                    )}
-                  >
-                    <div className="flex items-center justify-center gap-2">
-                       <ShoppingBag size={14} /> Pedidos
-                    </div>
-                  </button>
-                  <button 
-                    onClick={() => setHistoryTab('favoritos')}
-                    className={cn(
-                      "flex-1 py-4 text-[10px] font-black uppercase tracking-widest transition-all border-b-2",
-                      historyTab === 'favoritos' ? "border-red-800 text-red-800 bg-red-50/30" : "border-transparent text-slate-400 hover:text-slate-600"
-                    )}
-                  >
-                    <div className="flex items-center justify-center gap-2">
-                       <Star size={14} /> Favoritos
-                    </div>
-                  </button>
-                </div>
 
                 <div className="p-8">
                 {historyTab === 'transacoes' && (
@@ -1241,7 +1304,7 @@ export default function Customers() {
               </div>
             </motion.div>
           </div>
-        )}
+        )})()}
       </AnimatePresence>
     </motion.div>
   );

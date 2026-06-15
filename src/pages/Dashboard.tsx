@@ -404,7 +404,7 @@ export default function Dashboard() {
       `💵 *Valor Compensado:* ${formatCurrency(res.amount)}\n` +
       `📝 *Saldo Devedor Restante:* ${formatCurrency(res.clientRemainingDebt)}\n` +
       `-------------------------------------------\n` +
-      `Obrigado! Seu pagamento foi registrado e seu saldo foi atualizado.`;
+      `Obrigado! Seu pagamento foi registrado e seu saldo foi atualizado.\n\n_Produzido por: Brener Gomes_`;
 
     const encoded = encodeURIComponent(message);
     const phone = res.clientContact.replace(/\D/g, '');

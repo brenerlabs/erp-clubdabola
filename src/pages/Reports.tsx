@@ -397,7 +397,7 @@ export default function Reports() {
     
     const runDate = new Date().toLocaleString('pt-BR');
     doc.setFontSize(7.5);
-    doc.text(`Gerado em: ${runDate}`, 154, 14);
+    doc.text(`Gerado em: ${runDate} | Produzido por: Brener Gomes`, 114, 14);
     
     doc.setTextColor(30, 41, 59); // Slate-800
     doc.setFontSize(12);

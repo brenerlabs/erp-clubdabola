@@ -905,7 +905,7 @@ export default function Shipments() {
       message = `Fala, *${customerName}*! Tudo pronto para iniciar! ⚽⏳\n\nSua encomenda entrou em processamento logístico na origem.\n\n*Status:* Processando\n*Rastreio:* *${shipment.trackingCode}*\n\n*Produtos:*\n${itemsList}\n\nAssim que houver novos movimentos, te informamos! Tamo junto! 🔥🤙`;
     }
 
-    return message;
+    return message + `\n\n_Produzido por: Brener Gomes_`;
   };
 
   const sendNotification = (shipment: Shipment, newStatus: string) => {
