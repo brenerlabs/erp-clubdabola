@@ -400,6 +400,7 @@ export default function Dashboard() {
     const message = `${heading}\n` +
       `-------------------------------------------\n` +
       `👤 *Cliente:* ${res.clientName}\n` +
+      `📅 *Data:* ${new Date().toLocaleString('pt-BR')}\n` +
       `💵 *Valor Compensado:* ${formatCurrency(res.amount)}\n` +
       `📝 *Saldo Devedor Restante:* ${formatCurrency(res.clientRemainingDebt)}\n` +
       `-------------------------------------------\n` +

@@ -9,6 +9,13 @@ import { SidebarContext } from '../App';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
+const formatLocalYMD = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 export default function PDV() {
   const { setIsSidebarOpen } = useContext(SidebarContext);
   const [products, setProducts] = useState<Product[]>([]);
@@ -25,7 +32,7 @@ export default function PDV() {
   const [discountPerc, setDiscountPerc] = useState<string>('0');
   const [discountVal, setDiscountVal] = useState<string>('0');
   const [isFinishing, setIsFinishing] = useState(false);
-  const [saleDate, setSaleDate] = useState(new Date().toISOString().split('T')[0]);
+  const [saleDate, setSaleDate] = useState(formatLocalYMD(new Date()));
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showBudgetModal, setShowBudgetModal] = useState(false);
@@ -119,7 +126,13 @@ export default function PDV() {
     return isFinite(f) ? f : 0;
   };
 
-  const subtotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+  const subtotal = cart.reduce((acc, item) => {
+    const productObj = products.find(p => p.id === item.productId);
+    const isCamisa = (productObj?.category || '').toLowerCase().includes('camisa') || 
+                     (item.name || '').toLowerCase().includes('camisa');
+    const customizationFee = (item.isCustomized && isCamisa) ? 30 : 0;
+    return acc + ((item.price + customizationFee) * item.quantity);
+  }, 0);
   const total = Math.max(0, subtotal - safeFloat(discountVal));
 
   const handleDiscountPercChange = (valStr: string) => {
@@ -160,9 +173,9 @@ export default function PDV() {
     if (preSale.createdAt) {
       try {
         const d = new Date(preSale.createdAt.seconds ? preSale.createdAt.seconds * 1000 : preSale.createdAt);
-        setSaleDate(d.toISOString().split('T')[0]);
+        setSaleDate(formatLocalYMD(d));
       } catch (err) {
-        setSaleDate(new Date().toISOString().split('T')[0]);
+        setSaleDate(formatLocalYMD(new Date()));
       }
     }
     
@@ -315,7 +328,13 @@ export default function PDV() {
     try {
       const batch = writeBatch(db);
       
-      const subtotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+      const subtotal = cart.reduce((acc, item) => {
+        const productObj = products.find(p => p.id === item.productId);
+        const isCamisa = (productObj?.category || '').toLowerCase().includes('camisa') || 
+                         (item.name || '').toLowerCase().includes('camisa');
+        const customizationFee = (item.isCustomized && isCamisa) ? 30 : 0;
+        return acc + ((item.price + customizationFee) * item.quantity);
+      }, 0);
       const finalDiscount = safeFloat(discountVal);
       const finalDownPayment = isPreSale ? 0 : safeFloat(downPayment);
       const saleTotal = Math.max(0, subtotal - finalDiscount);
@@ -326,7 +345,8 @@ export default function PDV() {
       if (saleDate) {
         try {
           const [y, m, d] = saleDate.split('-').map(Number);
-          finalDate = new Date(y, m - 1, d, 12, 0, 0);
+          const now = new Date();
+          finalDate = new Date(y, m - 1, d, now.getHours(), now.getMinutes(), now.getSeconds());
           if (isNaN(finalDate.getTime())) finalDate = new Date();
         } catch (e) {
           finalDate = new Date();
@@ -340,19 +360,25 @@ export default function PDV() {
       const saleData = {
         customerId: selectedCustomer?.id || null,
         customerName: selectedCustomer?.name || 'Consumidor Final',
-        items: cart.map(item => ({
-          productId: item.productId || null,
-          variationId: item.variationId || null,
-          name: item.name || '',
-          variationName: item.variationName || '',
-          quantity: item.quantity || 0,
-          price: item.price || 0,
-          isDropshipping: !!item.isDropshipping,
-          gender: item.gender || null,
-          isCustomized: !!item.isCustomized,
-          customName: item.customName || null,
-          customNumber: item.customNumber || null
-        })),
+        items: cart.map(item => {
+          const productObj = products.find(p => p.id === item.productId);
+          const isCamisa = (productObj?.category || '').toLowerCase().includes('camisa') || 
+                           (item.name || '').toLowerCase().includes('camisa');
+          const customizationFee = (item.isCustomized && isCamisa) ? 30 : 0;
+          return {
+            productId: item.productId || null,
+            variationId: item.variationId || null,
+            name: item.name || '',
+            variationName: item.variationName || '',
+            quantity: item.quantity || 0,
+            price: (item.price || 0) + customizationFee,
+            isDropshipping: !!item.isDropshipping,
+            gender: item.gender || null,
+            isCustomized: !!item.isCustomized,
+            customName: item.customName || null,
+            customNumber: item.customNumber || null
+          };
+        }),
         subtotal,
         discount: finalDiscount,
         total: saleTotal,
@@ -479,7 +505,7 @@ export default function PDV() {
       setDownPayment('');
       setDiscountPerc('0');
       setDiscountVal('0');
-      setSaleDate(new Date().toISOString().split('T')[0]);
+      setSaleDate(formatLocalYMD(new Date()));
       setLoadedPreSaleId(null);
 
       // Handle Auto WhatsApp (Only for real sales)
@@ -519,10 +545,12 @@ export default function PDV() {
 
     const hasDiscount = sale.discount && sale.discount > 0;
 
+    const displayDateStr = new Date().toLocaleString('pt-BR');
+
     const message = `${heading}\n` +
       `-------------------------------------------\n` +
       `👤 *Cliente:* ${sale.customerName}\n` +
-      `📅 *Data:* ${sale.date?.toLocaleString ? sale.date.toLocaleString('pt-BR') : new Date().toLocaleString('pt-BR')}\n` +
+      `📅 *Data:* ${displayDateStr}\n` +
       (!isPre ? `💳 *Pagamento:* ${sale.paymentMethod}\n` : '') +
       (!isPre && sale.downPayment > 0 ? `💵 *Entrada:* ${formatCurrency(sale.downPayment)}\n` : '') +
       (!isPre && sale.debtAmount > 0 ? `📝 *Pendente:* ${formatCurrency(sale.debtAmount)}\n` : '') +
@@ -535,14 +563,14 @@ export default function PDV() {
       `-------------------------------------------\n` +
       `${footer}`;
 
-    const hasPixPayment = isPre || (sale.debtAmount && sale.debtAmount > 0);
-    const pixAmount = isPre ? sale.total : (sale.debtAmount || 0);
+    const hasPixPayment = !isPre && sale.paymentMethod === 'Fiado';
+    const pixAmount = sale.debtAmount || sale.total;
 
     const pixSection = hasPixPayment ? (
       `💳 *DADOS PARA PAGAMENTO VIA PIX:*\n` +
-      `• Chave Celular: *(91) 99324-9580*\n` +
-      `• Chave Copiar/Colar: \`91993249580\`\n` +
-      `• Titular: Club da Bola\n` +
+      `• Banco: *Nubank*\n` +
+      `• Beneficiário: *Brener Gomes*\n` +
+      `• Chave Pix Celular: \`91993249580\`\n` +
       `• Valor: *${formatCurrency(pixAmount)}*\n` +
       `-------------------------------------------\n`
     ) : '';
@@ -582,7 +610,7 @@ export default function PDV() {
     const whatsappText = `⚽ *CLUB DA BOLA - Orçamento* ⚽\n` +
       `-------------------------------------------\n` +
       `👤 *Cliente:* ${selectedCustomer ? selectedCustomer.name : 'Consumidor Final'}\n` +
-      `📅 *Data de Emissão:* ${now.toLocaleDateString('pt-BR')}\n` +
+      `📅 *Data de Emissão:* ${now.toLocaleString('pt-BR')}\n` +
       `⏳ *Validade:* ${validityDate.toLocaleDateString('pt-BR')} (7 dias)\n` +
       `-------------------------------------------\n` +
       `📦 *Itens do Orçamento:*\n${textItems}\n` +
@@ -590,12 +618,6 @@ export default function PDV() {
       (discountValue > 0 ? `💵 *Subtotal:* ${formatCurrency(subtotal)}\n` : '') +
       (discountValue > 0 ? `💸 *Desconto Aplicado:* -${formatCurrency(discountValue)}\n` : '') +
       `💰 *VALOR TOTAL: ${formatCurrency(total)}*\n` +
-      `-------------------------------------------\n` +
-      `💳 *DADOS PARA PAGAMENTO VIA PIX:*\n` +
-      `• Chave Celular: *(91) 99324-9580*\n` +
-      `• Chave Copiar/Colar: \`91993249580\`\n` +
-      `• Titular: Club da Bola\n` +
-      `• Valor: *${formatCurrency(total)}*\n` +
       `-------------------------------------------\n` +
       `📞 *Contato Club da Bola:*\n` +
       `• WhatsApp: (91) 99324-9580\n\n` +
@@ -759,9 +781,14 @@ export default function PDV() {
       const pIdx = idx + 1;
       const itemGender = item.gender || products.find(p => p.id === item.productId || p.name === item.name)?.gender || 'Ambos';
       const variationName = formatVariationWithGender(item.variationName, itemGender) || 'Grade Única';
-      const unitPriceStr = formatCurrency(item.price);
+      const productObj = products.find(p => p.id === item.productId);
+      const isCamisa = (productObj?.category || '').toLowerCase().includes('camisa') || 
+                       (item.name || '').toLowerCase().includes('camisa');
+      const customizationFee = (item.isCustomized && isCamisa) ? 30 : 0;
+      const finalPrice = item.price + customizationFee;
+      const unitPriceStr = formatCurrency(finalPrice);
       const qtyStr = `${item.quantity} UN`;
-      const subtotalItemStr = formatCurrency(item.price * item.quantity);
+      const subtotalItemStr = formatCurrency(finalPrice * item.quantity);
 
       let productName = cleanProductNameWithVariation(item.name);
       if (item.isCustomized && item.customName) {
@@ -822,7 +849,7 @@ export default function PDV() {
     <motion.div 
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="h-full flex flex-col md:flex-row gap-4 md:gap-6 relative pb-6 md:pb-10"
+      className="h-auto md:h-[calc(100vh-140px)] flex flex-col md:flex-row gap-4 md:gap-6 relative pb-16 md:pb-4 min-h-screen md:min-h-0"
     >
       {/* Mobile Cart Toggle Bar */}
       <div className="md:hidden sticky top-0 bg-slate-950/95 backdrop-blur-md p-3 rounded-2xl text-white shadow-xl z-[45] flex items-center justify-between border border-white/5 mx-1 mb-2">
@@ -1281,7 +1308,7 @@ export default function PDV() {
 
       {/* Search & Products Grid */}
       <div className={cn(
-        "flex-1 flex flex-col gap-6 overflow-hidden transition-all duration-300",
+        "flex-1 flex flex-col gap-4 md:gap-6 md:overflow-hidden transition-all duration-300",
         isCartVisible ? "hidden md:flex" : "flex"
       )}>
         <div className="sticky top-0 z-20 bg-slate-50/80 backdrop-blur-md pb-4 pt-1">
@@ -1290,14 +1317,14 @@ export default function PDV() {
             <input 
               type="text" 
               placeholder="Buscar por nome ou categoria..." 
-              className="w-full pl-14 pr-6 py-4 bg-white border border-gray-100 rounded-2xl shadow-sm outline-none focus:ring-2 focus:ring-red-800/20 focus:border-red-800 font-black text-sm md:text-base tracking-tight placeholder:text-slate-300 transition-all"
+              className="w-full pl-14 pr-6 py-4 bg-white border border-gray-100 rounded-2xl shadow-sm outline-none focus:ring-2 focus:ring-red-800/20 focus:border-red-800 font-black text-base tracking-tight placeholder:text-slate-300 transition-all"
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 pb-4">
+        <div className="flex-1 md:overflow-y-auto grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 pb-24 md:pb-4">
           {filteredProducts.map(product => {
             const isNoVar = !product.variations || product.variations.length === 0;
             return (
@@ -1392,20 +1419,20 @@ export default function PDV() {
 
       {/* Cart & Checkout */}
       <div className={cn(
-        "w-full md:w-[400px] flex flex-col gap-6 h-full transition-all duration-300",
+        "w-full md:w-[400px] flex flex-col gap-4 md:gap-4 h-auto md:h-full transition-all duration-300",
         isCartVisible ? "flex" : "hidden md:flex"
       )}>
-        <div className="bg-slate-950 text-white rounded-2xl md:rounded-[32px] p-4 md:p-6 flex flex-col h-full shadow-2xl relative overflow-hidden border border-slate-900">
+        <div className="bg-slate-950 text-white rounded-2xl md:rounded-[24px] p-4 md:p-4 pb-4 md:pb-4 flex flex-col h-auto md:h-full shadow-2xl relative md:overflow-hidden border border-slate-900">
           <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
             <ShoppingCart size={120} />
           </div>
           
-          <div className="flex items-center gap-3 mb-4 md:mb-5 shrink-0 relative">
+          <div className="flex items-center gap-3 mb-3 md:mb-3 shrink-0 relative">
             <div className="size-10 bg-red-800 rounded-xl flex items-center justify-center shadow-lg shadow-red-900/20">
               <ShoppingCart size={20} />
             </div>
             <div>
-              <h2 className="text-2xl md:text-3xl font-bold tracking-tight text-white leading-none">
+              <h2 className="text-2xl md:text-2xl font-bold tracking-tight text-white leading-none">
                 Venda <span className="text-red-600 underline decoration-red-400 decoration-4 underline-offset-4 tracking-tight font-bold">Checkout</span>
               </h2>
               <p className="text-[9px] font-bold text-white/40 uppercase tracking-[0.2em] font-sans mt-0.5">Finalização de pedido</p>
@@ -1416,7 +1443,7 @@ export default function PDV() {
           </div>
 
           {/* Segment Toggle */}
-          <div className="grid grid-cols-2 p-1 bg-black/50 border border-white/5 rounded-2xl mb-4 shrink-0 font-sans">
+          <div className="grid grid-cols-2 p-1 bg-black/50 border border-white/5 rounded-2xl mb-3 shrink-0 font-sans">
             <button 
               onClick={() => setActiveTab('checkout')}
               className={cn(
@@ -1442,11 +1469,11 @@ export default function PDV() {
             </button>
           </div>
 
-          <div className="flex-1 flex flex-col min-h-0 relative overflow-hidden">
+          <div className="flex-1 flex flex-col min-h-0 relative md:overflow-hidden">
             {activeTab === 'checkout' ? (
               <>
                 {/* Scrollable Area for Cart and Fields */}
-                <div className="flex-1 overflow-y-auto pr-1 -mr-1 custom-scrollbar space-y-6 pb-20">
+                <div className="flex-1 md:overflow-y-auto pr-1 -mr-1 custom-scrollbar space-y-6 pb-4 md:pb-6">
                   {/* Loaded pre-sale warning alert */}
                   {loadedPreSaleId && (
                     <div className="px-4 py-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex items-center justify-between mb-2">
@@ -1488,7 +1515,7 @@ export default function PDV() {
                     <div className="relative group">
                       <User className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 size-4 group-focus-within:text-amber-500 z-10 pointer-events-none" />
                       <select 
-                        className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs font-black uppercase outline-none appearance-none hover:bg-white/10 focus:ring-1 focus:ring-amber-500 transition-all text-white/80"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-base md:text-xs font-black uppercase outline-none appearance-none hover:bg-white/10 focus:ring-1 focus:ring-amber-500 transition-all text-white/80"
                         value={selectedCustomer?.id || ''}
                         onChange={e => {
                           const c = customers.find(cust => cust.id === e.target.value);
@@ -1504,7 +1531,7 @@ export default function PDV() {
                     <div className="relative group">
                       <Truck className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 size-4 group-focus-within:text-amber-500 z-10 pointer-events-none" />
                       <select 
-                        className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs font-black uppercase outline-none appearance-none hover:bg-white/10 focus:ring-1 focus:ring-amber-500 transition-all text-white/80"
+                        className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-base md:text-xs font-black uppercase outline-none appearance-none hover:bg-white/10 focus:ring-1 focus:ring-amber-500 transition-all text-white/80"
                         value={shippingRegion}
                         onChange={e => setShippingRegion(e.target.value as any)}
                       >
@@ -1564,7 +1591,7 @@ export default function PDV() {
                           type="text"
                           inputMode="decimal"
                           placeholder="Valor de Entrada (Opcional)"
-                          className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs font-bold outline-none hover:bg-white/10 focus:ring-1 focus:ring-emerald-500 transition-all text-white/80"
+                          className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-base md:text-xs font-bold outline-none hover:bg-white/10 focus:ring-1 focus:ring-emerald-500 transition-all text-white/80"
                           value={downPayment}
                           onChange={e => setDownPayment(e.target.value.replace(/[^0-9,.]/g, ''))}
                           onFocus={e => e.target.value === '0' ? setDownPayment('') : null}
@@ -1579,7 +1606,7 @@ export default function PDV() {
                         <input 
                           type="text"
                           inputMode="decimal"
-                          className="w-full bg-white/5 border border-white/10 rounded-xl pl-16 pr-4 py-2.5 text-xs font-bold outline-none hover:bg-white/10 focus:ring-1 focus:ring-amber-500 transition-all text-white/80"
+                          className="w-full bg-white/5 border border-white/10 rounded-xl pl-16 pr-4 py-2.5 text-base md:text-xs font-bold outline-none hover:bg-white/10 focus:ring-1 focus:ring-amber-500 transition-all text-white/80"
                           value={discountPerc}
                           onChange={e => {
                             const val = e.target.value.replace(/[^0-9,.]/g, '');
@@ -1594,7 +1621,7 @@ export default function PDV() {
                         <input 
                           type="text"
                           inputMode="decimal"
-                          className="w-full bg-white/5 border border-white/10 rounded-xl pl-16 pr-4 py-2.5 text-xs font-bold outline-none hover:bg-white/10 focus:ring-1 focus:ring-amber-500 transition-all text-white/80"
+                          className="w-full bg-white/5 border border-white/10 rounded-xl pl-16 pr-4 py-2.5 text-base md:text-xs font-bold outline-none hover:bg-white/10 focus:ring-1 focus:ring-amber-500 transition-all text-white/80"
                           value={discountVal}
                           onChange={e => {
                             const val = e.target.value.replace(/[^0-9,.]/g, '');
@@ -1611,7 +1638,7 @@ export default function PDV() {
                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 text-[9px] font-black group-focus-within:text-white uppercase tracking-widest leading-none z-10 pointer-events-none">Venda em:</span>
                         <input 
                           type="date"
-                          className="w-full bg-white/5 border border-white/10 rounded-xl pl-24 pr-4 py-2.5 text-xs font-black outline-none hover:bg-white/10 focus:ring-1 focus:ring-red-800 transition-all text-white/90"
+                          className="w-full bg-white/5 border border-white/10 rounded-xl pl-24 pr-4 py-2.5 text-base md:text-xs font-black outline-none hover:bg-white/10 focus:ring-1 focus:ring-red-800 transition-all text-white/90"
                           value={saleDate}
                           onChange={e => setSaleDate(e.target.value)}
                         />
@@ -1791,16 +1818,26 @@ export default function PDV() {
                           <div className="flex justify-between items-start mb-2">
                             <div className="flex-1">
                               <div className="flex items-center gap-2">
-                                 <p className="font-black text-xs leading-tight text-white uppercase group-hover/item:text-amber-400 transition-colors">{cleanProductNameWithVariation(item.name)}</p>
-                                 {item.isDropshipping && (
-                                   <span className="text-[7px] font-black bg-amber-500 text-white px-1.5 py-0.5 rounded italic animate-pulse">DS</span>
-                                 )}
+                                <p className="font-black text-xs leading-tight text-white uppercase group-hover/item:text-amber-400 transition-colors">{cleanProductNameWithVariation(item.name)}</p>
+                                {item.isDropshipping && (
+                                  <span className="text-[7px] font-black bg-amber-500 text-white px-1.5 py-0.5 rounded italic animate-pulse">DS</span>
+                                )}
                               </div>
                               {formatVariationWithGender(item.variationName, item.gender) && (
                                 <p className="text-[8px] font-black text-white/30 mt-1 uppercase tracking-widest">{formatVariationWithGender(item.variationName, item.gender)}</p>
                               )}
                             </div>
-                            <p className="font-black text-sm ml-2 text-white tabular-nums tracking-tighter">{formatCurrency(item.price * item.quantity)}</p>
+                            {(() => {
+                              const productObj = products.find(p => p.id === item.productId);
+                              const isCamisa = (productObj?.category || '').toLowerCase().includes('camisa') || 
+                                               (item.name || '').toLowerCase().includes('camisa');
+                              const customizationFee = (item.isCustomized && isCamisa) ? 30 : 0;
+                              return (
+                                <p className="font-black text-sm ml-2 text-white tabular-nums tracking-tighter">
+                                  {formatCurrency((item.price + customizationFee) * item.quantity)}
+                                </p>
+                              );
+                            })()}
                           </div>
                           <div className="flex items-center gap-3">
                             <div className="flex items-center bg-black/40 rounded-xl p-1 border border-white/5 shadow-inner">
@@ -1808,7 +1845,17 @@ export default function PDV() {
                               <span className="w-10 text-center font-black text-sm text-white tabular-nums">{item.quantity}</span>
                               <button onClick={() => updateQuantity(item.productId, item.variationId, 1)} className="size-8 flex items-center justify-center hover:bg-white/10 rounded-lg transition-colors text-white/60 hover:text-white"><Plus size={14} /></button>
                             </div>
-                            <div className="text-[9px] font-black text-white/30 uppercase tracking-widest">Un: {formatCurrency(item.price)}</div>
+                            {(() => {
+                              const productObj = products.find(p => p.id === item.productId);
+                              const isCamisa = (productObj?.category || '').toLowerCase().includes('camisa') || 
+                                               (item.name || '').toLowerCase().includes('camisa');
+                              const hasCustom = item.isCustomized && isCamisa;
+                              return (
+                                <div className="text-[9px] font-black text-white/30 uppercase tracking-widest">
+                                  Un: {formatCurrency(item.price)}{hasCustom && ` + ${formatCurrency(30)}`}
+                                </div>
+                              );
+                            })()}
                             <button 
                               onClick={() => setCart(cart.filter(c => c.variationId !== item.variationId))}
                               className="ml-auto size-9 flex items-center justify-center text-red-500/40 hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-all"
@@ -1838,7 +1885,7 @@ export default function PDV() {
                                     className="rounded border-white/10 bg-black/40 text-red-600 focus:ring-red-650 focus:ring-offset-slate-900 size-3.5"
                                   />
                                   <span className="text-[10px] font-bold uppercase text-white/60 group-hover/custom:text-white transition-colors tracking-wider flex items-center gap-1">
-                                    <Sparkles size={11} className="text-amber-400" /> Deseja Personalizar Camisa?
+                                    <Sparkles size={11} className="text-amber-400" /> Deseja Personalizar Camisa? (+ R$ 30,00)
                                   </span>
                                 </label>
 
@@ -1852,18 +1899,28 @@ export default function PDV() {
                                         value={item.customName || ''}
                                         onChange={(e) => updateCustomization(item.productId, item.variationId, { customName: e.target.value.toUpperCase() })}
                                         maxLength={15}
-                                        className="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-1.5 text-[11px] font-bold uppercase text-white placeholder-white/20 focus:border-red-500/50"
+                                        className="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-1.5 text-base md:text-[11px] font-bold uppercase text-white placeholder-white/20 focus:border-red-500/50"
                                       />
                                     </div>
                                     <div className="space-y-1">
-                                      <span className="text-[8px] font-bold uppercase text-white/40 tracking-wider block">Número</span>
+                                      <span className="text-[8px] font-bold uppercase text-white/40 tracking-wider block">Número (0-99)</span>
                                       <input 
                                         type="text" 
                                         placeholder="Ex: 10" 
                                         value={item.customNumber || ''}
-                                        onChange={(e) => updateCustomization(item.productId, item.variationId, { customNumber: e.target.value.replace(/[^0-9]/g, '') })}
-                                        maxLength={3}
-                                        className="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-1.5 text-[11px] font-bold uppercase text-white placeholder-white/20 focus:border-red-500/50 text-center"
+                                        onChange={(e) => {
+                                          const cleanNum = e.target.value.replace(/[^0-9]/g, '');
+                                          if (cleanNum === '') {
+                                            updateCustomization(item.productId, item.variationId, { customNumber: '' });
+                                          } else {
+                                            const parsed = parseInt(cleanNum, 10);
+                                            if (parsed <= 99) {
+                                              updateCustomization(item.productId, item.variationId, { customNumber: cleanNum.slice(0, 2) });
+                                            }
+                                          }
+                                        }}
+                                        maxLength={2}
+                                        className="w-full bg-black/40 border border-white/5 rounded-xl px-3 py-1.5 text-base md:text-[11px] font-bold uppercase text-white placeholder-white/20 focus:border-red-500/50 text-center"
                                       />
                                     </div>
                                   </div>
@@ -1878,24 +1935,24 @@ export default function PDV() {
                 </div>
 
                 {/* Sticky Bottom Summary */}
-                <div className="mt-auto space-y-4 pt-6 border-t border-white/10 shrink-0 bg-slate-950 z-10 -mx-4 md:-mx-6 px-4 md:px-6">
-                  <div className="flex flex-col gap-1 px-4 py-3 bg-white/5 rounded-2xl border border-white/5 font-display">
+                <div className="mt-auto space-y-2 md:space-y-2.5 pt-3 md:pt-3 border-t border-white/10 shrink-0 bg-slate-950 z-10 -mx-4 md:-mx-4 px-4 md:px-4 pb-1">
+                  <div className="flex flex-col gap-0.5 px-3 py-2 bg-white/5 rounded-xl border border-white/5 font-display">
                     <div className="flex justify-between items-center opacity-40">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-white">Subtotal</span>
-                      <span className="text-sm font-black text-white tabular-nums tracking-tight">{formatCurrency(subtotal)}</span>
+                      <span className="text-[9px] font-black uppercase tracking-widest text-white">Subtotal</span>
+                      <span className="text-xs font-black text-white tabular-nums tracking-tight">{formatCurrency(subtotal)}</span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-xs font-black text-amber-500 uppercase tracking-widest">Total Líquido</span>
-                      <span className="text-3xl font-bold tracking-tight text-white tabular-nums">{formatCurrency(total)}</span>
+                      <span className="text-[10px] font-black text-amber-500 uppercase tracking-widest">Total Líquido</span>
+                      <span className="text-xl md:text-2xl font-bold tracking-tight text-white tabular-nums">{formatCurrency(total)}</span>
                     </div>
                   </div>
 
                   {cart.length > 0 && (
                     <button 
                       onClick={generateBudgetPDF}
-                      className="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-3 rounded-xl transition-all flex items-center justify-center gap-2 uppercase tracking-widest text-[10px] shadow-lg shadow-amber-500/15 font-sans active:scale-95"
+                      className="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-2.5 rounded-xl transition-all flex items-center justify-center gap-2 uppercase tracking-widest text-[9px] shadow-lg shadow-amber-500/15 font-sans active:scale-95"
                     >
-                      <FileText size={15} /> Gerar Orçamento PDF
+                      <FileText size={14} /> Gerar Orçamento PDF
                     </button>
                   )}
 
@@ -1906,39 +1963,39 @@ export default function PDV() {
                   )}
 
                   {loadedPreSaleId ? (
-                    <div className="flex flex-col gap-2">
+                    <div className="flex flex-col md:grid md:grid-cols-2 gap-2">
                       <button 
                         disabled={isFinishing || cart.length === 0 || (paymentMethod === 'Fiado' && !selectedCustomer)}
                         onClick={() => finishSale(false)}
-                        className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-900 disabled:text-slate-700 disabled:shadow-none text-white font-black py-4 rounded-xl transition-all shadow-xl flex items-center justify-center gap-2 uppercase tracking-wider text-[10px]"
+                        className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-900 disabled:text-slate-700 disabled:shadow-none text-white font-black py-4 md:py-2.5 rounded-xl transition-all shadow-xl flex items-center justify-center gap-1.5 uppercase tracking-wider text-[9px]"
                       >
-                        {isFinishing ? 'PROCESSANDO...' : 'CONVERTER EM VENDA REAL'}
-                        {!isFinishing && <CheckCircle2 size={16} />}
+                        {isFinishing ? 'PROCESSANDO...' : 'FATURAR'}
+                        {!isFinishing && <CheckCircle2 size={13} />}
                       </button>
                       <button 
                         disabled={isFinishing || cart.length === 0}
                         onClick={() => finishSale(true)}
-                        className="w-full bg-slate-800 hover:bg-slate-700 disabled:bg-slate-900 text-amber-500 font-black py-3 rounded-xl transition-all flex items-center justify-center gap-2 uppercase tracking-wider text-[10px]"
+                        className="w-full bg-slate-800 hover:bg-slate-700 disabled:bg-slate-900 text-amber-500 font-black py-3 md:py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5 uppercase tracking-wider text-[9px]"
                       >
-                        {isFinishing ? 'PROCESSANDO...' : 'ATUALIZAR PRÉ-VENDA'}
+                        {isFinishing ? 'PROCESSANDO...' : 'ATUALIZAR'}
                       </button>
                     </div>
                   ) : (
-                    <div className="flex flex-col gap-2">
+                    <div className="flex flex-col md:grid md:grid-cols-2 gap-2">
                       <button 
                         disabled={isFinishing || cart.length === 0 || (paymentMethod === 'Fiado' && !selectedCustomer)}
                         onClick={() => finishSale(false)}
-                        className="w-full bg-red-800 hover:bg-black disabled:bg-slate-900 disabled:text-slate-700 disabled:shadow-none text-white font-black py-4 rounded-xl transition-all shadow-xl shadow-red-900/30 flex items-center justify-center gap-2 active:scale-[0.98] uppercase tracking-wider text-[10px]"
+                        className="w-full bg-red-800 hover:bg-black disabled:bg-slate-900 disabled:text-slate-700 disabled:shadow-none text-white font-black py-4 md:py-2.5 rounded-xl transition-all shadow-xl shadow-red-900/30 flex items-center justify-center gap-1.5 active:scale-[0.98] uppercase tracking-wider text-[9px]"
                       >
-                        {isFinishing ? 'PROCESSANDO...' : 'FINALIZAR VENDA'}
-                        {!isFinishing && <Send size={16} />}
+                        {isFinishing ? 'PROCESSANDO...' : 'FINALIZE'}
+                        {!isFinishing && <Send size={13} />}
                       </button>
                       <button 
                         disabled={isFinishing || cart.length === 0}
                         onClick={() => finishSale(true)}
-                        className="w-full bg-slate-900 hover:bg-slate-800 disabled:bg-slate-900 text-amber-500 border border-white/5 font-black py-3 rounded-xl transition-all flex items-center justify-center gap-2 uppercase tracking-wider text-[10px]"
+                        className="w-full bg-slate-900 hover:bg-slate-800 disabled:bg-slate-900 text-amber-500 border border-white/5 font-black py-3 md:py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5 uppercase tracking-wider text-[9px]"
                       >
-                        {isFinishing ? 'PROCESSANDO...' : 'SALVAR COMO PRÉ-VENDA'}
+                        {isFinishing ? 'PROCESSANDO...' : 'SALVE PRÉ-VENDA'}
                       </button>
                     </div>
                   )}
@@ -1948,7 +2005,7 @@ export default function PDV() {
               <div className="flex-1 flex flex-col min-h-0 relative">
                 <div className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-4 px-1">Orçamentos e Pré-Vendas ({sales.filter(s => s.status === 'Pré-venda').length})</div>
                 
-                <div className="flex-1 overflow-y-auto pr-1 -mr-1 custom-scrollbar space-y-3 pb-6">
+                <div className="flex-1 md:overflow-y-auto pr-1 -mr-1 custom-scrollbar space-y-3 pb-6">
                   {sales.filter(s => s.status === 'Pré-venda').length === 0 ? (
                     <div className="py-24 flex flex-col items-center justify-center opacity-35 gap-4">
                       <div className="size-16 rounded-full border-2 border-dashed border-white flex items-center justify-center text-white/50 animate-pulse">

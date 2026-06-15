@@ -271,6 +271,7 @@ export default function Customers() {
       const message = `${heading}\n` +
         `-------------------------------------------\n` +
         `👤 *Cliente:* ${selectedCustomer.name}\n` +
+        `📅 *Data:* ${new Date().toLocaleString('pt-BR')}\n` +
         `💵 *Valor Compensado:* ${formatCurrency(compAmount)}\n` +
         `📝 *Saldo Devedor Restante:* ${formatCurrency(remainingDebt)}\n` +
         `-------------------------------------------\n` +

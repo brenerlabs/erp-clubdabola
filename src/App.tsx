@@ -375,7 +375,10 @@ export default function App() {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-3 md:p-6 pb-24 md:pb-6">
+        <div className={cn(
+          "flex-1 p-3 md:p-6 pb-24 md:pb-6",
+          activePage === 'pdv' ? "overflow-y-auto md:overflow-hidden" : "overflow-y-auto"
+        )}>
           <AnimatePresence mode="wait">
             <motion.div
               key={activePage}

@@ -117,7 +117,7 @@ export default function Reports() {
   const formatDateShort = (timestamp: any) => {
     if (!timestamp) return 'Sem data';
     const date = timestamp.seconds ? new Date(timestamp.seconds * 1000) : new Date(timestamp);
-    return date.toLocaleDateString('pt-BR');
+    return date.toLocaleString('pt-BR');
   };
 
   // 1. DATA PREPARATION: JOINING TRANSACTIONS & SALES
