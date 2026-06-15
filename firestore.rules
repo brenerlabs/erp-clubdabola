@@ -80,7 +80,8 @@ service cloud.firestore {
     }
 
     match /sales/{saleId} {
-      allow read: if isSignedIn();
+      allow get: if true;
+      allow list: if isSignedIn();
       allow write: if isAdmin();
     }
 
@@ -93,7 +94,8 @@ service cloud.firestore {
     }
 
     match /shipments/{shipmentId} {
-      allow read: if isSignedIn();
+      allow get: if true;
+      allow list: if isSignedIn();
       allow write: if isAdmin();
     }
 

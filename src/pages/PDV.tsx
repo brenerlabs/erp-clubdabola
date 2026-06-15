@@ -41,6 +41,8 @@ export default function PDV() {
   const [lastSale, setLastSale] = useState<any>(null);
   const [sendWhatsAppOnFinish, setSendWhatsAppOnFinish] = useState(true);
   const [clickedProductId, setClickedProductId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [confirmDirectBillId, setConfirmDirectBillId] = useState<string | null>(null);
 
   useEffect(() => {
     setIsSidebarOpen(false);
@@ -185,22 +187,19 @@ export default function PDV() {
   };
 
   const deletePreSale = async (preSaleId: string) => {
-    if (confirm("Tem certeza que deseja apagar esta pré-venda?")) {
-      try {
-        await deleteDoc(doc(db, 'sales', preSaleId));
-        if (loadedPreSaleId === preSaleId) {
-          setLoadedPreSaleId(null);
-        }
-      } catch (err) {
-        console.error(err);
-        alert("Erro ao excluir pré-venda.");
+    try {
+      await deleteDoc(doc(db, 'sales', preSaleId));
+      if (loadedPreSaleId === preSaleId) {
+        setLoadedPreSaleId(null);
       }
+      setConfirmDeleteId(null);
+    } catch (err) {
+      console.error(err);
+      alert("Erro ao excluir pré-venda.");
     }
   };
 
   const convertPreSaleToSaleDirect = async (preSale: Sale) => {
-    if (!confirm(`Deseja faturar e finalizar o Orçamento #${preSale.id?.slice(-6).toUpperCase()} diretamente agora? O estoque será atualizado.`)) return;
-
     setIsFinishing(true);
     try {
       const batch = writeBatch(db);
@@ -509,8 +508,8 @@ export default function PDV() {
       setSaleDate(formatLocalYMD(new Date()));
       setLoadedPreSaleId(null);
 
-      // Handle Auto WhatsApp (Only for real sales)
-      if (!isPreSale && sendWhatsAppOnFinish && selectedCustomer?.contact) {
+      // Handle Auto WhatsApp (For both real sales and pre-sales / budgets)
+      if (sendWhatsAppOnFinish && selectedCustomer?.contact) {
         try {
           shareWhatsApp(finishedSale);
         } catch (e) {
@@ -578,7 +577,17 @@ export default function PDV() {
       `-------------------------------------------\n`
     ) : '';
 
-    const messageWithPix = message.replace(footer, pixSection + footer) + `\n\n_Produzido por: Brener Gomes_`;
+    const receiptLink = `${window.location.origin}/?receipt=${sale.id || ''}`;
+    const receiptSection = sale.id ? (
+      `🔗 *MANTO INTERATIVO ONLINE (Novidade):*\n` +
+      (isPre 
+        ? `Acompanhe a arte do seu manto personalizado e visualize os detalhes do seu orçamento em tempo real:\n`
+        : `Acompanhe a arte do seu manto personalizado de forma interativa, confetes de pagamento e rastreio de logística ao vivo:\n`) +
+      `👉 ${receiptLink}\n` +
+      `-------------------------------------------\n`
+    ) : '';
+
+    const messageWithPix = message.replace(footer, receiptSection + pixSection + footer) + `\n\n_Produzido por: Brener Gomes_`;
     const encoded = encodeURIComponent(messageWithPix);
     const phone = sale.customerContact ? sale.customerContact.replace(/\D/g, '') : '';
     let finalPhone = phone;
@@ -2062,33 +2071,96 @@ export default function PDV() {
                         </div>
 
                         <div className="space-y-2 pt-2">
-                          <div className="grid grid-cols-2 gap-2">
-                            <button 
-                              onClick={() => {
-                                deletePreSale(preSale.id!);
-                              }}
-                              className="py-2 border border-red-500/20 text-red-400 hover:bg-red-500/10 hover:border-red-500 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all"
-                            >
-                              Apagar
-                            </button>
-                            <button 
-                              onClick={() => {
-                                loadPreSale(preSale);
-                              }}
-                              className="py-2 bg-amber-500 text-slate-950 hover:bg-amber-400 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all"
-                            >
-                              Carregar
-                            </button>
-                          </div>
-                          <button 
-                            disabled={isFinishing}
-                            onClick={() => {
-                              convertPreSaleToSaleDirect(preSale);
-                            }}
-                            className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-[9px] font-black uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-md shadow-emerald-950/20 disabled:opacity-50"
-                          >
-                            <CheckCircle2 size={12} /> Faturar Orçamento (1-Clique)
-                          </button>
+                          {confirmDeleteId === preSale.id ? (
+                            <div className="bg-red-950/25 border border-red-500/20 rounded-xl p-2.5 flex flex-col gap-2 mt-2">
+                              <p className="text-[8.5px] font-black text-red-400 uppercase tracking-widest text-center leading-tight">CONFIRMA EXCLUSÃO DESTE ORÇAMENTO?</p>
+                              <div className="grid grid-cols-2 gap-2">
+                                <button 
+                                  type="button"
+                                  onClick={() => setConfirmDeleteId(null)}
+                                  className="py-1.5 bg-white/5 border border-white/10 hover:bg-white/10 text-white text-[9px] font-black uppercase tracking-widest rounded-lg transition-all"
+                                >
+                                  Cancelar
+                                </button>
+                                <button 
+                                  type="button"
+                                  onClick={() => deletePreSale(preSale.id!)}
+                                  className="py-1.5 bg-red-800 hover:bg-red-700 text-white text-[9px] font-black uppercase tracking-widest rounded-lg transition-all shadow-md shadow-red-950/40"
+                                >
+                                  Sim, Apagar
+                                </button>
+                              </div>
+                            </div>
+                          ) : confirmDirectBillId === preSale.id ? (
+                            <div className="bg-emerald-950/25 border border-emerald-500/20 rounded-xl p-2.5 flex flex-col gap-2 mt-2">
+                              <p className="text-[8.5px] font-black text-emerald-400 uppercase tracking-widest text-center leading-tight">CONFIRMA FATURAMENTO IMEDIATO? (ESTOQUE SERÁ ATUALIZADO)</p>
+                              <div className="grid grid-cols-2 gap-2">
+                                <button 
+                                  type="button"
+                                  onClick={() => setConfirmDirectBillId(null)}
+                                  className="py-1.5 bg-white/5 border border-white/10 hover:bg-white/10 text-white text-[9px] font-black uppercase tracking-widest rounded-lg transition-all"
+                                >
+                                  Cancelar
+                                </button>
+                                <button 
+                                  type="button"
+                                  disabled={isFinishing}
+                                  onClick={() => {
+                                    convertPreSaleToSaleDirect(preSale);
+                                    setConfirmDirectBillId(null);
+                                  }}
+                                  className="py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-[9px] font-black uppercase tracking-widest rounded-lg transition-all shadow-md shadow-emerald-950/40 disabled:opacity-50"
+                                >
+                                  Sim, Faturar
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="grid grid-cols-3 gap-2">
+                                <button 
+                                  type="button"
+                                  onClick={() => {
+                                    setConfirmDeleteId(preSale.id!);
+                                    setConfirmDirectBillId(null);
+                                  }}
+                                  className="py-2 border border-red-500/20 text-red-400 hover:bg-red-500/10 hover:border-red-500 text-[8px] font-black uppercase tracking-widest rounded-xl transition-all truncate"
+                                >
+                                  Apagar
+                                </button>
+                                <button 
+                                  type="button"
+                                  onClick={() => {
+                                    shareWhatsApp(preSale);
+                                  }}
+                                  className="py-2 bg-slate-800 border border-white/5 text-amber-500 hover:bg-slate-750 text-[8px] font-black uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-1"
+                                  title="Compartilhar Link Interativo"
+                                >
+                                  <span>Whats</span>
+                                </button>
+                                <button 
+                                  type="button"
+                                  onClick={() => {
+                                    loadPreSale(preSale);
+                                  }}
+                                  className="py-2 bg-amber-500 text-slate-950 hover:bg-amber-400 text-[8px] font-black uppercase tracking-widest rounded-xl transition-all"
+                                >
+                                  Carregar
+                                </button>
+                              </div>
+                              <button 
+                                type="button"
+                                disabled={isFinishing}
+                                onClick={() => {
+                                  setConfirmDirectBillId(preSale.id!);
+                                  setConfirmDeleteId(null);
+                                }}
+                                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-[9px] font-black uppercase tracking-widest rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-md shadow-emerald-950/20 disabled:opacity-50"
+                              >
+                                <CheckCircle2 size={12} /> Faturar Orçamento (1-Clique)
+                              </button>
+                            </>
+                          )}
                         </div>
                       </div>
                     ))

@@ -31,6 +31,7 @@ import Compensations from './pages/Compensations';
 import Shipments from './pages/Shipments';
 import Mural from './pages/Mural';
 import Reports from './pages/Reports';
+import PublicReceipt from './pages/PublicReceipt';
 
 type Page = 'dashboard' | 'pdv' | 'products' | 'customers' | 'finance' | 'compensations' | 'shipments' | 'mural' | 'reports';
 
@@ -53,6 +54,10 @@ export default function App() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string>('');
   const [logoScale, setLogoScale] = useState<number>(1.0);
+
+  // Check URL suffix for public receipt landing page bypass
+  const queryParams = new URLSearchParams(window.location.search);
+  const receiptId = queryParams.get('receipt') || queryParams.get('comprovante');
 
   // Sync Global Settings & Logo
   useEffect(() => {
@@ -157,6 +162,10 @@ export default function App() {
       }
     }
   };
+
+  if (receiptId) {
+    return <PublicReceipt receiptId={receiptId} />;
+  }
 
   if (loading) return (
     <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-50 text-slate-900 gap-4">

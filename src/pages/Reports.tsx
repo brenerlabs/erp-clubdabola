@@ -763,6 +763,19 @@ export default function Reports() {
                               >
                                 {copiedId === rec.originalRefId ? <Check size={11} className="text-emerald-500" /> : <Copy size={11} />}
                               </button>
+                              {rec.type === 'Venda' && (
+                                <button
+                                  onClick={() => {
+                                    const link = `${window.location.origin}/?receipt=${rec.originalRefId}`;
+                                    navigator.clipboard.writeText(link);
+                                    alert("🔗 Comprovante Web Interativo copiado para colar no WhatsApp do cliente!");
+                                  }}
+                                  className="p-1 pb-1 px-1.5 bg-red-50 text-red-800 hover:bg-red-800 hover:text-white rounded-lg transition-all text-[9px] font-black uppercase tracking-wider flex items-center gap-1 ml-1 shrink-0"
+                                  title="Copiar Link de Entrega Interativa"
+                                >
+                                  <span>Link do Manto</span> <ArrowUpRight size={10} />
+                                </button>
+                              )}
                             </div>
                           </td>
 
