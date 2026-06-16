@@ -142,8 +142,8 @@ export default function PublicReceipt({ receiptId }: PublicReceiptProps) {
   const isFiado = sale.paymentMethod === 'Fiado' || sale.status === 'Pendente';
   const isPaid = sale.status === 'Concluída' && sale.paymentMethod !== 'Fiado';
 
-  // Determine if payment is confirmed to show digital confetti
-  const isPaymentConfirmed = isPaid;
+  // Show digital confetti on all states for beautiful interactive presentation
+  const isPaymentConfirmed = true;
 
   // Format date helper
   const formattedDate = sale.createdAt?.seconds 
