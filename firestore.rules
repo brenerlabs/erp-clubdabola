@@ -86,7 +86,8 @@ service cloud.firestore {
     }
 
     match /transactions/{transactionId} {
-      allow read, write: if isAdmin();
+      allow read: if isAdmin() || (resource.data.saleId != null);
+      allow write: if isAdmin();
     }
 
     match /compensations/{compensationId} {

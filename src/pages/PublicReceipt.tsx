@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { doc, getDoc, collection, query, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, collection, query, onSnapshot, where } from 'firebase/firestore';
 import { Sale, Shipment } from '../types';
 import { JerseyPreview } from '../components/JerseyPreview';
 import { 
@@ -32,6 +32,7 @@ export default function PublicReceipt({ receiptId }: PublicReceiptProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'jersey' | 'tracking'>('jersey');
+  const [compensatedAmount, setCompensatedAmount] = useState<number>(0);
 
   // Load Sale and corresponding Shipment in real-time
   useEffect(() => {
@@ -81,9 +82,26 @@ export default function PublicReceipt({ receiptId }: PublicReceiptProps) {
       console.error("Error fetching matching shipment:", err);
     });
 
+    // 3. Listen to Transactions collection to calculate exactly how much was paid in real-time
+    const transactionsRef = collection(db, 'transactions');
+    const qTransactions = query(transactionsRef, where('saleId', '==', receiptId));
+    const unsubscribeTransactions = onSnapshot(qTransactions, (snapshot) => {
+      let paidSum = 0;
+      snapshot.forEach((docSnap) => {
+        const t = docSnap.data();
+        if (t.type === 'payment') {
+          paidSum += t.amount || 0;
+        }
+      });
+      setCompensatedAmount(paidSum);
+    }, (err) => {
+      console.error("Error fetching matching transactions:", err);
+    });
+
     return () => {
       unsubscribeSale();
       unsubscribeShipments();
+      unsubscribeTransactions();
     };
   }, [receiptId]);
 
@@ -455,10 +473,30 @@ export default function PublicReceipt({ receiptId }: PublicReceiptProps) {
                     <span className="font-mono">-{formatCurrency(sale.discount)}</span>
                   </div>
                 ) : null}
-                <div className="flex justify-between text-white uppercase font-black text-[12px] pt-1 border-t border-white/5">
-                  <span>Total Pago</span>
-                  <span className="font-mono text-amber-500">{formatCurrency(sale.total)}</span>
-                </div>
+                {isPreSale ? (
+                  <div className="flex justify-between text-white uppercase font-black text-[12px] pt-1 border-t border-white/5">
+                    <span>Valor a ser pago</span>
+                    <span className="font-mono text-amber-400">{formatCurrency(sale.total)}</span>
+                  </div>
+                ) : isFiado ? (
+                  <div className="space-y-1.5 pt-1 border-t border-white/5">
+                    <div className="flex justify-between text-white uppercase font-black text-[11px]">
+                      <span>Valor Pago</span>
+                      <span className="font-mono text-emerald-400">{formatCurrency(compensatedAmount)}</span>
+                    </div>
+                    <div className="flex justify-between text-rose-400 uppercase font-black text-[11px]">
+                      <span className="flex items-center gap-1">
+                        <Clock size={10} className="animate-pulse" /> Valor Pendente
+                      </span>
+                      <span className="font-mono">{formatCurrency(Math.max(0, sale.total - compensatedAmount))}</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex justify-between text-white uppercase font-black text-[12px] pt-1 border-t border-white/5">
+                    <span>Valor Pago</span>
+                    <span className="font-mono text-emerald-400">{formatCurrency(sale.total)}</span>
+                  </div>
+                )}
               </div>
             </div>
 
