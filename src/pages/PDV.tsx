@@ -577,8 +577,9 @@ export default function PDV() {
       `-------------------------------------------\n`
     ) : '';
 
-    const basePath = window.location.pathname.endsWith('/') ? window.location.pathname : window.location.pathname + '/';
-    const receiptLink = `${window.location.origin}${basePath}?receipt=${sale.id || ''}`;
+    const baseRoute = (import.meta as any).env?.BASE_URL || '/';
+    const cleanBase = baseRoute.endsWith('/') ? baseRoute : baseRoute + '/';
+    const receiptLink = `${window.location.origin}${cleanBase}?receipt=${sale.id || ''}`;
     const receiptSection = sale.id ? (
       `🔗 *MANTO INTERATIVO ONLINE (Novidade):*\n` +
       (isPre 

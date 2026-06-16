@@ -766,8 +766,9 @@ export default function Reports() {
                               {rec.type === 'Venda' && (
                                 <button
                                   onClick={() => {
-                                    const basePath = window.location.pathname.endsWith('/') ? window.location.pathname : window.location.pathname + '/';
-                                    const link = `${window.location.origin}${basePath}?receipt=${rec.originalRefId}`;
+                                    const baseRoute = (import.meta as any).env?.BASE_URL || '/';
+                                    const cleanBase = baseRoute.endsWith('/') ? baseRoute : baseRoute + '/';
+                                    const link = `${window.location.origin}${cleanBase}?receipt=${rec.originalRefId}`;
                                     navigator.clipboard.writeText(link);
                                     alert("🔗 Comprovante Web Interativo copiado para colar no WhatsApp do cliente!");
                                   }}
