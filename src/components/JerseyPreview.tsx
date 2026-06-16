@@ -239,12 +239,6 @@ export const JerseyPreview: React.FC<JerseyPreviewProps> = ({
             d="M 50,25 C 65,12 135,12 150,25 L 145,30 C 131,18 69,18 55,30 Z" 
             fill={activePreset.collarColor} 
           />
-          
-          {/* NECK BRANDING BADGE (CLUB DA BOLA LOGO MARK) */}
-          <g transform="translate(100, 42)">
-            <circle r="4" fill="#fbbf24" fillOpacity="0.9" />
-            <polygon points="-1,1 0,-2 1,1" fill="#020617" />
-          </g>
 
           {/* SLEEVE CUFF TRIMS */}
           <path d="M 15,45 C 10,48 10,55 15,58 L 19,55 C 15,52 15,48 19,45 Z" fill={activePreset.collarColor} />

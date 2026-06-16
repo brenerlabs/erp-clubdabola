@@ -172,7 +172,12 @@ export default function PublicReceipt({ receiptId }: PublicReceiptProps) {
 
   // Tracking Milestones
   const trackingMilestones = [
-    { label: 'Pedido Confirmado', desc: 'Processado no sistema', key: 'confirmado', active: true },
+    { 
+      label: isPreSale ? 'Orçamento Gerado' : 'Pedido Confirmado', 
+      desc: isPreSale ? 'Orçamento salvo no sistema' : 'Processado no sistema', 
+      key: 'confirmado', 
+      active: true 
+    },
     { label: 'Postado', desc: 'Despachado na transportadora', key: 'Postado', active: shipment?.status !== 'Processando' && !!shipment },
     { label: 'Em Trânsito', desc: 'Caminho internacional / nacional', key: 'Em Trânsito', active: ['Em Trânsito', 'Chegou no Brasil', 'Fiscalização', 'Em trânsito para o destino final', 'Recebido', 'Entregue'].includes(shipment?.status || '') },
     { label: 'Chegou no Brasil', desc: 'Centro de Triagem Aduaneira', key: 'Chegou no Brasil', active: ['Chegou no Brasil', 'Fiscalização', 'Em trânsito para o destino final', 'Recebido', 'Entregue'].includes(shipment?.status || '') },
@@ -343,12 +348,14 @@ export default function PublicReceipt({ receiptId }: PublicReceiptProps) {
                   </div>
                   
                   <h3 className="text-sm font-black text-white uppercase tracking-wider leading-none">
-                    {shipment ? shipment.status : 'Aguardando Despacho'}
+                    {shipment ? shipment.status : (isPreSale ? 'Aguardando Aprovação' : 'Aguardando Despacho')}
                   </h3>
                   <p className="text-[9px] text-slate-400 leading-tight max-w-xs uppercase">
                     {shipment 
                       ? 'Nossos fiscais atualizaram o status da sua encomenda recentemente.' 
-                      : 'O pedido foi faturado e está na fila para costura, separação e embalagem.'
+                      : (isPreSale 
+                          ? 'O orçamento aguarda sua aprovação e pagamento para seguir para fila de produção.' 
+                          : 'O pedido foi faturado e está na fila para costura, separação e embalagem.')
                     }
                   </p>
                 </div>
