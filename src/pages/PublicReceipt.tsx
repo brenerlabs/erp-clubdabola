@@ -204,15 +204,16 @@ export default function PublicReceipt({ receiptId }: PublicReceiptProps) {
   ];
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white font-sans relative overflow-x-hidden selection:bg-red-800 selection:text-white">
+    <div className="min-h-screen bg-gradient-to-br from-[#020617] via-[#0b030c] to-[#010103] text-white font-sans relative overflow-x-hidden selection:bg-red-800 selection:text-white">
       <style>{EXTRA_CSS}</style>
       
       {/* Background Confetti Congratulatory Effects */}
       {renderConfetti()}
 
-      {/* Cosmic background glows */}
-      <div className="absolute top-0 left-1/4 -translate-x-1/2 w-[350px] h-[350px] bg-red-900/10 rounded-full blur-[100px] pointer-events-none" />
-      <div className="absolute bottom-10 right-1/4 w-[300px] h-[300px] bg-amber-500/5 rounded-full blur-[80px] pointer-events-none" />
+      {/* Cosmic background glows with gorgeous red/gold gradients */}
+      <div className="absolute top-0 left-[20%] -translate-x-1/2 w-[450px] h-[450px] bg-gradient-to-tr from-red-800/15 to-transparent rounded-full blur-[130px] pointer-events-none animate-pulse" style={{ animationDuration: '8s' }} />
+      <div className="absolute top-[35%] right-[-150px] w-[450px] h-[450px] bg-gradient-to-bl from-amber-600/10 to-red-950/10 rounded-full blur-[140px] pointer-events-none" />
+      <div className="absolute bottom-10 left-[10%] w-[350px] h-[350px] bg-emerald-500/5 rounded-full blur-[90px] pointer-events-none" />
 
       {/* Main Container */}
       <div className="max-w-md mx-auto px-4 py-6 relative z-10 flex flex-col min-h-screen justify-between pb-10">
@@ -220,7 +221,7 @@ export default function PublicReceipt({ receiptId }: PublicReceiptProps) {
         {/* Header Branding */}
         <header className="flex flex-col items-center justify-center text-center gap-3 mb-6">
           <div className="flex items-center gap-2">
-            <span className="size-8 rounded-xl bg-gradient-to-tr from-red-900 to-amber-500 flex items-center justify-center text-white text-sm font-black shadow-lg shadow-red-900/40">
+            <span className="size-8 rounded-xl bg-gradient-to-tr from-red-850 to-amber-500 flex items-center justify-center text-white text-sm font-black shadow-lg shadow-red-900/40">
               CB
             </span>
             <div className="flex flex-col -space-y-1 text-left">
@@ -236,7 +237,7 @@ export default function PublicReceipt({ receiptId }: PublicReceiptProps) {
         <div className="space-y-4 flex-1">
           
           {/* Main Hero Card */}
-          <div className="bg-slate-900/80 border border-white/5 rounded-3xl p-5 shadow-2xl relative overflow-hidden backdrop-blur-md">
+          <div className="bg-gradient-to-b from-slate-900/90 via-slate-950/80 to-slate-900/90 border border-white/10 rounded-3xl p-5 shadow-2xl relative overflow-hidden backdrop-blur-md">
             
             {/* Header Status Badge */}
             <div className="flex items-center justify-between border-b border-white/5 pb-4 mb-4">
@@ -298,13 +299,13 @@ export default function PublicReceipt({ receiptId }: PublicReceiptProps) {
 
             {/* TAB SELECTOR: Canvas visual vs Rastreamento */}
             {hasCustomized && (
-              <div className="grid grid-cols-2 bg-slate-950 p-1.5 rounded-2xl border border-white/5 mb-5">
+              <div className="grid grid-cols-2 bg-gradient-to-r from-slate-950 to-slate-900 p-1.5 rounded-2xl border border-white/5 mb-5 shadow-inner">
                 <button
                   type="button"
                   onClick={() => setActiveTab('jersey')}
                   className={`py-2 px-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${
                     activeTab === 'jersey' 
-                      ? 'bg-red-800 text-white shadow-md shadow-red-950/40' 
+                      ? 'bg-gradient-to-r from-red-800 to-red-955 text-white shadow-md shadow-red-950/40' 
                       : 'text-slate-500 hover:text-white'
                   }`}
                 >
@@ -315,7 +316,7 @@ export default function PublicReceipt({ receiptId }: PublicReceiptProps) {
                   onClick={() => setActiveTab('tracking')}
                   className={`py-2 px-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${
                     activeTab === 'tracking' 
-                      ? 'bg-red-800 text-white shadow-md shadow-red-950/40' 
+                      ? 'bg-gradient-to-r from-red-800 to-red-955 text-white shadow-md shadow-red-950/40' 
                       : 'text-slate-500 hover:text-white'
                   }`}
                 >
@@ -336,7 +337,7 @@ export default function PublicReceipt({ receiptId }: PublicReceiptProps) {
                 />
 
                 {/* Information Badge */}
-                <div className="flex gap-2.5 bg-white/5 rounded-xl p-3 border border-indigo-500/10 text-left">
+                <div className="flex gap-2.5 bg-gradient-to-r from-white/5 via-indigo-950/10 to-white/5 rounded-xl p-3 border border-indigo-500/10 text-left">
                   <ShieldCheck size={18} className="text-emerald-400 shrink-0 mt-0.5" />
                   <div className="space-y-0.5 text-left">
                     <h4 className="text-[10px] font-extrabold uppercase tracking-wide text-white">Garantia Club da Bola</h4>
@@ -354,7 +355,7 @@ export default function PublicReceipt({ receiptId }: PublicReceiptProps) {
               <div className="space-y-4 animate-fadeIn">
                 
                 {/* Active Tracking Status Banner */}
-                <div className="bg-slate-950 border border-white/5 rounded-2xl p-4 flex flex-col items-center justify-center text-center gap-1.5 shadow-inner">
+                <div className="bg-gradient-to-b from-slate-950 to-slate-900 border border-white/5 rounded-2xl p-4 flex flex-col items-center justify-center text-center gap-1.5 shadow-inner">
                   <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest leading-none block">STATUS DE TRANSPORTE</span>
                   
                   <div className="size-11 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500 mb-1">
@@ -370,7 +371,7 @@ export default function PublicReceipt({ receiptId }: PublicReceiptProps) {
                   </h3>
                   <p className="text-[9px] text-slate-400 leading-tight max-w-xs uppercase">
                     {shipment 
-                      ? 'Nossos fiscais atualizaram o status da sua encomenda recentemente.' 
+                      ? 'Nossos fiscais atualizaram o status da sua encomenda recently.' 
                       : (isPreSale 
                           ? 'O orçamento aguarda sua aprovação e pagamento para seguir para fila de produção.' 
                           : 'O pedido foi faturado e está na fila para costura, separação e embalagem.')
@@ -379,7 +380,7 @@ export default function PublicReceipt({ receiptId }: PublicReceiptProps) {
                 </div>
 
                 {/* Tracking Milestones Progression */}
-                <div className="relative bg-slate-950 border border-white/5 rounded-2xl p-4 pl-8 space-y-4 text-left">
+                <div className="relative bg-gradient-to-br from-slate-950 to-slate-900 border border-white/5 rounded-2xl p-4 pl-8 space-y-4 text-left">
                   {/* Vertical progression line */}
                   <div className="absolute top-6 bottom-6 left-6 w-0.5 bg-slate-800" />
 
@@ -415,18 +416,18 @@ export default function PublicReceipt({ receiptId }: PublicReceiptProps) {
                       href={`https://rastreamento.correios.com.br/app/index.php?codigo=${shipment.trackingCode}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="w-full py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-amber-500/10"
+                      className="w-full py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-amber-500/15"
                     >
                       <span>Acompanhar Correios Rastreio</span> <ExternalLink size={12} />
                     </a>
                     
-                    <div className="bg-white/5 rounded-xl border border-white/5 p-2 px-3 flex items-center justify-between text-[9px] font-mono select-all">
+                    <div className="bg-gradient-to-r from-white/5 to-white/10 rounded-xl border border-white/5 p-2 px-3 flex items-center justify-between text-[9px] font-mono select-all">
                       <span className="text-slate-500">CÓDIGO:</span>
                       <span className="text-white font-extrabold uppercase select-all tracking-wider">{shipment.trackingCode}</span>
                     </div>
                   </div>
                 ) : (
-                  <div className="bg-slate-950 border border-white/5 rounded-2xl p-4.5 text-center text-slate-500 text-[9px] font-medium uppercase leading-tight">
+                  <div className="bg-gradient-to-br from-slate-950 to-slate-900 border border-white/5 rounded-2xl p-4.5 text-center text-slate-500 text-[9px] font-medium uppercase leading-tight">
                     Logo que seu objeto for postado nos Correios ou DHL, mandaremos uma notificação em tempo real por WhatsApp com o código para rastreamento.
                   </div>
                 )}
@@ -435,7 +436,7 @@ export default function PublicReceipt({ receiptId }: PublicReceiptProps) {
             )}
 
             {/* ALWAYS SHOW: Items Summary Details Box */}
-            <div className="bg-slate-950 border border-white/5 rounded-2xl p-4 space-y-3 mt-4">
+            <div className="bg-gradient-to-b from-slate-950 to-slate-900 border border-white/10 rounded-2xl p-4 space-y-3 mt-4 shadow-xl">
               <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest block leading-none">RESUMO DOS ITENS</span>
               
               <div className="space-y-2">

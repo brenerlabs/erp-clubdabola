@@ -741,23 +741,15 @@ export default function Mural() {
                   animate={{ opacity: 1, scale: 1 }}
                   className="bg-white border rounded-[28px] overflow-hidden shadow-sm group hover:shadow-xl transition-all duration-300 relative flex flex-col border-slate-200 p-4"
                 >
-                  {/* Polaroid Frame Container */}
+                  {/* Polaroid Frame Container - Click "Editar Card" to adjust zoom/placement */}
                   <div 
-                    className="aspect-square w-full rounded-2xl overflow-hidden bg-slate-950 relative border border-slate-100 select-none"
-                    style={{ cursor: (item.scale || 1.0) > 0.1 ? 'grab' : 'default' }}
-                    onMouseDown={(e) => handleMouseDown(e, item)}
-                    onMouseMove={(e) => handleMouseMove(e, item)}
-                    onMouseUp={() => handleMouseUpOrLeave(item)}
-                    onMouseLeave={() => handleMouseUpOrLeave(item)}
-                    onTouchStart={(e) => handleTouchStart(e, item)}
-                    onTouchMove={(e) => handleTouchMove(e, item)}
-                    onTouchEnd={() => handleMouseUpOrLeave(item)}
+                    className="aspect-[9/16] w-full rounded-2xl overflow-hidden bg-slate-900 relative border border-slate-100 select-none"
                   >
                     <img 
                       src={item.photoUrl} 
                       alt={item.customerName}
                       referrerPolicy="no-referrer"
-                      className="w-full h-full object-cover rounded-2xl pointer-events-none transition-transform duration-75 ease-out origin-center"
+                      className="w-full h-full rounded-2xl pointer-events-none transition-all duration-350 ease-out origin-center object-cover bg-slate-950"
                       style={{ 
                         transform: `scale(${item.scale || 1.0}) translate(${(localOffsets[item.id || '']?.x ?? item.offsetX ?? 0) / (item.scale || 1.0)}px, ${(localOffsets[item.id || '']?.y ?? item.offsetY ?? 0) / (item.scale || 1.0)}px)`
                       }}
@@ -1076,7 +1068,7 @@ export default function Mural() {
                   {selectedPhotoFile ? (
                     <div className="space-y-4">
                       <div 
-                        className="relative aspect-video rounded-2xl overflow-hidden border border-slate-200 group bg-slate-950 flex items-center justify-center select-none"
+                        className="relative aspect-[9/16] w-full max-w-[260px] mx-auto rounded-2xl overflow-hidden border border-slate-200 group bg-slate-950 flex items-center justify-center select-none"
                         style={{ cursor: photoScale > 0.1 ? 'grab' : 'default' }}
                         onMouseDown={handleModalPhotoMouseDown}
                         onMouseMove={handleModalPhotoMouseMove}
@@ -1089,7 +1081,7 @@ export default function Mural() {
                         <img 
                           src={selectedPhotoFile} 
                           alt="Preview" 
-                          className="w-full h-full object-cover transition-transform duration-75 ease-out pointer-events-none origin-center" 
+                          className="w-full h-full transition-all duration-350 ease-out pointer-events-none origin-center object-cover bg-slate-950" 
                           style={{ transform: `scale(${photoScale}) translate(${photoOffsetX / photoScale}px, ${photoOffsetY / photoScale}px)` }}
                         />
                         <button 

@@ -236,7 +236,11 @@ export default function App() {
 
   return (
     <SidebarContext.Provider value={{ isSidebarOpen, setIsSidebarOpen }}>
-      <div className="flex h-screen font-sans overflow-hidden relative bg-slate-50 text-slate-900">
+      <div className="flex h-screen font-sans overflow-hidden relative bg-gradient-to-tr from-[#f8fafc] via-[#f1f5f9] to-[#e2e8f0] text-slate-900">
+        
+        {/* Subtle Elegant Ambient Background Gradient Glows */}
+        <div className="absolute top-[-150px] left-[-150px] w-[500px] h-[500px] bg-red-800/10 rounded-full blur-[130px] pointer-events-none" />
+        <div className="absolute bottom-[-100px] right-[50px] w-[600px] h-[600px] bg-amber-500/10 rounded-full blur-[160px] pointer-events-none" />
       
       {/* Modern Sidebar - Strictly for Desktop (hidden on mobile) */}
       <AnimatePresence mode="wait">
