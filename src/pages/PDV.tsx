@@ -9,6 +9,42 @@ import { SidebarContext } from '../App';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { JerseyPreview } from '../components/JerseyPreview';
+import html2canvas from 'html2canvas';
+
+// Helper custom robust copy-to-clipboard for browser sandboxing and iframes
+const copyToClipboard = (text: string) => {
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(() => {
+      alert("Script de vendas copiado com sucesso! Só colar no WhatsApp do cliente. 💬");
+    }).catch(() => {
+      fallbackCopyToClipboard(text);
+    });
+  } else {
+    fallbackCopyToClipboard(text);
+  }
+};
+
+const fallbackCopyToClipboard = (text: string) => {
+  const textArea = document.createElement("textarea");
+  textArea.value = text;
+  textArea.style.top = "0";
+  textArea.style.left = "0";
+  textArea.style.position = "fixed";
+  document.body.appendChild(textArea);
+  textArea.focus();
+  textArea.select();
+  try {
+    const successful = document.execCommand('copy');
+    if (successful) {
+      alert("Script de vendas copiado com sucesso! Só colar no WhatsApp do cliente. 💬");
+    } else {
+      alert("Não foi possível copiar automaticamente. Selecione e copie o texto manualmente.");
+    }
+  } catch (err) {
+    alert("Não foi possível copiar automaticamente. Selecione e copie o texto manualmente.");
+  }
+  document.body.removeChild(textArea);
+};
 
 const formatLocalYMD = (date: Date) => {
   const year = date.getFullYear();
@@ -318,7 +354,10 @@ export default function PDV() {
   };
 
   const finishSale = async (isPreSale = false) => {
-    if (cart.length === 0) return;
+    if (cart.length === 0) {
+      alert('Selecione pelo menos um produto para finalizar!');
+      return;
+    }
     if (!isPreSale && paymentMethod === 'Fiado' && !selectedCustomer) {
       alert('Selecione um cliente para venda no Fiado!');
       return;
@@ -1207,119 +1246,144 @@ export default function PDV() {
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="bg-white rounded-[32px] shadow-2xl relative z-10 w-full max-w-lg overflow-hidden border border-slate-200"
+              className="bg-white rounded-[32px] shadow-2xl relative z-10 w-full max-w-lg max-h-[92vh] flex flex-col overflow-hidden border border-slate-200"
             >
-              <div className="p-6 bg-slate-900 text-white relative">
-                <button 
-                  onClick={() => setShowSizeGuideModal(false)}
-                  className="absolute top-4 right-4 text-white/60 hover:text-white transition-colors p-1"
-                >
-                  <X size={18} />
-                </button>
-                <div className="flex items-center gap-2.5 mb-2">
-                  <span className="p-1.5 bg-amber-500/20 text-amber-400 rounded-lg">
-                    <Sparkles size={16} />
-                  </span>
-                  <p className="text-[9px] font-black uppercase text-amber-500 tracking-widest leading-none">Guia de Caimento Inteligente</p>
-                </div>
-                <h3 className="text-xl font-black uppercase tracking-tight">Jogador vs Torcedor</h3>
-                <p className="text-white/60 font-medium text-[10px] uppercase tracking-wide mt-1 leading-relaxed">
-                  Evite custos de Devolução e Frete Reverso orientando corretamente o cliente!
-                </p>
-              </div>
-
-              <div className="p-6 space-y-5 overflow-y-auto max-h-[75vh] custom-scrollbar">
-                
-                {/* Visual Explanation of Differences */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="p-4 rounded-2xl bg-amber-50/50 border border-amber-200/40 text-slate-800">
-                    <div className="flex items-center gap-1.5 mb-2">
-                      <span className="text-[10px] font-black uppercase bg-amber-500 text-slate-950 px-2 py-0.5 rounded-full">Jogador</span>
-                      <span className="text-[8px] font-bold text-amber-800 uppercase tracking-widest">(Slim Fit)</span>
+              {/* Scrollable area for size guide information content */}
+              <div className="flex-1 overflow-y-auto custom-scrollbar">
+                {/* Contêiner capturado como foto */}
+                <div id="size-guide-content" className="bg-white text-slate-800 p-6 space-y-5">
+                  <div className="bg-slate-900 text-white p-5 -mx-6 -mt-6 relative">
+                    <div className="flex items-center gap-2.5 mb-2">
+                      <span className="p-1.5 bg-amber-500/20 text-amber-400 rounded-lg">
+                        <Sparkles size={16} />
+                      </span>
+                      <p className="text-[10px] font-black uppercase text-amber-500 tracking-widest leading-none">Guia de Caimento Inteligente</p>
                     </div>
-                    <ul className="text-[10px] space-y-1 text-slate-600 font-semibold leading-relaxed list-disc list-inside">
-                      <li>Modelagem <strong>confort/colada</strong></li>
-                      <li>Tecido de jogo texturizado</li>
-                      <li>Símbolos emborrachados/silk</li>
-                      <li><strong>Indicação:</strong> Comprar <strong>1 tamanho acima</strong></li>
-                    </ul>
-                  </div>
-
-                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/50 text-slate-800">
-                    <div className="flex items-center gap-1.5 mb-2">
-                      <span className="text-[10px] font-black uppercase bg-slate-800 text-white px-2 py-0.5 rounded-full">Torcedor</span>
-                      <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">(Classic Fit)</span>
-                    </div>
-                    <ul className="text-[10px] space-y-1 text-slate-600 font-semibold leading-relaxed list-disc list-inside">
-                      <li>Modelagem <strong>padrão/folgada</strong></li>
-                      <li>Tecido de poliéster liso</li>
-                      <li>Símbolos e escudos bordados</li>
-                      <li><strong>Indicação:</strong> Comprar o <strong>tamanho de costume</strong></li>
-                    </ul>
-                  </div>
-                </div>
-
-                {/* Size Equivalence Table */}
-                <div className="border border-slate-150 rounded-2xl overflow-hidden shadow-sm">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead>
-                      <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
-                        <th className="p-3 font-black text-[9px] uppercase tracking-wider">Se o cliente usa (Torcedor):</th>
-                        <th className="p-3 font-black text-[9px] uppercase tracking-wider text-amber-700 font-bold">Ele deve comprar (Jogador):</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 text-[10px] text-slate-650 font-bold uppercase font-sans">
-                      <tr>
-                        <td className="p-3">Tamanho P</td>
-                        <td className="p-3 text-amber-600 font-extrabold">Tamanho M (Slim)</td>
-                      </tr>
-                      <tr className="bg-slate-50/50">
-                        <td className="p-3">Tamanho M</td>
-                        <td className="p-3 text-amber-600 font-extrabold">Tamanho G (Slim)</td>
-                      </tr>
-                      <tr>
-                        <td className="p-3">Tamanho G</td>
-                        <td className="p-3 text-amber-600 font-extrabold">Tamanho GG (Slim)</td>
-                      </tr>
-                      <tr className="bg-slate-50/50">
-                        <td className="p-3">Tamanho GG</td>
-                        <td className="p-3 text-amber-600 font-extrabold">Tamanho XG / GGG (Slim)</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Practical Tip card */}
-                <div className="p-3.5 bg-rose-50 border border-rose-100 rounded-2xl flex items-start gap-2.5">
-                  <span className="text-red-700 font-extrabold text-xs">💡</span>
-                  <div>
-                    <h4 className="text-[10px] font-black text-rose-800 uppercase tracking-widest mb-0.5">Dica de Arguição de Venda</h4>
-                    <p className="text-[10px] text-rose-750 font-medium leading-relaxed">
-                      Diga ao cliente: <em>"Como a versão Jogador é mais justa para atletas, sugerimos uma numeração a mais para que fique perfeita e confortável no corpo, mantendo o excelente caimento."</em>
+                    <h3 className="text-xl font-black uppercase tracking-tight">Jogador vs Torcedor</h3>
+                    <p className="text-white/60 font-medium text-[10px] uppercase tracking-wide mt-1 leading-relaxed">
+                      Evite custos de Devolução e Frete Reverso orientando corretamente o cliente!
                     </p>
                   </div>
-                </div>
+                  
+                  {/* Visual Explanation of Differences */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200/40 text-slate-800">
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <span className="text-[10px] font-black uppercase bg-amber-500 text-slate-950 px-2 py-0.5 rounded-full">Jogador</span>
+                        <span className="text-[8px] font-bold text-amber-800 uppercase tracking-widest">(Slim Fit)</span>
+                      </div>
+                      <ul className="text-[10px] space-y-1 text-slate-600 font-semibold leading-relaxed list-disc list-inside">
+                        <li>Modelagem <strong>confort/colada</strong></li>
+                        <li>Tecido de jogo texturizado</li>
+                        <li>Símbolos emborrachados/silk</li>
+                        <li><strong>Indicação:</strong> Comprar <strong>1 tamanho acima</strong></li>
+                      </ul>
+                    </div>
 
-                <div className="flex gap-3">
+                    <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/50 text-slate-800">
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <span className="text-[10px] font-black uppercase bg-slate-800 text-white px-2 py-0.5 rounded-full">Torcedor</span>
+                        <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">(Classic Fit)</span>
+                      </div>
+                      <ul className="text-[10px] space-y-1 text-slate-600 font-semibold leading-relaxed list-disc list-inside">
+                        <li>Modelagem <strong>padrão/folgada</strong></li>
+                        <li>Tecido de poliéster liso</li>
+                        <li>Símbolos e escudos bordados</li>
+                        <li><strong>Indicação:</strong> Comprar o <strong>tamanho de costume</strong></li>
+                      </ul>
+                    </div>
+                  </div>
+
+                  {/* Size Equivalence Table */}
+                  <div className="border border-slate-150 rounded-2xl overflow-hidden shadow-sm bg-white">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                          <th className="p-3 font-black text-[9px] uppercase tracking-wider">Se o cliente usa (Torcedor):</th>
+                          <th className="p-3 font-black text-[9px] uppercase tracking-wider text-amber-700 font-bold">Ele deve comprar (Jogador):</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 text-[10px] text-slate-650 font-bold uppercase font-sans">
+                        <tr>
+                          <td className="p-3">Tamanho P</td>
+                          <td className="p-3 text-amber-600 font-extrabold">Tamanho M (Slim)</td>
+                        </tr>
+                        <tr className="bg-slate-50/50">
+                          <td className="p-3">Tamanho M</td>
+                          <td className="p-3 text-amber-600 font-extrabold">Tamanho G (Slim)</td>
+                        </tr>
+                        <tr>
+                          <td className="p-3">Tamanho G</td>
+                          <td className="p-3 text-amber-600 font-extrabold">Tamanho GG (Slim)</td>
+                        </tr>
+                        <tr className="bg-slate-50/50">
+                          <td className="p-3">Tamanho GG</td>
+                          <td className="p-3 text-amber-600 font-extrabold">Tamanho XG / GGG (Slim)</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Practical Tip card */}
+                  <div className="p-3.5 bg-rose-50 border border-rose-100 rounded-2xl flex items-start gap-2.5">
+                    <span className="text-red-700 font-extrabold text-xs">💡</span>
+                    <div>
+                      <h4 className="text-[10px] font-black text-rose-800 uppercase tracking-widest mb-0.5">Dica de Arguição de Venda</h4>
+                      <p className="text-[10px] text-rose-750 font-medium leading-relaxed">
+                        Diga ao cliente: <em>"Como a versão Jogador é mais justa para atletas, sugerimos uma numeração a mais para que fique perfeita e confortável no corpo, mantendo o excelente caimento."</em>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Botões - Fora do contêiner de imagem para não sair na foto, fixados no rodapé */}
+              <div className="p-5 border-t border-slate-100 bg-slate-50/70 space-y-3">
+                <div className="flex flex-col sm:flex-row gap-2">
                   <button 
                     type="button"
                     onClick={() => {
                       const text = "A versão JOGADOR possui modelagem Slim (esportiva/justa). Como o corte é projetado para atletas, recomendamos levar +1 tamanho acima do que você costuma usar para garantir o máximo conforto! ⚽🔥";
-                      navigator.clipboard.writeText(text);
-                      alert("Script de vendas copiado para o teclado! Só colar no WhatsApp do cliente.");
+                      copyToClipboard(text);
                     }}
-                    className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-black uppercase tracking-widest text-[9.5px] transition-all border border-slate-200 flex items-center justify-center gap-1.5"
+                    className="flex-1 py-3 bg-white hover:bg-slate-100 text-slate-700 rounded-xl font-black uppercase tracking-widest text-[9.5px] transition-all border border-slate-200 flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer shadow-sm"
                   >
                     <span>Copiar Script WhatsApp 💬</span>
                   </button>
                   <button 
                     type="button"
-                    onClick={() => setShowSizeGuideModal(false)}
-                    className="py-3 px-6 bg-slate-900 hover:bg-black text-white font-black rounded-xl transition-all uppercase tracking-widest text-[9.5px] shadow-md"
+                    onClick={async () => {
+                      const element = document.getElementById('size-guide-content');
+                      if (!element) return;
+                      try {
+                        const canvas = await html2canvas(element, {
+                          backgroundColor: '#ffffff',
+                          scale: 2,
+                          logging: false,
+                          useCORS: true
+                        });
+                        const image = canvas.toDataURL('image/png');
+                        const link = document.createElement('a');
+                        link.href = image;
+                        link.download = 'guia-de-tamanhos-club-da-bola.png';
+                        link.click();
+                      } catch (err) {
+                        console.error('Erro ao gerar foto do guia:', err);
+                        alert('Não foi possível gerar a foto automaticamente neste navegador. Tire um print da tela para salvar!');
+                      }
+                    }}
+                    className="flex-1 py-3 bg-amber-500 hover:bg-amber-600 text-slate-950 rounded-xl font-black uppercase tracking-widest text-[9.5px] transition-all flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer shadow-md shadow-amber-500/10"
                   >
-                    Fechar
+                    <span>Salvar como Foto 📸</span>
                   </button>
                 </div>
+                <button 
+                  type="button"
+                  onClick={() => setShowSizeGuideModal(false)}
+                  className="w-full py-3 bg-slate-900 hover:bg-black text-white font-black rounded-xl transition-all uppercase tracking-widest text-[9.5px] shadow-md cursor-pointer"
+                >
+                  Fechar
+                </button>
               </div>
             </motion.div>
           </div>
@@ -1523,13 +1587,19 @@ export default function PDV() {
                   <div className="space-y-4 pb-6 border-b border-white/10">
                     <div className="flex items-center justify-between mb-2">
                       <div className="text-[10px] font-black uppercase tracking-widest text-white/40">Informações da Venda</div>
-                      <button 
-                        type="button"
-                        onClick={() => setShowSizeGuideModal(true)}
-                        className="px-2 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all flex items-center gap-1"
-                      >
-                        <HelpCircle size={10} /> Guia de Costuras 📏
-                      </button>
+                      {cart.some(item => {
+                        const productObj = products.find(p => p.id === item.productId);
+                        return (productObj?.category || '').toLowerCase().includes('camisa') || 
+                               (item.name || '').toLowerCase().includes('camisa');
+                      }) && (
+                        <button 
+                          type="button"
+                          onClick={() => setShowSizeGuideModal(true)}
+                          className="px-2 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 rounded-lg text-[8.5px] font-black uppercase tracking-widest transition-all active:scale-95 flex items-center gap-1 shadow-lg shadow-amber-500/5 cursor-pointer animate-in fade-in zoom-in-95 duration-200"
+                        >
+                          <HelpCircle size={10} /> Guia de Costuras 📏
+                        </button>
+                      )}
                     </div>
                     {/* Customer Selector */}
                     <div className="relative group">
@@ -1978,14 +2048,12 @@ export default function PDV() {
                     </div>
                   </div>
 
-                  {cart.length > 0 && (
-                    <button 
-                      onClick={generateBudgetPDF}
-                      className="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-2.5 rounded-xl transition-all flex items-center justify-center gap-2 uppercase tracking-widest text-[9px] shadow-lg shadow-amber-500/15 font-sans active:scale-95"
-                    >
-                      <FileText size={14} /> Gerar Orçamento PDF
-                    </button>
-                  )}
+                  <button 
+                    onClick={generateBudgetPDF}
+                    className="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-2.5 rounded-xl transition-all flex items-center justify-center gap-2 uppercase tracking-widest text-[9px] shadow-lg shadow-amber-500/15 font-sans active:scale-95 text-center"
+                  >
+                    <FileText size={14} /> Gerar Orçamento PDF
+                  </button>
 
                   {paymentMethod === 'Fiado' && !selectedCustomer && (
                     <div className="bg-red-950/50 border border-red-800/50 p-2 rounded-xl text-center">
@@ -1996,7 +2064,7 @@ export default function PDV() {
                   {loadedPreSaleId ? (
                     <div className="flex flex-col md:grid md:grid-cols-2 gap-2">
                       <button 
-                        disabled={isFinishing || cart.length === 0 || (paymentMethod === 'Fiado' && !selectedCustomer)}
+                        disabled={isFinishing || (paymentMethod === 'Fiado' && !selectedCustomer)}
                         onClick={() => finishSale(false)}
                         className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-900 disabled:text-slate-700 disabled:shadow-none text-white font-black py-4 md:py-2.5 rounded-xl transition-all shadow-xl flex items-center justify-center gap-1.5 uppercase tracking-wider text-[9px]"
                       >
@@ -2004,7 +2072,7 @@ export default function PDV() {
                         {!isFinishing && <CheckCircle2 size={13} />}
                       </button>
                       <button 
-                        disabled={isFinishing || cart.length === 0}
+                        disabled={isFinishing}
                         onClick={() => finishSale(true)}
                         className="w-full bg-slate-800 hover:bg-slate-700 disabled:bg-slate-900 text-amber-500 font-black py-3 md:py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5 uppercase tracking-wider text-[9px]"
                       >
@@ -2014,7 +2082,7 @@ export default function PDV() {
                   ) : (
                     <div className="flex flex-col md:grid md:grid-cols-2 gap-2">
                       <button 
-                        disabled={isFinishing || cart.length === 0 || (paymentMethod === 'Fiado' && !selectedCustomer)}
+                        disabled={isFinishing || (paymentMethod === 'Fiado' && !selectedCustomer)}
                         onClick={() => finishSale(false)}
                         className="w-full bg-red-800 hover:bg-black disabled:bg-slate-900 disabled:text-slate-700 disabled:shadow-none text-white font-black py-4 md:py-2.5 rounded-xl transition-all shadow-xl shadow-red-900/30 flex items-center justify-center gap-1.5 active:scale-[0.98] uppercase tracking-wider text-[9px]"
                       >
@@ -2022,7 +2090,7 @@ export default function PDV() {
                         {!isFinishing && <Send size={13} />}
                       </button>
                       <button 
-                        disabled={isFinishing || cart.length === 0}
+                        disabled={isFinishing}
                         onClick={() => finishSale(true)}
                         className="w-full bg-slate-900 hover:bg-slate-800 disabled:bg-slate-900 text-amber-500 border border-white/5 font-black py-3 md:py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5 uppercase tracking-wider text-[9px]"
                       >

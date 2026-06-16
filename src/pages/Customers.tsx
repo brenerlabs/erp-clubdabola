@@ -640,20 +640,20 @@ export default function Customers() {
           </h2>
           <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.3em] font-sans mt-2">Base Global de Clientes e Créditos</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-center md:justify-end gap-2 w-full md:w-auto">
           <label className={cn(
             "flex items-center gap-2 px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-800 font-black rounded-xl cursor-pointer transition-all active:scale-95 uppercase tracking-widest text-[10px] font-sans border border-slate-200 shadow-sm",
             isImporting && "opacity-50 pointer-events-none"
           )}>
             <ArrowDownCircle size={20} className="text-red-800" />
-            {isImporting ? 'Sincronizando...' : 'Importar Lote'}
+            {isImporting ? 'Importando...' : 'Importar Clientes'}
             <input type="file" accept=".csv" className="hidden" onChange={handleCSVImport} disabled={isImporting} />
           </label>
           <button 
             onClick={() => openModal()}
             className="bg-red-800 hover:bg-black text-white font-black py-3 px-6 rounded-xl transition-all shadow-lg shadow-red-900/20 flex items-center gap-2 active:scale-95 uppercase tracking-widest text-[10px] font-sans"
           >
-            <Plus size={20} className="text-amber-500" /> Integrar Cliente
+            <Plus size={20} className="text-amber-500" /> Cadastrar Cliente
           </button>
         </div>
       </div>

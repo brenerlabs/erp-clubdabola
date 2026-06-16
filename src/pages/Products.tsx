@@ -656,27 +656,28 @@ export default function Products() {
           </h2>
           <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.3em] font-sans mt-2">Controle de Inventário e Margens</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5 w-full md:w-auto">
           <button 
             type="button"
             onClick={() => setIsSimulatorOpen(true)}
-            className="bg-amber-400 hover:bg-amber-500 text-blue-950 font-black py-3 px-6 rounded-xl transition-all shadow-lg shadow-amber-500/10 flex items-center gap-2 active:scale-95 text-[10px] font-sans uppercase tracking-widest cursor-pointer"
+            className="bg-amber-400 hover:bg-amber-500 text-blue-950 font-black py-2.5 px-3 md:py-3 md:px-5 rounded-xl transition-all shadow-lg shadow-amber-500/10 flex items-center justify-center gap-1.5 active:scale-95 text-[10px] md:text-xs uppercase tracking-widest cursor-pointer flex-1 sm:flex-initial"
           >
-            <Calculator size={18} className="text-blue-950" /> Simulador
+            <Calculator size={14} className="text-blue-950" /> Simulador
           </button>
           <label className={cn(
-            "flex items-center gap-2 px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-800 font-black rounded-xl cursor-pointer transition-all active:scale-95 text-[10px] font-sans uppercase tracking-widest border border-slate-200 shadow-sm",
+            "flex items-center justify-center gap-1.5 px-3 py-2.5 md:px-5 md:py-3 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl cursor-pointer transition-all active:scale-95 text-[10px] md:text-xs uppercase tracking-widest border border-slate-200 shadow-sm flex-1 sm:flex-initial text-center select-none",
             isImporting && "opacity-50 pointer-events-none"
           )}>
-            <Box size={20} className="text-red-800" />
-            {isImporting ? 'Sincronizando...' : 'Importar CSV'}
+            <Box size={14} className="text-red-800" />
+            <span>{isImporting ? 'Importando...' : 'Importar Produtos'}</span>
             <input type="file" accept=".csv" className="hidden" onChange={handleCSVImport} disabled={isImporting} />
           </label>
           <button 
             onClick={() => openModal()}
-            className="bg-red-800 hover:bg-black text-white font-black py-3 px-6 rounded-xl transition-all shadow-lg shadow-red-900/20 flex items-center gap-2 active:scale-95 text-[10px] font-sans uppercase tracking-widest"
+            className="bg-red-800 hover:bg-black text-white font-bold py-2.5 px-3 md:py-3 md:px-6 rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 active:scale-95 shadow-red-900/20 text-[10px] md:text-xs flex-1 sm:flex-initial cursor-pointer"
           >
-            <Plus size={20} className="text-amber-500" /> Deploy Produto
+            <Plus size={14} className="text-amber-500" />
+            <span>Cadastrar Produto</span>
           </button>
         </div>
       </div>
@@ -705,33 +706,41 @@ export default function Products() {
         </motion.div>
       )}
 
-      <div className="flex flex-col lg:flex-row items-center justify-between gap-4 p-6 bg-white/40 backdrop-blur-md rounded-[32px] border border-white/60 shadow-xl shadow-slate-200/50">
-        <div className="flex flex-col sm:flex-row items-center gap-4 flex-1 w-full max-w-2xl">
+      <div className="flex flex-col lg:flex-row items-center justify-between gap-4 p-4 lg:p-6 bg-white/40 backdrop-blur-md rounded-2xl lg:rounded-3xl border border-white/60 shadow-xl shadow-slate-200/50 mb-4 lg:mb-6">
+        <div className="flex flex-col lg:flex-row items-center gap-3 flex-1 w-full">
           <div className="flex-1 relative group w-full">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 size-5 group-focus-within:text-red-800 transition-colors" />
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 size-4 group-focus-within:text-red-800 transition-colors" />
             <input 
               type="text" 
-              placeholder="Buscar SKUs..." 
-              className="w-full pl-12 pr-4 py-3 bg-white/60 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-red-800 transition-all shadow-sm outline-none text-[10px] font-black tracking-widest"
+              placeholder="Buscar itens por SKU ou nome..." 
+              className="w-full pl-10 pr-10 py-2 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-red-800 transition-all shadow-sm outline-none text-xs font-bold tracking-tight"
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
-            {search.toLowerCase() === 'estoque baixo' && (
+            {search.toLowerCase() === 'estoque baixo' ? (
               <button 
                 onClick={() => setSearch('')}
-                className="absolute right-4 top-1/2 -translate-y-1/2 p-1 bg-red-100 text-red-800 rounded-lg hover:bg-red-200 transition-colors"
-                title="Limpar filtro de estoque"
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 bg-red-100 text-red-800 rounded-lg hover:bg-red-200 transition-colors cursor-pointer"
+                title="Limpar filtro"
               >
-                <X size={16} />
+                <X size={12} />
               </button>
-            )}
+            ) : search ? (
+              <button 
+                onClick={() => setSearch('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                title="Limpar busca"
+              >
+                <X size={14} />
+              </button>
+            ) : null}
           </div>
 
-          <div className="flex gap-2 w-full sm:w-auto">
+          <div className="flex flex-row gap-2 w-full lg:w-auto">
             <select
               value={filterCategory}
               onChange={e => setFilterCategory(e.target.value)}
-              className="bg-white/60 border border-slate-200 rounded-2xl px-4 py-3 text-[9px] font-black uppercase tracking-widest outline-none focus:ring-2 focus:ring-red-800 transition-all shadow-sm flex-1 sm:flex-initial"
+              className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-wider outline-none focus:ring-2 focus:ring-red-800 transition-all shadow-sm w-full lg:w-44 cursor-pointer"
             >
               {categories.map(cat => (
                 <option key={cat} value={cat}>{cat === 'Todas' ? 'Todas Categorias' : cat}</option>
@@ -740,7 +749,7 @@ export default function Products() {
             <select
               value={filterGender}
               onChange={e => setFilterGender(e.target.value)}
-              className="bg-white/60 border border-slate-200 rounded-2xl px-4 py-3 text-[9px] font-black uppercase tracking-widest outline-none focus:ring-2 focus:ring-red-800 transition-all shadow-sm flex-1 sm:flex-initial"
+              className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-wider outline-none focus:ring-2 focus:ring-red-800 transition-all shadow-sm w-full lg:w-36 cursor-pointer"
             >
               {genders.map(g => (
                 <option key={g} value={g}>{g === 'Todos' ? 'Todos Gêneros' : g}</option>

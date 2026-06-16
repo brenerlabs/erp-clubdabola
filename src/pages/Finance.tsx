@@ -1042,45 +1042,45 @@ export default function Finance() {
         </div>
 
         {/* Transactions & Sales List */}
-        <div className="xl:col-span-2 bg-white rounded-[32px] border border-slate-200 shadow-sm overflow-hidden flex flex-col h-[750px]">
-          <div className="p-8 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50/30 pb-5">
+        <div className="xl:col-span-2 bg-white rounded-[24px] md:rounded-[32px] border border-slate-200 shadow-sm overflow-hidden flex flex-col h-[750px]">
+          <div className="p-4 md:p-8 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50/30 pb-4">
              {/* Master Tab switcher */}
-            <div className="flex bg-slate-100 p-1 rounded-2xl border border-slate-200/50 shadow-inner flex-wrap gap-1">
+            <div className="flex bg-slate-100 p-1 rounded-2xl border border-slate-200/50 shadow-inner flex-wrap gap-1 flex-1 md:flex-initial">
               <button
                 onClick={() => setAuditTab('sales')}
                 className={cn(
-                  "px-5 py-2 text-[10px] font-black rounded-xl uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5",
+                  "px-3.5 py-1.5 md:px-5 md:py-2 text-[10px] font-black rounded-xl uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5 flex-1 md:flex-initial",
                   auditTab === 'sales'
                     ? "bg-slate-900 text-white shadow-md font-extrabold"
                     : "text-slate-500 hover:text-slate-800"
                 )}
               >
-                <TableIcon size={12} />
-                Histórico de Vendas
+                <TableIcon size={11} />
+                Vendas
               </button>
               <button
                 onClick={() => setAuditTab('transactions')}
                 className={cn(
-                  "px-5 py-2 text-[10px] font-black rounded-xl uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5",
+                  "px-3.5 py-1.5 md:px-5 md:py-2 text-[10px] font-black rounded-xl uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5 flex-1 md:flex-initial",
                   auditTab === 'transactions'
                     ? "bg-slate-900 text-white shadow-md font-extrabold"
                     : "text-slate-500 hover:text-slate-800"
                 )}
               >
-                <Receipt size={12} />
-                Lançamentos Gerais
+                <Receipt size={11} />
+                Lançamentos
               </button>
               <button
                 onClick={() => setAuditTab('auditor')}
                 className={cn(
-                  "px-5 py-2 text-[10px] font-black rounded-xl uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5",
+                  "px-3.5 py-1.5 md:px-5 md:py-2 text-[10px] font-black rounded-xl uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5 flex-1 md:flex-initial",
                   auditTab === 'auditor'
                     ? "bg-red-800 text-white shadow-md font-extrabold animate-pulse"
                     : "text-slate-500 hover:text-slate-1000 flex items-center gap-1 text-red-800 bg-red-50 hover:bg-red-100/60"
                 )}
               >
-                <AlertCircle size={12} />
-                Auditar Integridade
+                <AlertCircle size={11} />
+                Conferência
                 {!auditResults.isHealthy && (
                   <span className="size-2 rounded-full bg-amber-500 animate-ping" />
                 )}
@@ -1088,15 +1088,15 @@ export default function Finance() {
             </div>
 
             {/* General client & ticket search filter */}
-            <div className="flex items-center gap-2">
-              <div className="relative">
+            <div className="flex items-center gap-2 w-full md:w-auto">
+              <div className="relative w-full md:w-auto">
                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   type="text"
                   placeholder="Pesquisar ID, cliente..."
                   value={salesSearch}
                   onChange={(e) => setSalesSearch(e.target.value)}
-                  className="pl-9 pr-4 py-2 bg-white border border-slate-250 rounded-xl text-[10px] font-bold text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-805 shadow-sm w-44"
+                  className="pl-9 pr-4 py-2 bg-white border border-slate-250 rounded-xl text-[10px] font-bold text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-805 shadow-sm w-full md:w-44"
                 />
                 {salesSearch && (
                   <button onClick={() => setSalesSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
@@ -1108,7 +1108,7 @@ export default function Finance() {
           </div>
 
           {/* Advanced Dynamic Filters Section */}
-          <div className="p-6 border-b border-slate-100 bg-slate-50/20 grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="p-4 md:p-6 border-b border-slate-100 bg-slate-50/20 grid grid-cols-1 sm:grid-cols-3 gap-3">
             {/* Period filter selection */}
             <div className="space-y-1.5">
               <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block font-sans">Período</span>

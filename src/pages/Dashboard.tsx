@@ -963,145 +963,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Filters Section */}
-      <div className="bg-white/45 backdrop-blur-md p-4 sm:p-5 rounded-[24px] border border-white/60 shadow-lg shadow-slate-200/40 space-y-4">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <SlidersHorizontal size={14} className="text-slate-500" />
-            <span className="text-[10px] font-black uppercase text-slate-800 tracking-widest font-sans">Filtros de Vendas & Desempenho</span>
-          </div>
-          <div className="flex items-center gap-2 md:ml-auto">
-             <span className="size-2 bg-emerald-500 rounded-full animate-pulse"></span>
-             <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest font-sans">Atualização Contínua</span>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-          {/* Active Product Name/SKU Search */}
-          <div className="bg-white px-4 py-2.5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3 group relative">
-            <div className="size-8 bg-amber-500/10 text-amber-600 rounded-lg flex items-center justify-center shrink-0">
-               <Search size={14} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1 font-sans">Buscar Produto</p>
-              <input 
-                type="text"
-                placeholder="PRODUTO OU SKU..."
-                className="w-full bg-transparent font-black text-slate-900 outline-none text-[11px] placeholder:text-slate-300 uppercase tracking-tight"
-                value={productSearch}
-                onChange={e => setProductSearch(e.target.value)}
-              />
-            </div>
-            {productSearch && (
-              <button 
-                onClick={() => setProductSearch('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 bg-slate-50 rounded"
-              >
-                <X size={12} />
-              </button>
-            )}
-          </div>
-
-          {/* Customer Filter */}
-          <div className="bg-white px-4 py-2.5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3 group font-sans">
-            <div className="size-8 bg-slate-900 text-white rounded-lg flex items-center justify-center shrink-0">
-               <Users size={14} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1 font-sans">Cliente</p>
-              <select 
-                className="w-full bg-transparent font-black text-slate-900 outline-none text-[11px] cursor-pointer uppercase tracking-tight"
-                value={customerFilter}
-                onChange={e => setCustomerFilter(e.target.value)}
-              >
-                <option value="all">TODOS CLIENTES</option>
-                {customers.map(c => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Product Select Filter */}
-          <div className="bg-white px-4 py-2.5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3 group font-sans">
-            <div className="size-8 bg-red-800 text-white rounded-lg flex items-center justify-center shrink-0">
-               <Package size={14} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1 font-sans">Selecionar SKU</p>
-              <select 
-                className="w-full bg-transparent font-black text-slate-900 outline-none text-[11px] cursor-pointer uppercase tracking-tight text-ellipsis overflow-hidden"
-                value={productFilter}
-                onChange={e => setProductFilter(e.target.value)}
-              >
-                <option value="all">TODOS PRODUTOS</option>
-                {products.map(p => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Gender Filter */}
-          <div className="bg-white px-4 py-2.5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3 group font-sans">
-            <div className="size-8 bg-blue-500/10 text-blue-600 rounded-lg flex items-center justify-center shrink-0">
-               <Activity size={14} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1 font-sans">Gênero</p>
-              <select 
-                className="w-full bg-transparent font-black text-slate-900 outline-none text-[11px] cursor-pointer uppercase tracking-tight"
-                value={genderFilter}
-                onChange={e => setGenderFilter(e.target.value)}
-              >
-                <option value="all">TODOS GÊNEROS</option>
-                <option value="Masculino">MASCULINO</option>
-                <option value="Feminino">FEMININO</option>
-                <option value="Ambos">UNISSEX / AMBOS</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Category Filter */}
-          <div className="bg-white px-4 py-2.5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3 group font-sans">
-            <div className="size-8 bg-emerald-50 text-emerald-600 rounded-lg flex items-center justify-center shrink-0">
-               <Tag size={14} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1 font-sans">Categoria</p>
-              <select 
-                className="w-full bg-transparent font-black text-slate-900 outline-none text-[11px] cursor-pointer uppercase tracking-tight font-sans"
-                value={categoryFilter}
-                onChange={e => setCategoryFilter(e.target.value)}
-              >
-                <option value="all">TODAS CATEGORIAS</option>
-                {categories.filter(cat => cat !== 'all').map(cat => (
-                  <option key={cat} value={cat}>{cat}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </div>
-
-        {/* Filters Clear Button if any is changed */}
-        {(customerFilter !== 'all' || productFilter !== 'all' || genderFilter !== 'all' || categoryFilter !== 'all' || productSearch !== '') && (
-          <div className="flex justify-end pt-1">
-            <button 
-              onClick={() => {
-                setCustomerFilter('all');
-                setProductFilter('all');
-                setGenderFilter('all');
-                setCategoryFilter('all');
-                setProductSearch('');
-              }}
-              className="text-[9px] font-black uppercase text-red-850 hover:text-red-900 transition-colors flex items-center gap-1.5"
-            >
-              <X size={12} /> Limpar Todos os Filtros Ativos
-            </button>
-          </div>
-        )}
-      </div>
-
       {/* Grade Modular de Desempenho Econômico, Liquidez e Giro (Bento Grid) */}
       <motion.div 
         initial={{ opacity: 0, y: 15 }}
@@ -1402,6 +1263,221 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        {/* Global Business Health Index */}
+        <div className="xl:col-span-3 grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="bg-slate-950 rounded-3xl p-6 text-white relative overflow-hidden group border border-slate-900">
+             <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:scale-110 transition-transform">
+                <Activity size={80} />
+             </div>
+             <div className="relative z-10">
+                <p className="text-[8px] font-black text-amber-500 uppercase tracking-[0.3em] mb-1">Taxa de Liquidez</p>
+                <div className="flex items-end gap-2">
+                   <h4 className="text-3xl font-bold tracking-tight">
+                     {Math.floor(stats.efficiencyRatio)}
+                     <span className="text-xl text-amber-500">.{(stats.efficiencyRatio % 1).toFixed(1).substring(2) || '0'}</span>
+                   </h4>
+                   <p className="text-[8px] font-bold text-amber-400/60 mb-1 uppercase tracking-widest">
+                     {stats.efficiencyRatio === 100 ? 'Máxima' : `${(100 - stats.efficiencyRatio).toFixed(1)}% Risco`}
+                   </p>
+                </div>
+                <div className="mt-4 flex gap-1.5 overflow-x-auto">
+                   {['Liquidez', 'Estores', 'Tributos'].map(tag => (
+                     <span key={tag} className="px-2 py-0.5 bg-white/5 border border-white/10 rounded-full text-[7px] font-black uppercase tracking-widest whitespace-nowrap">{tag}</span>
+                   ))}
+                </div>
+             </div>
+          </div>
+          
+          <div className="md:col-span-3 bg-red-900 rounded-3xl p-6 text-white flex flex-col justify-center relative overflow-hidden border border-white/5">
+             <div className="absolute top-0 right-0 p-6 opacity-10">
+                <LayoutDashboard size={60} />
+             </div>
+             <div className="relative z-10">
+                <h4 className="text-sm font-bold tracking-tight mb-4 uppercase font-display">Diretivas Executivas</h4>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                   <div className="bg-black/20 backdrop-blur-sm p-3 rounded-2xl border border-white/5">
+                      <p className="text-[8px] font-black text-amber-500 uppercase mb-1">Otimizar</p>
+                      <p className="text-[10px] font-black leading-tight uppercase tracking-tight">
+                        {stats.pendingTaxes > 0 ? `Taxas Fiscais: R$ ${stats.pendingTaxes.toFixed(0)} pendentes` : "Logística de Importação e Dropshipping"}
+                      </p>
+                   </div>
+                   <div className="bg-black/20 backdrop-blur-sm p-3 rounded-2xl border border-white/5">
+                      <p className="text-[8px] font-black text-amber-500 uppercase mb-1">Oportunidade</p>
+                      <p className="text-[10px] font-black leading-tight uppercase tracking-tight">
+                        {stats.lowStockItems > 0 ? `Abastecer ${stats.lowStockItems} SKUs com estoque mínimo` : "Expandir Mix do Clube da Bola"}
+                      </p>
+                   </div>
+                   <div className="bg-black/20 backdrop-blur-sm p-3 rounded-2xl border border-white/5 hidden md:block">
+                      <p className="text-[8px] font-black text-amber-500 uppercase mb-1">Risco</p>
+                      <p className="text-[10px] font-black leading-tight uppercase tracking-tight">
+                        {stats.totalDebt > 0 ? `Fiado Ativo em R$ ${stats.totalDebt.toFixed(0)} (${(100 - stats.efficiencyRatio).toFixed(1)}% receita)` : "Inadimplência Fiado com Risco Zero"}
+                      </p>
+                   </div>
+                </div>
+             </div>
+          </div>
+        </div>
+
+        {/* Chart Section */}
+        <div className="xl:col-span-2 bg-white p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                <Calendar size={18} className="text-red-800" />
+                Matriz de Desempenho
+              </h3>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Série Temporal (10 DIB)</p>
+            </div>
+            <div className="flex items-center gap-4 text-[9px] font-black uppercase tracking-widest">
+              <div className="flex items-center gap-1.5"><span className="size-2 bg-red-800 rounded-full"></span> Receita</div>
+              <div className="flex items-center gap-1.5"><span className="size-2 bg-amber-500 rounded-full"></span> Unidades</div>
+            </div>
+          </div>
+          <div className="flex-1 min-h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={salesByDay}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: '#64748b' }} />
+                <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: '#64748b' }} />
+                <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: '#64748b' }} />
+                <Tooltip 
+                   cursor={{ fill: 'rgba(140, 40, 40, 0.02)' }}
+                   contentStyle={{ borderRadius: '16px', border: '1px solid #cbd5e1', backgroundColor: '#ffffff', boxShadow: '0 10px 30px rgba(0, 0, 0, 0.06)', padding: '16px' }}
+                   itemStyle={{ fontSize: '12px', fontWeight: 'bold' }}
+                   labelStyle={{ fontWeight: 'black', marginBottom: '8px', color: '#0f172a' }}
+                />
+                <Bar yAxisId="left" dataKey="total" fill="#8c2828" radius={[6, 6, 0, 0]} />
+                <Bar yAxisId="right" dataKey="quantity" fill="#c69c3a" radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Monthly Sales vs Amortizations Comparison Chart */}
+        <div className="xl:col-span-1 bg-white p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+          <div className="flex flex-col mb-6">
+            <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+              <TrendingUp size={18} className="text-red-800" />
+              Sales vs. Amortização
+            </h3>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Comparativo Mensal (6 Meses)</p>
+          </div>
+
+          <div className="flex items-center gap-4 text-[9px] font-black uppercase tracking-widest mb-6">
+            <div className="flex items-center gap-1.5">
+              <span className="size-2 bg-red-800 rounded-full" style={{ backgroundColor: '#8c2828' }}></span> Vendas
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="size-2 bg-amber-500 rounded-full" style={{ backgroundColor: '#c69c3a' }}></span> Amortizado (Fiado)
+            </div>
+          </div>
+
+          <div className="flex-1 min-h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={monthlyComparisonData}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                <XAxis 
+                  dataKey="monthLabel" 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fontSize: 9, fontWeight: 700, fill: '#64748b' }} 
+                />
+                <YAxis 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fontSize: 9, fontWeight: 700, fill: '#64748b' }} 
+                  tickFormatter={(val) => `R$ ${val >= 1000 ? (val / 1000).toFixed(0) + 'k' : val}`}
+                />
+                <Tooltip 
+                  cursor={{ fill: 'rgba(140, 40, 40, 0.02)' }}
+                  contentStyle={{ borderRadius: '16px', border: '1px solid #cbd5e1', backgroundColor: '#ffffff', boxShadow: '0 10px 30px rgba(0, 0, 0, 0.06)', padding: '16px' }}
+                  itemStyle={{ fontSize: '11px', fontWeight: 'bold' }}
+                  labelStyle={{ fontWeight: 'black', marginBottom: '8px', color: '#0f172a' }}
+                  formatter={(value: any) => [formatCurrency(Number(value)), '']}
+                />
+                <Bar dataKey="salesTotal" name="Vendas" fill="#8c2828" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="amortizedTotal" name="Amortizado" fill="#c69c3a" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Filters Section (Simplified & Full width) */}
+        <div className="xl:col-span-3 bg-white/45 backdrop-blur-md p-4 sm:p-5 rounded-[24px] border border-white/60 shadow-lg shadow-slate-200/40 space-y-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <SlidersHorizontal size={14} className="text-slate-500" />
+              <span className="text-[10px] font-black uppercase text-slate-800 tracking-widest font-sans">Busca & Filtro de Clientes</span>
+            </div>
+            <div className="flex items-center gap-2 md:ml-auto">
+               <span className="size-2 bg-emerald-500 rounded-full animate-pulse"></span>
+               <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest font-sans">Atualização Contínua</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Active Product Name/SKU Search */}
+            <div className="bg-white px-4 py-2.5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3 group relative">
+              <div className="size-8 bg-amber-500/10 text-amber-600 rounded-lg flex items-center justify-center shrink-0">
+                 <Search size={14} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1 font-sans">Buscar Produto</p>
+                <input 
+                  type="text"
+                  placeholder="PRODUTO OU SKU..."
+                  className="w-full bg-transparent font-black text-slate-900 outline-none text-[11px] placeholder:text-slate-300 uppercase tracking-tight"
+                  value={productSearch}
+                  onChange={e => setProductSearch(e.target.value)}
+                />
+              </div>
+              {productSearch && (
+                <button 
+                  onClick={() => setProductSearch('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 bg-slate-50 rounded"
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+
+            {/* Customer Filter */}
+            <div className="bg-white px-4 py-2.5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3 group font-sans">
+              <div className="size-8 bg-slate-900 text-white rounded-lg flex items-center justify-center shrink-0">
+                 <Users size={14} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1 font-sans">Clientes</p>
+                <select 
+                  className="w-full bg-transparent font-black text-slate-900 outline-none text-[11px] cursor-pointer uppercase tracking-tight"
+                  value={customerFilter}
+                  onChange={e => setCustomerFilter(e.target.value)}
+                >
+                  <option value="all">TODOS CLIENTES</option>
+                  {customers.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Filters Clear Button if any is changed */}
+          {(customerFilter !== 'all' || productSearch !== '') && (
+            <div className="flex justify-end pt-1">
+              <button 
+                onClick={() => {
+                  setCustomerFilter('all');
+                  setProductSearch('');
+                }}
+                className="text-[9px] font-black uppercase text-red-850 hover:text-red-900 transition-colors flex items-center gap-1.5"
+              >
+                <X size={12} /> Limpar Filtros
+              </button>
+            </div>
+          )}
+        </div>
+
         {/* Debtors Section */}
         <div className="bg-slate-950 rounded-[32px] p-8 text-white shadow-2xl relative overflow-hidden group border border-slate-900">
           <div className="absolute top-0 right-0 p-8 opacity-5 pointer-events-none group-hover:scale-110 transition-transform duration-500">
@@ -1610,145 +1686,6 @@ export default function Dashboard() {
                 <p className="text-center py-6 text-white/40 text-[10px] font-black uppercase tracking-widest">Nenhum dado disponível</p>
               )}
             </div>
-          </div>
-        </div>
-
-        {/* Global Business Health Index */}
-        <div className="xl:col-span-3 grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-slate-950 rounded-3xl p-6 text-white relative overflow-hidden group border border-slate-900">
-             <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:scale-110 transition-transform">
-                <Activity size={80} />
-             </div>
-             <div className="relative z-10">
-                <p className="text-[8px] font-black text-amber-500 uppercase tracking-[0.3em] mb-1">Taxa de Liquidez</p>
-                <div className="flex items-end gap-2">
-                   <h4 className="text-3xl font-bold tracking-tight">
-                     {Math.floor(stats.efficiencyRatio)}
-                     <span className="text-xl text-amber-500">.{(stats.efficiencyRatio % 1).toFixed(1).substring(2) || '0'}</span>
-                   </h4>
-                   <p className="text-[8px] font-bold text-amber-400/60 mb-1 uppercase tracking-widest">
-                     {stats.efficiencyRatio === 100 ? 'Máxima' : `${(100 - stats.efficiencyRatio).toFixed(1)}% Risco`}
-                   </p>
-                </div>
-                <div className="mt-4 flex gap-1.5 overflow-x-auto">
-                   {['Liquidez', 'Estores', 'Tributos'].map(tag => (
-                     <span key={tag} className="px-2 py-0.5 bg-white/5 border border-white/10 rounded-full text-[7px] font-black uppercase tracking-widest whitespace-nowrap">{tag}</span>
-                   ))}
-                </div>
-             </div>
-          </div>
-          
-          <div className="md:col-span-3 bg-red-900 rounded-3xl p-6 text-white flex flex-col justify-center relative overflow-hidden border border-white/5">
-             <div className="absolute top-0 right-0 p-6 opacity-10">
-                <LayoutDashboard size={60} />
-             </div>
-             <div className="relative z-10">
-                <h4 className="text-sm font-bold tracking-tight mb-4 uppercase font-display">Diretivas Executivas</h4>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                   <div className="bg-black/20 backdrop-blur-sm p-3 rounded-2xl border border-white/5">
-                      <p className="text-[8px] font-black text-amber-500 uppercase mb-1">Otimizar</p>
-                      <p className="text-[10px] font-black leading-tight uppercase tracking-tight">
-                        {stats.pendingTaxes > 0 ? `Taxas Fiscais: R$ ${stats.pendingTaxes.toFixed(0)} pendentes` : "Logística de Importação e Dropshipping"}
-                      </p>
-                   </div>
-                   <div className="bg-black/20 backdrop-blur-sm p-3 rounded-2xl border border-white/5">
-                      <p className="text-[8px] font-black text-amber-500 uppercase mb-1">Oportunidade</p>
-                      <p className="text-[10px] font-black leading-tight uppercase tracking-tight">
-                        {stats.lowStockItems > 0 ? `Abastecer ${stats.lowStockItems} SKUs com estoque mínimo` : "Expandir Mix do Clube da Bola"}
-                      </p>
-                   </div>
-                   <div className="bg-black/20 backdrop-blur-sm p-3 rounded-2xl border border-white/5 hidden md:block">
-                      <p className="text-[8px] font-black text-amber-500 uppercase mb-1">Risco</p>
-                      <p className="text-[10px] font-black leading-tight uppercase tracking-tight">
-                        {stats.totalDebt > 0 ? `Fiado Ativo em R$ ${stats.totalDebt.toFixed(0)} (${(100 - stats.efficiencyRatio).toFixed(1)}% receita)` : "Inadimplência Fiado com Risco Zero"}
-                      </p>
-                   </div>
-                </div>
-             </div>
-          </div>
-        </div>
-
-        {/* Chart Section */}
-        <div className="xl:col-span-2 bg-white p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-          <div className="flex items-center justify-between mb-8">
-            <div>
-              <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
-                <Calendar size={18} className="text-red-800" />
-                Matriz de Desempenho
-              </h3>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Série Temporal (10 DIB)</p>
-            </div>
-            <div className="flex items-center gap-4 text-[9px] font-black uppercase tracking-widest">
-              <div className="flex items-center gap-1.5"><span className="size-2 bg-red-800 rounded-full"></span> Receita</div>
-              <div className="flex items-center gap-1.5"><span className="size-2 bg-amber-500 rounded-full"></span> Unidades</div>
-            </div>
-          </div>
-          <div className="flex-1 min-h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={salesByDay}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: '#64748b' }} />
-                <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: '#64748b' }} />
-                <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: '#64748b' }} />
-                <Tooltip 
-                   cursor={{ fill: 'rgba(140, 40, 40, 0.02)' }}
-                   contentStyle={{ borderRadius: '16px', border: '1px solid #cbd5e1', backgroundColor: '#ffffff', boxShadow: '0 10px 30px rgba(0, 0, 0, 0.06)', padding: '16px' }}
-                   itemStyle={{ fontSize: '12px', fontWeight: 'bold' }}
-                   labelStyle={{ fontWeight: 'black', marginBottom: '8px', color: '#0f172a' }}
-                />
-                <Bar yAxisId="left" dataKey="total" fill="#8c2828" radius={[6, 6, 0, 0]} />
-                <Bar yAxisId="right" dataKey="quantity" fill="#c69c3a" radius={[6, 6, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Monthly Sales vs Amortizations Comparison Chart */}
-        <div className="xl:col-span-1 bg-white p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-          <div className="flex flex-col mb-6">
-            <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
-              <TrendingUp size={18} className="text-red-800" />
-              Sales vs. Amortização
-            </h3>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Comparativo Mensal (6 Meses)</p>
-          </div>
-
-          <div className="flex items-center gap-4 text-[9px] font-black uppercase tracking-widest mb-6">
-            <div className="flex items-center gap-1.5">
-              <span className="size-2 bg-red-800 rounded-full" style={{ backgroundColor: '#8c2828' }}></span> Vendas
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="size-2 bg-amber-500 rounded-full" style={{ backgroundColor: '#c69c3a' }}></span> Amortizado (Fiado)
-            </div>
-          </div>
-
-          <div className="flex-1 min-h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={monthlyComparisonData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                <XAxis 
-                  dataKey="monthLabel" 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{ fontSize: 9, fontWeight: 700, fill: '#64748b' }} 
-                />
-                <YAxis 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{ fontSize: 9, fontWeight: 700, fill: '#64748b' }} 
-                  tickFormatter={(val) => `R$ ${val >= 1000 ? (val / 1000).toFixed(0) + 'k' : val}`}
-                />
-                <Tooltip 
-                  cursor={{ fill: 'rgba(140, 40, 40, 0.02)' }}
-                  contentStyle={{ borderRadius: '16px', border: '1px solid #cbd5e1', backgroundColor: '#ffffff', boxShadow: '0 10px 30px rgba(0, 0, 0, 0.06)', padding: '16px' }}
-                  itemStyle={{ fontSize: '11px', fontWeight: 'bold' }}
-                  labelStyle={{ fontWeight: 'black', marginBottom: '8px', color: '#0f172a' }}
-                  formatter={(value: any) => [formatCurrency(Number(value)), '']}
-                />
-                <Bar dataKey="salesTotal" name="Vendas" fill="#8c2828" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="amortizedTotal" name="Amortizado" fill="#c69c3a" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
           </div>
         </div>
       </div>

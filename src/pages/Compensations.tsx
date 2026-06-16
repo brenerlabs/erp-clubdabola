@@ -83,53 +83,68 @@ export default function Compensations() {
     <motion.div 
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="space-y-8 pb-10"
+      className="space-y-4 md:space-y-6 pb-6 md:pb-10"
     >
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight text-slate-900 leading-none">
-            Auditoria de <span className="text-red-800 underline decoration-red-200 decoration-4 underline-offset-4 tracking-tight font-bold">Recebíveis</span>
-          </h2>
-          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.3em] font-sans mt-2">Relatórios de Compensação e Amortização</p>
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-3xl font-bold tracking-tight text-slate-900 leading-none">
+              Auditoria de <span className="text-red-800 underline decoration-red-200 decoration-4 underline-offset-4 tracking-tight font-bold">Recebíveis</span>
+            </h2>
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.3em] font-sans mt-2">Relatórios de Compensação e Amortização</p>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button 
-            onClick={handleShare}
-            className="flex items-center gap-2 px-6 py-3 bg-red-800 hover:bg-black text-white font-black uppercase text-[10px] tracking-widest rounded-xl transition-all shadow-lg shadow-red-500/20 active:scale-95 translate-y-[-1px]"
-          >
-            <Share2 size={16} />
-            Export WhatsApp
-          </button>
-        </div>
+        
+        {/* Export full-width front top section proportionally */}
+        <button 
+          onClick={handleShare}
+          className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-red-800 hover:bg-black text-white font-black uppercase text-xs tracking-widest rounded-2xl transition-all shadow-lg shadow-red-500/20 active:scale-[0.99] cursor-pointer"
+        >
+          <Share2 size={18} />
+          Exportar Relatório p/ WhatsApp 💬
+        </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-6 bg-white/40 backdrop-blur-md rounded-[32px] border border-white/60 shadow-xl shadow-slate-200/50">
-        <div className="bg-white/60 border border-slate-100 rounded-2xl p-4 shadow-sm">
-          <p className="text-[9px] font-black uppercase text-slate-400 mb-2 tracking-widest">Customer Entity</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-4 bg-white/40 backdrop-blur-md rounded-2xl border border-white/60 shadow-xl shadow-slate-200/50 mb-4 md:mb-6">
+        <div className="bg-white/60 border border-slate-100 rounded-xl p-3 shadow-sm flex flex-col justify-between">
+          <p className="text-[9px] font-black uppercase text-slate-400 mb-1.5 tracking-widest">Filtrar Cliente</p>
           <select 
             value={customerFilter}
             onChange={e => setCustomerFilter(e.target.value)}
             className="w-full bg-transparent text-xs font-black text-slate-900 outline-none border-none appearance-none cursor-pointer"
           >
-            <option value="all">All Channels</option>
+            <option value="all">Todos os Clientes</option>
             {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
-        <div className="bg-white/60 border border-slate-100 rounded-2xl p-4 shadow-sm">
-          <p className="text-[9px] font-black uppercase text-slate-400 mb-2 tracking-widest">Financial Gateway</p>
+        
+        <div className="bg-white/60 border border-slate-100 rounded-xl p-3 shadow-sm flex flex-col justify-between">
+          <p className="text-[9px] font-black uppercase text-slate-400 mb-1.5 tracking-widest">Forma de Pagamento</p>
           <select 
             value={methodFilter}
             onChange={e => setMethodFilter(e.target.value)}
             className="w-full bg-transparent text-xs font-black text-slate-900 outline-none border-none appearance-none cursor-pointer"
           >
-            <option value="all">All Methods</option>
-            <option value="Dinheiro">Cash (Físico)</option>
-            <option value="Pix">Instant (Pix)</option>
-            <option value="Cartão">Credit Card</option>
+            <option value="all">Todas as Formas</option>
+            <option value="Dinheiro">Dinheiro</option>
+            <option value="Pix">Pix</option>
+            <option value="Cartão">Cartão</option>
           </select>
         </div>
-        <div className="bg-white/60 border border-slate-100 rounded-2xl p-4 shadow-sm">
-          <p className="text-[9px] font-black uppercase text-slate-400 mb-2 tracking-widest">Auditoria Temporal</p>
+        
+        <div className="bg-white/60 border border-slate-100 rounded-xl p-3 shadow-sm flex flex-col justify-between relative">
+          <div className="flex items-center justify-between mb-1.5">
+            <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Filtrar por Data</p>
+            {dateFilter && (
+              <button 
+                onClick={() => setDateFilter('')}
+                className="text-[9px] font-black text-red-800 hover:text-black uppercase tracking-wider bg-red-100/60 hover:bg-red-150 px-1.5 py-0.5 rounded cursor-pointer transition-all"
+                title="Limpar Data"
+              >
+                Limpar
+              </button>
+            )}
+          </div>
           <input 
             type="date"
             value={dateFilter}
@@ -137,9 +152,10 @@ export default function Compensations() {
             className="w-full bg-transparent text-xs font-black text-slate-900 outline-none border-none appearance-none cursor-pointer block"
           />
         </div>
-        <div className="bg-slate-950 rounded-2xl p-4 shadow-lg shadow-slate-900/10 border border-white/5 flex flex-col justify-center">
-          <p className="text-[9px] font-black uppercase text-amber-500 mb-1 tracking-widest opacity-80">Volume Filtrado</p>
-          <div className="text-xl font-black text-white italic tracking-tighter">{formatCurrency(filtered.reduce((acc, t) => acc + t.amount, 0))}</div>
+        
+        <div className="bg-slate-950 rounded-xl p-3 shadow-lg shadow-slate-900/10 border border-white/5 flex flex-col justify-center">
+          <p className="text-[9px] font-black uppercase text-amber-500 mb-0.5 tracking-widest opacity-80">Total Recebido</p>
+          <div className="text-base font-black text-white italic tracking-tighter">{formatCurrency(filtered.reduce((acc, t) => acc + t.amount, 0))}</div>
         </div>
       </div>
 

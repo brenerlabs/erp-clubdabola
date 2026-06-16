@@ -1165,7 +1165,7 @@ export default function Shipments() {
     }
   };
 
-  const updateItemStatus = async (shipmentId: string, itemId: string, nextStatus: 'Pendente' | 'Recebido' | 'Faturado') => {
+  const updateItemStatus = async (shipmentId: string, itemId: string, nextStatus: 'Pendente' | 'Recebido' | 'Entregue') => {
     try {
       const shipment = shipments.find(s => s.id === shipmentId);
       if (!shipment) return;
@@ -1214,42 +1214,6 @@ export default function Shipments() {
             }
           }
         }
-
-        // 2. Automated purchase flow status update and transaction registering
-        if (nextStatus === 'Faturado' && previousStatus !== 'Faturado') {
-          try {
-            const amount = targetItem.price * targetItem.quantity;
-            if (amount > 0) {
-              let pMethod: any = 'Dinheiro';
-              
-              if (targetItem.saleId && targetItem.saleId.trim()) {
-                const saleRef = doc(db, 'sales', targetItem.saleId);
-                const saleSnap = await getDoc(saleRef);
-                if (saleSnap.exists()) {
-                  const saleData = saleSnap.data() as Sale;
-                  pMethod = saleData.paymentMethod || 'Dinheiro';
-                  if (saleData.status === 'Pendente' || saleData.status === 'Pré-venda') {
-                    await updateDoc(saleRef, {
-                      status: 'Concluída',
-                      updatedAt: serverTimestamp()
-                    });
-                  }
-                }
-              }
-
-              await addDoc(collection(db, 'transactions'), {
-                customerId: targetItem.customerId || 'Consumidor Final',
-                amount: amount,
-                type: 'payment',
-                paymentMethod: pMethod === 'Fiado' ? 'Dinheiro' : pMethod,
-                saleId: targetItem.saleId || null,
-                createdAt: serverTimestamp()
-              });
-            }
-          } catch (err) {
-            console.error("Erro background faturamento automático da sale:", targetItem.saleId, err);
-          }
-        }
       }
     } catch (err) {
       console.error("Erro ao atualizar status do item correspondente:", err);
@@ -1257,7 +1221,7 @@ export default function Shipments() {
     }
   };
 
-  const updateCustomerGroupStatus = async (shipmentId: string, customerId: string, nextStatus: 'Pendente' | 'Recebido' | 'Faturado') => {
+  const updateCustomerGroupStatus = async (shipmentId: string, customerId: string, nextStatus: 'Pendente' | 'Recebido' | 'Entregue') => {
     try {
       const shipment = shipments.find(s => s.id === shipmentId);
       if (!shipment) return;
@@ -1305,42 +1269,6 @@ export default function Shipments() {
             } catch (err) {
               console.error("Erro ao atualizar estoque automático para lote:", item.productId, err);
             }
-          }
-        }
-
-        // 2. Faturamento Automático da Sale integrada + Registro financeiro na Compensação
-        if (nextStatus === 'Faturado') {
-          try {
-            const amount = item.price * item.quantity;
-            if (amount > 0) {
-              let pMethod: any = 'Dinheiro';
-              
-              if (item.saleId && item.saleId.trim()) {
-                const saleRef = doc(db, 'sales', item.saleId);
-                const saleSnap = await getDoc(saleRef);
-                if (saleSnap.exists()) {
-                  const saleData = saleSnap.data() as Sale;
-                  pMethod = saleData.paymentMethod || 'Dinheiro';
-                  if (saleData.status === 'Pendente' || saleData.status === 'Pré-venda') {
-                    await updateDoc(saleRef, {
-                      status: 'Concluída',
-                      updatedAt: serverTimestamp()
-                    });
-                  }
-                }
-              }
-
-              await addDoc(collection(db, 'transactions'), {
-                customerId: item.customerId || 'Consumidor Final',
-                amount: amount,
-                type: 'payment',
-                paymentMethod: pMethod === 'Fiado' ? 'Dinheiro' : pMethod,
-                saleId: item.saleId || null,
-                createdAt: serverTimestamp()
-              });
-            }
-          } catch (err) {
-            console.error("Erro ao faturamento automático para lote de sale:", item.saleId, err);
           }
         }
       }
@@ -1944,7 +1872,7 @@ export default function Shipments() {
                                     <option value="" disabled>Alterar...</option>
                                     <option value="Pendente">⏳ Pendente</option>
                                     <option value="Recebido">✓ Recebido</option>
-                                    <option value="Faturado">💳 Faturado</option>
+                                    <option value="Entregue">📦 Entregue</option>
                                   </select>
                                   <span className="text-[8px] font-black text-red-800 bg-red-100/80 px-1.5 py-0.5 rounded-lg ml-1">
                                     {customerItems.length} {customerItems.length === 1 ? 'Item' : 'Itens'}
@@ -1994,7 +1922,7 @@ export default function Shipments() {
                                               "text-[9px] font-black px-1.5 py-0.5 rounded-lg border outline-none cursor-pointer transition-all pr-4 relative appearance-none bg-no-repeat bg-[right_4px_center] bg-[length:6px] select-none",
                                               (item.status || 'Pendente') === 'Pendente' && "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100",
                                               (item.status || 'Pendente') === 'Recebido' && "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100",
-                                              (item.status || 'Pendente') === 'Faturado' && "bg-sky-50 text-sky-700 border-sky-305 hover:bg-sky-100"
+                                              (item.status || 'Pendente') === 'Entregue' && "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
                                             )}
                                             style={{
                                               backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23334155' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'></polyline></svg>")`,
@@ -2002,7 +1930,7 @@ export default function Shipments() {
                                           >
                                             <option value="Pendente">⏳ PEN</option>
                                             <option value="Recebido">✓ REC</option>
-                                            <option value="Faturado">💳 FAT</option>
+                                            <option value="Entregue">📦 ENT</option>
                                           </select>
                                         </div>
                                       </div>
@@ -2198,8 +2126,8 @@ export default function Shipments() {
                               <option value="" disabled>Alterar...</option>
                               <option value="Pendente">⏳ Pendente</option>
                               <option value="Recebido">✓ Recebido</option>
-                              <option value="Faturado">💳 Faturado</option>
-                              </select>
+                              <option value="Entregue">📦 Entregue</option>
+                            </select>
                             <span className="text-[8px] font-black text-red-800 bg-red-100/80 px-1.5 py-0.5 rounded-lg ml-1">
                               {customerItems.length} {customerItems.length === 1 ? 'Item' : 'Itens'}
                             </span>
@@ -2248,7 +2176,7 @@ export default function Shipments() {
                                         "text-[9px] font-black px-1.5 py-0.5 rounded-lg border outline-none cursor-pointer transition-all pr-4 relative appearance-none bg-no-repeat bg-[right_4px_center] bg-[length:6px] select-none",
                                         (item.status || 'Pendente') === 'Pendente' && "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100",
                                         (item.status || 'Pendente') === 'Recebido' && "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100",
-                                        (item.status || 'Pendente') === 'Faturado' && "bg-sky-50 text-sky-700 border-sky-305 hover:bg-sky-100"
+                                        (item.status || 'Pendente') === 'Entregue' && "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
                                       )}
                                       style={{
                                         backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23334155' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'></polyline></svg>")`,
@@ -2256,7 +2184,7 @@ export default function Shipments() {
                                     >
                                       <option value="Pendente">⏳ PEN</option>
                                       <option value="Recebido">✓ REC</option>
-                                      <option value="Faturado">💳 FAT</option>
+                                      <option value="Entregue">📦 ENT</option>
                                     </select>
                                   </div>
                                 </div>
@@ -2375,20 +2303,20 @@ export default function Shipments() {
     <motion.div 
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="space-y-8 pb-10"
+      className="space-y-4 md:space-y-8 pb-6 md:pb-10"
     >
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <h2 className="text-3xl font-bold tracking-tight text-slate-900 leading-none">
             Rastreio de <span className="text-red-800 underline decoration-red-200 decoration-4 underline-offset-4 tracking-tight font-bold">Encomendas</span>
           </h2>
-          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.3em] font-sans mt-2">Gestão de Importação e Rastreamento</p>
+          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.3em] font-sans mt-2 font-semibold">Gestão de Importação e Rastreamento</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5 w-full md:w-auto">
           {selectedIds.length > 0 && (
-            <div className="flex items-center gap-2 mr-4 px-4 py-2 bg-slate-900 rounded-xl animate-in slide-in-from-top-4">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{selectedIds.length} selecionados</span>
-              <div className="h-4 w-[1px] bg-slate-700 mx-2" />
+            <div className="flex items-center gap-1.5 mr-auto md:mr-2 px-3 py-2 bg-slate-900 rounded-xl animate-in slide-in-from-top-4 w-full sm:w-auto justify-between">
+              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{selectedIds.length} selecionados</span>
+              <div className="h-4 w-[1px] bg-slate-700 mx-1.5 hidden sm:block" />
               <select 
                 onChange={(e) => {
                   if (e.target.value === 'payTax') {
@@ -2401,7 +2329,7 @@ export default function Shipments() {
                     batchUpdateStatus(e.target.value as any);
                   }
                 }}
-                className="bg-transparent text-white text-[10px] font-bold uppercase outline-none cursor-pointer"
+                className="bg-transparent text-white text-[9px] font-bold uppercase outline-none cursor-pointer"
                 value=""
               >
                 <option value="" disabled>Ação em Massa</option>
@@ -2413,7 +2341,7 @@ export default function Shipments() {
                 </optgroup>
               </select>
               <button onClick={() => setSelectedIds([])} className="ml-2 text-slate-400 hover:text-white transition-colors">
-                <X size={14} />
+                <X size={12} />
               </button>
             </div>
           )}
@@ -2422,44 +2350,44 @@ export default function Shipments() {
             onClick={() => syncActiveShipments(true)}
             disabled={isSyncing}
             className={cn(
-              "font-bold py-3 px-5 rounded-xl transition-all border flex items-center gap-2 active:scale-95 shadow-sm text-xs cursor-pointer select-none",
+              "font-bold py-2.5 px-3 md:py-3 md:px-5 rounded-xl transition-all border flex items-center justify-center gap-1.5 active:scale-95 shadow-sm text-[10px] md:text-xs cursor-pointer select-none flex-1 sm:flex-initial",
               isSyncing 
                 ? "bg-slate-100 border-slate-200 text-slate-400" 
                 : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300"
             )}
           >
-            <RefreshCw size={15} className={cn("text-red-800 transition-transform duration-300", isSyncing ? "animate-spin text-red-500" : "")} />
-            <span>{isSyncing ? 'Sincronizando...' : 'Sincronizar API'}</span>
+            <RefreshCw size={13} className={cn("text-red-800 transition-transform duration-300", isSyncing ? "animate-spin text-red-500" : "")} />
+            <span>{isSyncing ? 'Sincronizando...' : 'Atualizar Rastreios'}</span>
           </button>
 
           <button 
             type="button"
             onClick={() => setShowInsights(!showInsights)}
             className={cn(
-              "font-bold py-3 px-5 rounded-xl transition-all border flex items-center gap-2 active:scale-95 shadow-sm text-xs cursor-pointer select-none",
+              "font-bold py-2.5 px-3 md:py-3 md:px-5 rounded-xl transition-all border flex items-center justify-center gap-1.5 active:scale-95 shadow-sm text-[10px] md:text-xs cursor-pointer select-none flex-1 sm:flex-initial",
               showInsights 
                 ? "bg-slate-900 border-slate-950 text-white hover:bg-slate-800" 
                 : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300"
             )}
           >
-            <Sparkles size={15} className={cn("text-amber-500 transition-transform duration-300", showInsights ? "fill-amber-400 rotate-[15deg] scale-110" : "")} />
-            <span>{showInsights ? 'Ocultar Insights' : 'Ver Insights'}</span>
+            <Sparkles size={13} className={cn("text-amber-500 transition-transform duration-300", showInsights ? "fill-amber-400 rotate-[15deg] scale-110" : "")} />
+            <span>{showInsights ? 'Ocultar Análise' : 'Ver Análise'}</span>
           </button>
 
           <button 
             type="button"
             onClick={() => setIsSupplierRankOpen(true)}
-            className="font-bold py-3 px-5 rounded-xl transition-all border bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 flex items-center gap-2 active:scale-95 shadow-sm text-xs cursor-pointer select-none"
+            className="font-bold py-2.5 px-3 md:py-3 md:px-5 rounded-xl transition-all border bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 flex items-center justify-center gap-1.5 active:scale-95 shadow-sm text-[10px] md:text-xs cursor-pointer select-none flex-1 sm:flex-initial"
           >
-            <TrendingUp size={15} className="text-red-800 font-sans font-black" />
-            <span>Rank Fornecedores</span>
+            <TrendingUp size={13} className="text-red-800 font-sans font-black" />
+            <span>Melhores Fornecedores</span>
           </button>
 
           <button 
             onClick={() => openModal()}
-            className="bg-red-800 hover:bg-black text-white font-bold py-3 px-6 rounded-xl transition-all shadow-md flex items-center gap-2 active:scale-95 shadow-red-900/20 text-xs"
+            className="bg-red-800 hover:bg-black text-white font-bold py-2.5 px-3 md:py-3 md:px-6 rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 active:scale-95 shadow-red-900/20 text-[10px] md:text-xs flex-1 sm:flex-initial"
           >
-            <Plus size={16} /> Deploy Lote
+            <Plus size={14} /> Cadastrar Encomenda
           </button>
         </div>
       </div>
@@ -2471,7 +2399,7 @@ export default function Shipments() {
             animate={{ opacity: 1, height: 'auto', y: 0 }}
             exit={{ opacity: 0, height: 0, y: -10 }}
             className={cn(
-              "p-3.5 rounded-2xl text-[10px] font-black uppercase tracking-wider flex items-center gap-2.5 shadow-sm border select-none w-full",
+              "p-3 rounded-2xl text-[10px] font-black uppercase tracking-wider flex items-center gap-2.5 shadow-sm border select-none w-full",
               syncFeedback.type === 'success' 
                 ? "bg-emerald-50 border-emerald-100 text-emerald-800"
                 : syncFeedback.type === 'error'
@@ -2485,20 +2413,20 @@ export default function Shipments() {
         )}
       </AnimatePresence>
 
-      <div className="flex flex-col lg:flex-row items-center justify-between gap-4 p-6 bg-white/40 backdrop-blur-md rounded-3xl border border-white/60 shadow-xl shadow-slate-200/50">
-        <div className="flex-1 max-w-md relative group">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 size-5 group-focus-within:text-red-800 transition-colors" />
+      <div className="flex flex-col lg:flex-row items-center justify-between gap-4 p-4 lg:p-6 bg-white/40 backdrop-blur-md rounded-2xl lg:rounded-3xl border border-white/60 shadow-xl shadow-slate-200/50 mb-4 lg:mb-6">
+        <div className="flex-1 w-full max-w-md relative group">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 size-4 group-focus-within:text-red-800 transition-colors" />
           <input 
             type="text" 
-            placeholder="Buscar Rastreio ou Cliente..." 
-            className="w-full pl-12 pr-4 py-3 bg-white/60 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-red-800 transition-all shadow-sm outline-none text-sm font-bold tracking-tight"
+            placeholder="Buscar por código de rastreamento ou cliente..." 
+            className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-red-800 transition-all shadow-sm outline-none text-xs font-bold tracking-tight"
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
         </div>
         <div className="flex items-center gap-8 px-6 border-l border-slate-200 hidden lg:flex font-sans">
            <div className="text-right">
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Lotes no Trecho</p>
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Encomendas a Caminho</p>
               <p className="text-xl font-black text-slate-900 font-display tabular-nums leading-none">{shipments.filter(s => s.status !== 'Entregue').length}</p>
            </div>
            <div className="text-right">

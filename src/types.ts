@@ -71,7 +71,7 @@ export interface ShipmentItem {
   price: number;
   isDropshipping?: boolean;
   gender?: 'Masculino' | 'Feminino' | 'Ambos';
-  status?: 'Pendente' | 'Recebido' | 'Faturado';
+  status?: 'Pendente' | 'Recebido' | 'Entregue';
   isCustomized?: boolean;
   customName?: string;
   customNumber?: string;

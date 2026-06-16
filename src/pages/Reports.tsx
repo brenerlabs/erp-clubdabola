@@ -500,7 +500,7 @@ export default function Reports() {
   };
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-4 md:space-y-6 pb-6 md:pb-12">
       {/* Header design following elegant visual system */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
@@ -510,71 +510,71 @@ export default function Reports() {
           <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.3em] font-sans mt-2">Navegabilidade de ponta a ponta: Vendas, Encomendas e Histórico Financeiro</p>
         </div>
         
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button 
             type="button"
             onClick={handleShareReport}
-            className="flex items-center gap-2 px-5 py-3 bg-amber-600 hover:bg-amber-700 text-white font-black uppercase text-[10px] tracking-widest rounded-2xl transition-all shadow-md active:scale-95 cursor-pointer"
+            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-black uppercase text-[10px] tracking-widest rounded-xl transition-all shadow-md active:scale-95 cursor-pointer flex-1 sm:flex-initial"
             id="btn-share-report"
           >
-            <Download size={14} />
-            Compartilhar WhatsApp
+            <Download size={13} />
+            WhatsApp
           </button>
 
           <button 
             type="button"
             onClick={handleDownloadPDF}
-            className="flex items-center gap-2 px-5 py-3 bg-red-800 hover:bg-black text-white font-black uppercase text-[10px] tracking-widest rounded-2xl transition-all shadow-md active:scale-95 cursor-pointer"
+            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-red-800 hover:bg-black text-white font-black uppercase text-[10px] tracking-widest rounded-xl transition-all shadow-md active:scale-95 cursor-pointer flex-1 sm:flex-initial"
             id="btn-download-pdf"
           >
-            <Download size={14} />
-            Exportar em PDF
+            <Download size={13} />
+            Gerar PDF
           </button>
         </div>
       </div>
 
       {/* Primary Navigation Tabs */}
-      <div className="flex border-b border-slate-200/80 gap-2">
+      <div className="flex flex-wrap border-b border-slate-200/80 gap-1 md:gap-2">
         <button
           onClick={() => { setActiveTab('all'); setSearchQuery(''); }}
           className={cn(
-            "px-6 py-3 font-bold text-xs uppercase tracking-wider border-b-2 transition-all",
+            "px-3 py-2 md:px-6 md:py-3 font-bold text-[10px] md:text-xs uppercase tracking-wider border-b-2 transition-all flex-1 md:flex-initial",
             activeTab === 'all' ? "border-red-800 text-red-800 font-extrabold" : "border-transparent text-slate-400 hover:text-slate-600"
           )}
         >
-          🔍 Rastreamento Geral (Transações & Encomendas)
+          🔍 Geral & Encomendas
         </button>
         <button
           onClick={() => { setActiveTab('products'); setSearchQuery(''); }}
           className={cn(
-            "px-6 py-3 font-bold text-xs uppercase tracking-wider border-b-2 transition-all",
+            "px-3 py-2 md:px-6 md:py-3 font-bold text-[10px] md:text-xs uppercase tracking-wider border-b-2 transition-all flex-1 md:flex-initial",
             activeTab === 'products' ? "border-red-800 text-red-800 font-extrabold" : "border-transparent text-slate-400 hover:text-slate-600"
           )}
         >
-          📦 Estatística por Produtos
+          📦 Por Produtos
         </button>
         <button
           onClick={() => { setActiveTab('customers'); setSearchQuery(''); }}
           className={cn(
-            "px-6 py-3 font-bold text-xs uppercase tracking-wider border-b-2 transition-all",
+            "px-3 py-2 md:px-6 md:py-3 font-bold text-[10px] md:text-xs uppercase tracking-wider border-b-2 transition-all flex-1 md:flex-initial",
             activeTab === 'customers' ? "border-red-800 text-red-800 font-extrabold" : "border-transparent text-slate-400 hover:text-slate-600"
           )}
         >
-          👥 Histórico de Clientes (LTV)
+          👥 Clientes (LTV)
         </button>
       </div>
 
       {/* Unified Filters Dashboard */}
-      <div className="bg-white rounded-[24px] border border-slate-100 shadow-sm p-6 space-y-4">
+      <div className="bg-white rounded-[20px] md:rounded-[24px] border border-slate-100 shadow-sm p-4 md:p-6 space-y-4">
         <div className="flex items-center gap-2 text-[10px] uppercase font-black text-slate-400 tracking-wider">
           <Filter size={12} className="text-slate-400" />
-          Filtros de Auditoria dinâmica
+          Filtros de Pesquisa
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-4">
           {/* Text Search */}
-          <div className="space-y-1.5 md:col-span-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Busca Inteligente</label>
+          <div className="space-y-1.5 sm:col-span-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Procurar</label>
             <div className="relative">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
               <input
