@@ -33,16 +33,16 @@ export default function PublicReceipt({ receiptId }: PublicReceiptProps) {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'jersey' | 'tracking'>('jersey');
 
-  // Load Sale and corresponding Shipment
+  // Load Sale and corresponding Shipment in real-time
   useEffect(() => {
     if (!receiptId) return;
 
     setLoading(true);
     setError(null);
 
-    // 1. Fetch exact Sale document (allowed publicly by ID in firestore.rules)
+    // 1. Listen to exact Sale document in real-time
     const saleRef = doc(db, 'sales', receiptId);
-    getDoc(saleRef).then((saleSnap) => {
+    const unsubscribeSale = onSnapshot(saleRef, (saleSnap) => {
       if (!saleSnap.exists()) {
         setError('Comprovante não encontrado. Verifique o link enviado.');
         setLoading(false);
@@ -53,38 +53,38 @@ export default function PublicReceipt({ receiptId }: PublicReceiptProps) {
       setSale(saleData);
 
       const hasCustObj = saleData.items?.some((it) => it.isCustomized) || false;
-      if (!hasCustObj) {
-        setActiveTab('tracking');
-      } else {
-        setActiveTab('jersey');
-      }
-
-      // 2. Listen to Shipments collection to live-track delivery state
-      const shipmentsRef = collection(db, 'shipments');
-      const unsubscribeShipments = onSnapshot(shipmentsRef, (snapshot) => {
-        let matchedShipment: Shipment | null = null;
-        snapshot.forEach((docSnap) => {
-          const s = { id: docSnap.id, ...docSnap.data() } as Shipment;
-          // Check if any item in the shipment corresponds to this sale ID
-          const hasSale = s.items?.some((item) => item.saleId === receiptId);
-          if (hasSale) {
-            matchedShipment = s;
-          }
-        });
-        setShipment(matchedShipment);
-        setLoading(false);
-      }, (err) => {
-        console.error("Error fetching matching shipment:", err);
-        // Suppress and complete loading since the sale is already resolved
-        setLoading(false);
+      setActiveTab((prev) => {
+        if (!hasCustObj) return 'tracking';
+        return prev;
       });
-
-      return () => unsubscribeShipments();
-    }).catch((err) => {
-      console.error("Error loading public receipt:", err);
+      setLoading(false);
+    }, (err) => {
+      console.error("Error loading public sale receipt:", err);
       setError('Houve um problema de rede ou permissão ao carregar o comprovante.');
       setLoading(false);
     });
+
+    // 2. Listen to Shipments collection to live-track delivery state
+    const shipmentsRef = collection(db, 'shipments');
+    const unsubscribeShipments = onSnapshot(shipmentsRef, (snapshot) => {
+      let matchedShipment: Shipment | null = null;
+      snapshot.forEach((docSnap) => {
+        const s = { id: docSnap.id, ...docSnap.data() } as Shipment;
+        // Check if any item in the shipment corresponds to this sale ID
+        const hasSale = s.items?.some((item) => item.saleId === receiptId);
+        if (hasSale) {
+          matchedShipment = s;
+        }
+      });
+      setShipment(matchedShipment);
+    }, (err) => {
+      console.error("Error fetching matching shipment:", err);
+    });
+
+    return () => {
+      unsubscribeSale();
+      unsubscribeShipments();
+    };
   }, [receiptId]);
 
   if (loading) {
@@ -120,8 +120,12 @@ export default function PublicReceipt({ receiptId }: PublicReceiptProps) {
     );
   }
 
+  const isPreSale = sale.status === 'Pré-venda';
+  const isFiado = sale.paymentMethod === 'Fiado' || sale.status === 'Pendente';
+  const isPaid = sale.status === 'Concluída' && sale.paymentMethod !== 'Fiado';
+
   // Determine if payment is confirmed to show digital confetti
-  const isPaymentConfirmed = sale.paymentMethod !== 'Fiado' || sale.status === 'Concluída';
+  const isPaymentConfirmed = isPaid;
 
   // Format date helper
   const formattedDate = sale.createdAt?.seconds 
@@ -220,20 +224,44 @@ export default function PublicReceipt({ receiptId }: PublicReceiptProps) {
                 </span>
               </div>
               <div className="text-right">
-                {isPaymentConfirmed ? (
-                  <span className="text-[9px] font-black text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full uppercase tracking-wider inline-flex items-center gap-1">
-                    <CheckCircle2 size={10} className="animate-pulse" /> Pago Confirmado
+                {isPreSale ? (
+                  <span className="text-[9px] font-black text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-full uppercase tracking-wider inline-flex items-center gap-1">
+                    <Clock size={10} className="animate-pulse" /> Aguardando Aprovação
+                  </span>
+                ) : isFiado ? (
+                  <span className="text-[9px] font-black text-rose-400 bg-rose-500/10 border border-rose-500/20 px-2.5 py-1 rounded-full uppercase tracking-wider inline-flex items-center gap-1">
+                    <Clock size={10} className="animate-pulse" /> Pagamento Pendente
                   </span>
                 ) : (
-                  <span className="text-[9px] font-black text-amber-500 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-full uppercase tracking-wider inline-flex items-center gap-1">
-                    <Clock size={10} className="animate-pulse" /> Pendente / Fiado
+                  <span className="text-[9px] font-black text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full uppercase tracking-wider inline-flex items-center gap-1">
+                    <CheckCircle2 size={10} className="animate-pulse" /> Pago Confirmado
                   </span>
                 )}
               </div>
             </div>
 
-            {/* Congratulatory Text */}
-            {isPaymentConfirmed && (
+            {/* Congratulatory / Status Text */}
+            {isPreSale ? (
+              <div className="text-center mb-6 space-y-1.5 animate-fadeIn">
+                <div className="size-12 bg-amber-500/10 border border-amber-500/30 rounded-full flex items-center justify-center mx-auto mb-2 shadow-inner shadow-amber-500/5">
+                  <Clock size={20} className="text-amber-400 animate-pulse" />
+                </div>
+                <h2 className="text-base font-black uppercase text-white tracking-wide">Orçamento Disponível!</h2>
+                <p className="text-[10px] text-slate-400 max-w-xs mx-auto leading-relaxed">
+                  Olá, <strong className="text-white uppercase">{sale.customerName}</strong>! Seu orçamento já está salvo no sistema e <strong className="text-amber-400">aguarda aprovação</strong> para iniciarmos a confecção do seu manto exclusivo.
+                </p>
+              </div>
+            ) : isFiado ? (
+              <div className="text-center mb-6 space-y-1.5 animate-fadeIn">
+                <div className="size-12 bg-rose-500/10 border border-rose-500/30 rounded-full flex items-center justify-center mx-auto mb-2 shadow-inner shadow-rose-500/5">
+                  <Clock size={20} className="text-rose-400 animate-pulse" />
+                </div>
+                <h2 className="text-base font-black uppercase text-white tracking-wide">Pedido Registrado!</h2>
+                <p className="text-[10px] text-slate-400 max-w-xs mx-auto leading-relaxed">
+                  Fala, <strong className="text-white uppercase">{sale.customerName}</strong>! Seu pedido foi registrado com sucesso. Seu pagamento está como <strong className="text-rose-400">pendente ou em aberto</strong> no sistema. Fale com seu assessor para acertar os detalhes.
+                </p>
+              </div>
+            ) : (
               <div className="text-center mb-6 space-y-1.5 animate-fadeIn">
                 <div className="size-12 bg-emerald-500/10 border border-emerald-500/30 rounded-full flex items-center justify-center mx-auto mb-2 shadow-inner shadow-emerald-500/5">
                   <Sparkles size={20} className="text-amber-500 animate-spin" style={{ animationDuration: '6s' }} />
