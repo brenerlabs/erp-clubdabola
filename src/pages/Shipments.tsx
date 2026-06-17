@@ -1177,11 +1177,65 @@ export default function Shipments() {
         return i;
       });
 
-      // Update the shipment status first! This guarantees swiftness and that the status change is saved immediately to Firestore
-      await updateDoc(doc(db, 'shipments', shipmentId), {
+      const allEntregue = updatedItems.length > 0 && updatedItems.every(i => i.status === 'Entregue');
+      
+      const updatePayload: any = {
         items: updatedItems,
         updatedAt: serverTimestamp()
-      });
+      };
+
+      let autoStockProcessed = shipment.stockProcessed || false;
+      if (allEntregue && shipment.status !== 'Entregue') {
+        updatePayload.status = 'Entregue';
+        
+        const history = [...(shipment.history || [])];
+        history.push({
+          status: 'Entregue',
+          updatedAt: new Date(),
+          notes: 'Encomenda entregue automaticamente (todos os clientes receberam seus itens).'
+        });
+
+        // Autoupdate real stock for restock elements if not processed yet
+        const stockItems = updatedItems.filter(i => i.customerId === 'estoque');
+        if (!autoStockProcessed && stockItems.length > 0) {
+          for (const item of stockItems) {
+            if (!item.productId) continue;
+            try {
+              const prodRef = doc(db, 'products', item.productId);
+              const prodSnap = await getDoc(prodRef);
+              if (prodSnap.exists()) {
+                const productData = { id: prodSnap.id, ...prodSnap.data() } as Product;
+                const updatedVariations = (productData.variations || []).map(v => {
+                  if (v.id === item.variationId) {
+                    return { ...v, stock: (v.stock || 0) + item.quantity };
+                  }
+                  return v;
+                });
+                const totalStock = updatedVariations.reduce((acc, v) => acc + (v.stock || 0), 0);
+                await updateDoc(prodRef, {
+                  variations: updatedVariations,
+                  totalStock,
+                  updatedAt: serverTimestamp()
+                });
+              }
+            } catch (err) {
+              console.error("Erro background ao atualizar estoque de peca única:", item.productId, err);
+            }
+          }
+          autoStockProcessed = true;
+          history.push({
+            status: 'Entregue',
+            updatedAt: new Date(),
+            notes: `Estoque automático integrado: ${stockItems.length} item(ns) inseridos no estoque real.`
+          });
+        }
+
+        updatePayload.history = history;
+        updatePayload.stockProcessed = autoStockProcessed;
+      }
+
+      // Update the shipment status first! This guarantees swiftness and that the status change is saved immediately to Firestore
+      await updateDoc(doc(db, 'shipments', shipmentId), updatePayload);
 
       // Safely process background side-effects inside individual isolated try-catch blocks
       const targetItem = shipment.items.find(i => i.id === itemId);
@@ -1233,11 +1287,65 @@ export default function Shipments() {
         return i;
       });
 
-      // Update the shipment status first to make the front-end react immediately
-      await updateDoc(doc(db, 'shipments', shipmentId), {
+      const allEntregue = updatedItems.length > 0 && updatedItems.every(i => i.status === 'Entregue');
+
+      const updatePayload: any = {
         items: updatedItems,
         updatedAt: serverTimestamp()
-      });
+      };
+
+      let autoStockProcessed = shipment.stockProcessed || false;
+      if (allEntregue && shipment.status !== 'Entregue') {
+        updatePayload.status = 'Entregue';
+        
+        const history = [...(shipment.history || [])];
+        history.push({
+          status: 'Entregue',
+          updatedAt: new Date(),
+          notes: 'Encomenda entregue automaticamente (todos os clientes receberam seus itens).'
+        });
+
+        // Autoupdate real stock for restock elements if not processed yet
+        const stockItems = updatedItems.filter(i => i.customerId === 'estoque');
+        if (!autoStockProcessed && stockItems.length > 0) {
+          for (const item of stockItems) {
+            if (!item.productId) continue;
+            try {
+              const prodRef = doc(db, 'products', item.productId);
+              const prodSnap = await getDoc(prodRef);
+              if (prodSnap.exists()) {
+                const productData = { id: prodSnap.id, ...prodSnap.data() } as Product;
+                const updatedVariations = (productData.variations || []).map(v => {
+                  if (v.id === item.variationId) {
+                    return { ...v, stock: (v.stock || 0) + item.quantity };
+                  }
+                  return v;
+                });
+                const totalStock = updatedVariations.reduce((acc, v) => acc + (v.stock || 0), 0);
+                await updateDoc(prodRef, {
+                  variations: updatedVariations,
+                  totalStock,
+                  updatedAt: serverTimestamp()
+                });
+              }
+            } catch (err) {
+              console.error("Erro background ao atualizar estoque de peca única:", item.productId, err);
+            }
+          }
+          autoStockProcessed = true;
+          history.push({
+            status: 'Entregue',
+            updatedAt: new Date(),
+            notes: `Estoque automático integrado: ${stockItems.length} item(ns) inseridos no estoque real.`
+          });
+        }
+
+        updatePayload.history = history;
+        updatePayload.stockProcessed = autoStockProcessed;
+      }
+
+      // Update the shipment status first to make the front-end react immediately
+      await updateDoc(doc(db, 'shipments', shipmentId), updatePayload);
 
       // Process side effects sequentially or asynchronously in a highly decoupled, non-blocking manner
       const customerItems = shipment.items.filter(i => i.customerId === customerId);
@@ -2413,7 +2521,7 @@ export default function Shipments() {
         )}
       </AnimatePresence>
 
-      <div className="flex flex-col lg:flex-row items-center justify-between gap-4 p-4 lg:p-6 bg-white/40 backdrop-blur-md rounded-2xl lg:rounded-3xl border border-white/60 shadow-xl shadow-slate-200/50 mb-4 lg:mb-6">
+      <div className="flex flex-col lg:flex-row items-center justify-between gap-4 p-6 bg-white/40 backdrop-blur-md rounded-[32px] border border-white/60 shadow-xl shadow-slate-200/50 mb-4 lg:mb-6 font-sans">
         <div className="flex-1 w-full max-w-md relative group">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 size-4 group-focus-within:text-red-800 transition-colors" />
           <input 

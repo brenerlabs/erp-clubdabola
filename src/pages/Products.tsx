@@ -706,7 +706,7 @@ export default function Products() {
         </motion.div>
       )}
 
-      <div className="flex flex-col lg:flex-row items-center justify-between gap-4 p-4 lg:p-6 bg-white/40 backdrop-blur-md rounded-2xl lg:rounded-3xl border border-white/60 shadow-xl shadow-slate-200/50 mb-4 lg:mb-6">
+      <div className="flex flex-col lg:flex-row items-center justify-between gap-4 p-6 bg-white/40 backdrop-blur-md rounded-[32px] border border-white/60 shadow-xl shadow-slate-200/50 mb-4 lg:mb-6">
         <div className="flex flex-col lg:flex-row items-center gap-3 flex-1 w-full">
           <div className="flex-1 relative group w-full">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 size-4 group-focus-within:text-red-800 transition-colors" />

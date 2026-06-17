@@ -84,36 +84,103 @@ const oklchToRgb = (l: number, c: number, h: number): [number, number, number] =
   ];
 };
 
+const oklabToRgb = (l: number, a: number, b: number): [number, number, number] => {
+  const L_lms = l + 0.3963377774 * a + 0.2158037573 * b;
+  const M_lms = l - 0.1055613458 * a - 0.0638541728 * b;
+  const S_lms = l - 0.0894841775 * a - 1.2914855480 * b;
+
+  const l_cubed = L_lms * L_lms * L_lms;
+  const m_cubed = M_lms * M_lms * M_lms;
+  const s_cubed = S_lms * S_lms * S_lms;
+
+  const r = +4.0767416621 * l_cubed - 3.3077115913 * m_cubed + 0.2309699292 * s_cubed;
+  const g = -1.2684380046 * l_cubed + 2.6097574011 * m_cubed - 0.3413193965 * s_cubed;
+  const b_rgb = -0.0041960863 * l_cubed - 0.7034186147 * m_cubed + 1.7076147010 * s_cubed;
+
+  const toSRGB = (cVal: number) => {
+    const clamped = Math.max(0, Math.min(1, cVal));
+    return clamped <= 0.0031308
+      ? clamped * 12.92
+      : 1.055 * Math.pow(clamped, 1 / 2.4) - 0.055;
+  };
+
+  return [
+    Math.round(toSRGB(r) * 255),
+    Math.round(toSRGB(g) * 255),
+    Math.round(toSRGB(b_rgb) * 255)
+  ];
+};
+
+const parseColorValue = (str: string, percentScale: boolean = false): number => {
+  const s = str.trim();
+  if (s.toLowerCase() === 'none') return 0;
+  if (s.endsWith('%')) {
+    return parseFloat(s) / 100;
+  }
+  const val = parseFloat(s);
+  if (percentScale && val > 1) {
+    return val / 100;
+  }
+  return val;
+};
+
 const replaceOklch = (cssText: string): string => {
-  if (!cssText || typeof cssText !== 'string' || !cssText.toLowerCase().includes('oklch')) {
+  if (!cssText || typeof cssText !== 'string') {
     return cssText;
   }
-  return cssText.replace(/oklch\(([^)]+)\)/gi, (match, inner) => {
-    try {
-      const parts = inner.trim().split(/[\s,+/]+/);
-      if (parts.length >= 3) {
-        const l = parseFloat(parts[0]);
-        const c = parseFloat(parts[1]);
-        const h = parseFloat(parts[2]);
-        if (isNaN(l) || isNaN(c) || isNaN(h)) {
-          return 'rgba(0, 0, 0, 0)';
-        }
-        let alpha = 1;
-        if (parts[3]) {
-          if (parts[3].endsWith('%')) {
-            alpha = parseFloat(parts[3]) / 100;
-          } else {
-            alpha = parseFloat(parts[3]);
+  let result = cssText;
+
+  if (result.toLowerCase().includes('oklch')) {
+    result = result.replace(/oklch\(([^)]+)\)/gi, (match, inner) => {
+      try {
+        const parts = inner.trim().split(/[\s,+/]+/);
+        if (parts.length >= 3) {
+          const l = parseColorValue(parts[0], true);
+          const c = parseColorValue(parts[1]);
+          const h = parseColorValue(parts[2]);
+          if (isNaN(l) || isNaN(c) || isNaN(h)) {
+            return 'rgba(0, 0, 0, 0)';
           }
+          let alpha = 1;
+          if (parts[3]) {
+            alpha = parseColorValue(parts[3], parts[3].endsWith('%'));
+          }
+          const [r, g, b] = oklchToRgb(l, c, h);
+          return `rgba(${r}, ${g}, ${b}, ${alpha})`;
         }
-        const [r, g, b] = oklchToRgb(l, c, h);
-        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+      } catch {
+        // fallback
       }
-    } catch {
-      // fallback
-    }
-    return 'rgba(0, 0, 0, 0)';
-  });
+      return 'rgba(0, 0, 0, 0)';
+    });
+  }
+
+  if (result.toLowerCase().includes('oklab')) {
+    result = result.replace(/oklab\(([^)]+)\)/gi, (match, inner) => {
+      try {
+        const parts = inner.trim().split(/[\s,+/]+/);
+        if (parts.length >= 3) {
+          const l = parseColorValue(parts[0], true);
+          const a = parseColorValue(parts[1]);
+          const b = parseColorValue(parts[2]);
+          if (isNaN(l) || isNaN(a) || isNaN(b)) {
+            return 'rgba(0, 0, 0, 0)';
+          }
+          let alpha = 1;
+          if (parts[3]) {
+            alpha = parseColorValue(parts[3], parts[3].endsWith('%'));
+          }
+          const [r, g, b_rgb] = oklabToRgb(l, a, b);
+          return `rgba(${r}, ${g}, ${b_rgb}, ${alpha})`;
+        }
+      } catch {
+        // fallback
+      }
+      return 'rgba(0, 0, 0, 0)';
+    });
+  }
+
+  return result;
 };
 
 export default function PDV() {
@@ -1419,6 +1486,7 @@ export default function PDV() {
                     onClick={async () => {
                       const element = document.getElementById('size-guide-content');
                       if (!element) return;
+                      
                       try {
                         const canvas = await html2canvas(element, {
                           backgroundColor: '#ffffff',
@@ -1427,7 +1495,10 @@ export default function PDV() {
                           useCORS: true,
                           onclone: (clonedDoc) => {
                             // 1. Compile and sanitize all global CSS rules
-                            const newStyle = clonedDoc.createElement('style');
+                            const parentStyleNodes = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'));
+                            const clonedStyleNodes = Array.from(clonedDoc.querySelectorAll('style, link[rel="stylesheet"]'));
+
+                            const sheetsToRemove = new Set<Element>();
                             let combinedCSS = '';
 
                             Array.from(document.styleSheets).forEach((sheet) => {
@@ -1436,24 +1507,28 @@ export default function PDV() {
                                 rules.forEach((rule) => {
                                   combinedCSS += rule.cssText + '\n';
                                 });
+                                if (sheet.ownerNode) {
+                                  const idx = parentStyleNodes.indexOf(sheet.ownerNode as Element);
+                                  if (idx !== -1 && idx < clonedStyleNodes.length) {
+                                    sheetsToRemove.add(clonedStyleNodes[idx]);
+                                  }
+                                }
                               } catch (e) {
                                 // Ignore cross-origin stylesheet reading restrictions if any
                               }
                             });
 
                             if (combinedCSS) {
-                              newStyle.innerHTML = replaceOklch(combinedCSS);
-                              clonedDoc.head.appendChild(newStyle);
+                              const cleanStyle = clonedDoc.createElement('style');
+                              cleanStyle.textContent = replaceOklch(combinedCSS);
+                              clonedDoc.head.appendChild(cleanStyle);
 
-                              // Remove original styles and links so html2canvas doesn't try to parse them
-                              const originalStyles = Array.from(clonedDoc.querySelectorAll('style, link[rel="stylesheet"]'));
-                              originalStyles.forEach((el) => {
-                                if (el !== newStyle) {
-                                  el.parentNode?.removeChild(el);
-                                }
+                              // Only remove style sheets that we successfully read and combined
+                              sheetsToRemove.forEach((node) => {
+                                node.parentNode?.removeChild(node);
                               });
                             } else {
-                              // Fallback style replacement for iframe style tags
+                              // Fallback style replacement for iframe style tags if rules were empty
                               const styleElements = clonedDoc.getElementsByTagName('style');
                               for (let i = 0; i < styleElements.length; i++) {
                                 const styleEl = styleElements[i];
@@ -1466,12 +1541,26 @@ export default function PDV() {
                             styledEls.forEach((el) => {
                               const htmlEl = el as HTMLElement;
                               const styleAttr = htmlEl.getAttribute('style');
-                              if (styleAttr && styleAttr.toLowerCase().includes('oklch')) {
+                              if (styleAttr && (styleAttr.toLowerCase().includes('oklch') || styleAttr.toLowerCase().includes('oklab'))) {
                                 htmlEl.setAttribute('style', replaceOklch(styleAttr));
+                              }
+                            });
+
+                            // 3. Convert all SVG fill/stroke colors
+                            const svgProperties = clonedDoc.querySelectorAll('[fill], [stroke]');
+                            svgProperties.forEach((el) => {
+                              const fill = el.getAttribute('fill');
+                              if (fill && (fill.toLowerCase().includes('oklch') || fill.toLowerCase().includes('oklab'))) {
+                                el.setAttribute('fill', replaceOklch(fill));
+                              }
+                              const stroke = el.getAttribute('stroke');
+                              if (stroke && (stroke.toLowerCase().includes('oklch') || stroke.toLowerCase().includes('oklab'))) {
+                                el.setAttribute('stroke', replaceOklch(stroke));
                               }
                             });
                           }
                         });
+
                         const image = canvas.toDataURL('image/png');
                         
                         // Try native Web Share on mobile devices (including iOS Safari!)
@@ -1572,16 +1661,18 @@ export default function PDV() {
         "flex-1 flex flex-col gap-4 md:gap-6 md:overflow-hidden transition-all duration-300",
         isCartVisible ? "hidden md:flex" : "flex"
       )}>
-        <div className="sticky top-0 z-20 bg-slate-50/80 backdrop-blur-md pb-4 pt-1">
-          <div className="relative group">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-red-800 transition-colors size-6" />
-            <input 
-              type="text" 
-              placeholder="Buscar por nome ou categoria..." 
-              className="w-full pl-14 pr-6 py-4 bg-white border border-gray-100 rounded-2xl shadow-sm outline-none focus:ring-2 focus:ring-red-800/20 focus:border-red-800 font-black text-base tracking-tight placeholder:text-slate-300 transition-all"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
+        <div className="sticky top-0 z-20 bg-transparent pb-4 pt-1">
+          <div className="p-4 bg-white/40 backdrop-blur-md rounded-[32px] border border-white/60 shadow-xl shadow-slate-200/50">
+            <div className="relative group">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-red-800 transition-colors size-6" />
+              <input 
+                type="text" 
+                placeholder="Buscar por nome ou categoria..." 
+                className="w-full pl-14 pr-6 py-4 bg-white border border-gray-100 rounded-2xl shadow-sm outline-none focus:ring-2 focus:ring-red-800/20 focus:border-red-800 font-black text-base tracking-tight placeholder:text-slate-300 transition-all"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
+            </div>
           </div>
         </div>
 

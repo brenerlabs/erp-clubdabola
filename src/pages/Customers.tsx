@@ -658,7 +658,7 @@ export default function Customers() {
         </div>
       </div>
 
-      <div className="flex flex-col lg:flex-row items-center justify-between gap-4 p-6 bg-white/40 backdrop-blur-md rounded-[32px] border border-white/60 shadow-xl shadow-slate-200/50">
+      <div className="flex flex-col lg:flex-row items-center justify-between gap-4 p-6 bg-white/40 backdrop-blur-md rounded-[32px] border border-white/60 shadow-xl shadow-slate-200/50 mb-6 font-sans">
         <div className="flex flex-col sm:flex-row items-center gap-4 flex-1 w-full max-w-2xl">
           <div className="flex-1 relative group w-full">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 size-5 group-focus-within:text-red-800 transition-colors" />
