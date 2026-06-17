@@ -963,35 +963,22 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Grade Modular de Desempenho Econômico, Liquidez e Giro (Bento Grid) */}
-      <motion.div 
-        initial={{ opacity: 0, y: 15 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="bg-white rounded-[32px] border border-slate-200/50 p-6 md:p-8 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.06),0_1px_4px_rgba(0,0,0,0.01)] hover:shadow-[0_24px_60px_-10px_rgba(0,0,0,0.09),0_1px_6px_rgba(0,0,0,0.02)] transition-all duration-300 flex flex-col gap-6 relative overflow-hidden mb-6"
-      >
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2">
-          <div>
-            <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-800"></span>
-              </span>
-              Grade Modular de Desempenho Econômico e Giro
-            </h3>
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">Sincronização em tempo real de faturamento, liquidez de carteira e preferências do consumidor</p>
+      {/* Bento Grid para Dashboards (Painéis Organizados) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        
+        {/* Bloco 1: Faturamento & Rentabilidade (Peso Grande: col-span-2) */}
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.98, y: 15 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+          whileHover={{ y: -4 }}
+          className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200/60 shadow-sm flex flex-col justify-between relative overflow-hidden group md:col-span-2 lg:col-span-2 min-h-[220px]"
+        >
+          <div className="absolute top-0 right-0 p-6 opacity-[0.03] group-hover:opacity-[0.07] transition-all group-hover:scale-110">
+            <TrendingUp size={110} />
           </div>
-          <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100">
-            {filteredSales.length} OPERAÇÕES ATIVAS
-          </div>
-        </div>
-
-        <div className="h-px w-full bg-gradient-to-r from-transparent via-slate-200/80 to-transparent" />
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {/* Pillar 1: Faturamento & Rentabilidade */}
-          <div className="space-y-4 md:pr-8 md:border-r border-slate-100">
-            <div className="flex justify-between items-center">
+          <div className="relative z-10 w-full">
+            <div className="flex justify-between items-center mb-6">
               <span className="text-[9px] font-black tracking-widest uppercase text-slate-400">01. Desempenho Comercial</span>
               <div className="size-8 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center font-bold">
                 <TrendingUp size={16} />
@@ -1004,96 +991,204 @@ export default function Dashboard() {
                 {formatCurrency(stats.totalRevenue)}
               </h3>
             </div>
+          </div>
 
-            <div className="h-px w-full bg-gradient-to-r from-transparent via-slate-200/60 to-transparent" />
-            
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Lucro Líquido Real</span>
-                  <span className="text-xs font-black text-emerald-600 font-mono tracking-tight tabular-nums">
-                    {formatCurrency(stats.totalProfit)}
-                  </span>
-                </div>
-                {stats.totalRevenue > 0 && (
-                  <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 text-[10px] font-black rounded-lg uppercase tracking-wider font-mono">
-                    {((stats.totalProfit / stats.totalRevenue) * 100).toFixed(1)}% Mg
-                  </span>
-                )}
+          <div className="h-px w-full bg-slate-100 my-5 relative z-10" />
+          
+          <div className="space-y-3 relative z-10 w-full">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Lucro Líquido Real</span>
+                <span className="text-sm font-black text-emerald-600 font-mono tracking-tight tabular-nums">
+                  {formatCurrency(stats.totalProfit)}
+                </span>
               </div>
+              {stats.totalRevenue > 0 && (
+                <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 text-[10px] font-black rounded-lg uppercase tracking-wider font-mono">
+                  {((stats.totalProfit / stats.totalRevenue) * 100).toFixed(1)}% Margem
+                </span>
+              )}
+            </div>
 
-              {/* Custom Profitability Progress Bar */}
-              <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                <motion.div 
-                  initial={{ width: 0 }}
-                  animate={{ width: `${stats.totalRevenue > 0 ? Math.min(100, Math.max(0, (stats.totalProfit / stats.totalRevenue) * 100)) : 0}%` }}
-                  transition={{ duration: 1, ease: 'easeOut' }}
-                  className="h-full bg-emerald-500 rounded-full"
-                />
+            <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+              <motion.div 
+                initial={{ width: 0 }}
+                animate={{ width: `${stats.totalRevenue > 0 ? Math.min(100, Math.max(0, (stats.totalProfit / stats.totalRevenue) * 100)) : 0}%` }}
+                transition={{ duration: 1, ease: 'easeOut' }}
+                className="h-full bg-emerald-500 rounded-full"
+              />
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Bloco 2: Encomendas a Caminho (Destacado em tons de escuros e indicador ativo - col-span-1) */}
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.98, y: 15 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.1 }}
+          whileHover={{ y: -4 }}
+          className="bg-slate-900 text-white p-6 rounded-[32px] border border-slate-800 shadow-md flex flex-col justify-between relative overflow-hidden group col-span-1 min-h-[220px]"
+        >
+          <div className="absolute top-0 right-0 p-6 opacity-[0.05] group-hover:opacity-[0.10] transition-all group-hover:scale-110">
+            <Truck size={100} />
+          </div>
+          <div className="relative z-10">
+            <div className="flex justify-between items-center mb-6">
+              <span className="text-[9px] font-black tracking-widest uppercase text-slate-400">02. Fluxo Logístico</span>
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-indigo-500"></span>
+              </span>
+            </div>
+            
+            <div className="space-y-1">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Encomendas a Caminho</span>
+              <div className="flex items-baseline gap-1.5">
+                <h3 className="text-4.5xl font-black text-white font-display tracking-tight leading-none uppercase">
+                  {shipments.filter(s => s.status !== 'Entregue').length}
+                </h3>
+                <span className="text-[10px] text-indigo-300 font-bold uppercase tracking-widest font-mono">lotes ativos</span>
               </div>
             </div>
           </div>
 
-          {/* Pillar 2: Controle de Crédito & Liquidez (Fiados) */}
-          <div className="space-y-4 md:px-8 md:border-r border-slate-100">
-            <div className="flex justify-between items-center">
-              <span className="text-[9px] font-black tracking-widest uppercase text-slate-400">02. Crédito & Liquidez</span>
-              <div className={cn(
-                "size-8 rounded-xl flex items-center justify-center font-bold",
-                stats.totalDebt > 0 ? "bg-amber-50 text-amber-600" : "bg-emerald-50 text-emerald-600"
-              )}>
-                <Wallet size={16} />
+          <div className="mt-4 relative z-10">
+            <p className="text-[8.5px] text-slate-400 font-black uppercase tracking-widest leading-normal">
+              {stats.dropshippingOrders} pedidos via Dropshipping ({stats.totalOrders > 0 ? ((stats.dropshippingOrders / stats.totalOrders) * 100).toFixed(0) : 0}% do faturamento ativo)
+            </p>
+            <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden mt-2">
+              <div 
+                className="h-full bg-indigo-500 rounded-full" 
+                style={{ width: `${stats.totalOrders > 0 ? (stats.dropshippingOrders / stats.totalOrders) * 100 : 0}%` }} 
+              />
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Bloco 3: Taxas Pendentes (Destaque visual vibrante em vermelho/rose - col-span-1) */}
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.98, y: 15 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.15 }}
+          whileHover={{ y: -4 }}
+          className="bg-rose-50/60 p-6 rounded-[32px] border border-rose-100/80 shadow-sm flex flex-col justify-between relative overflow-hidden group col-span-1 min-h-[220px]"
+        >
+          <div className="absolute top-0 right-0 p-6 opacity-[0.03] group-hover:opacity-[0.08] transition-all group-hover:scale-110">
+            <DollarSign size={100} />
+          </div>
+          <div className="relative z-10">
+            <div className="flex justify-between items-center mb-6">
+              <span className="text-[9px] font-black tracking-widest uppercase text-rose-500">03. Custos Aduaneiros</span>
+              <div className="size-8 bg-rose-100/50 text-rose-600 rounded-xl flex items-center justify-center font-bold">
+                <Receipt size={16} />
+              </div>
+            </div>
+            
+            <div className="space-y-1">
+              <span className="text-[10px] font-bold text-rose-600/75 uppercase tracking-wider block">Taxas Pendentes</span>
+              <h3 className="text-3xl font-black text-rose-950 font-display tracking-tight leading-none uppercase tabular-nums">
+                {formatCurrency(stats.pendingTaxes)}
+              </h3>
+            </div>
+          </div>
+
+          <div className="mt-4 relative z-10">
+            <p className="text-[8.5px] text-rose-700 font-bold uppercase tracking-widest leading-none flex items-center gap-1">
+              <span className="size-1.5 bg-rose-600 rounded-full inline-block animate-pulse"></span>
+              Aguardando Liquidação Fiscal
+            </p>
+            <p className="text-[8px] text-slate-400 mt-1 uppercase font-bold">Consolidação de Lotes de Importação</p>
+          </div>
+        </motion.div>
+
+        {/* Bloco 4: Crédito, Carteira & Fiados (col-span-1) */}
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.98, y: 15 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.2 }}
+          whileHover={{ y: -4 }}
+          className="bg-white p-6 rounded-[32px] border border-slate-200/60 shadow-sm flex flex-col justify-between relative overflow-hidden group col-span-1 min-h-[220px]"
+        >
+          <div className="relative z-10">
+            <div className="flex justify-between items-center mb-6">
+              <span className="text-[9px] font-black tracking-widest uppercase text-slate-400">04. Crédito & Carteira</span>
+              <div className="size-8 bg-amber-50 text-amber-500 rounded-xl flex items-center justify-center font-bold">
+                <Wallet size={15} />
               </div>
             </div>
             
             <div className="space-y-1">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Contas a Receber (Fiado)</span>
-              <h3 className="text-3xl font-black text-slate-900 font-display tracking-tight leading-none uppercase tabular-nums">
+              <h3 className="text-2xl font-black text-slate-900 tracking-tight leading-none uppercase tabular-nums">
                 {formatCurrency(stats.totalDebt)}
               </h3>
             </div>
+          </div>
 
-            <div className="h-px w-full bg-gradient-to-r from-transparent via-slate-200/60 to-transparent" />
+          <div className="mt-4 relative z-10 space-y-1.5">
+            <div className="flex items-center justify-between text-[9px] font-bold uppercase">
+              <span className="text-slate-400 block">Eficiência Líquida</span>
+              <span className="text-amber-600 font-mono">{stats.efficiencyRatio.toFixed(1)}%</span>
+            </div>
+            <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+              <div className="h-full bg-amber-500 rounded-full" style={{ width: `${stats.efficiencyRatio}%` }} />
+            </div>
+          </div>
+        </motion.div>
 
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Eficiência de Caixa</span>
-                  <span className={cn(
-                    "text-xs font-black font-mono tracking-tight",
-                    stats.efficiencyRatio > 85 ? "text-emerald-600" : "text-amber-600"
-                  )}>
-                    {stats.efficiencyRatio.toFixed(1)}% Liquidado
-                  </span>
-                </div>
-                <span className="text-[9px] font-black text-slate-500 uppercase tracking-wider bg-slate-50 px-2 py-0.5 rounded-md">
-                  {debtors.length} Contas
-                </span>
+        {/* Bloco 5: Controle Operacional - Ticket Médio, AOV e Peças (col-span-1) */}
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.98, y: 15 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.25 }}
+          whileHover={{ y: -4 }}
+          className="bg-white p-6 rounded-[32px] border border-slate-200/60 shadow-sm flex flex-col justify-between relative overflow-hidden group col-span-1 min-h-[220px]"
+        >
+          <div className="relative z-10 w-full">
+            <div className="flex justify-between items-center mb-6">
+              <span className="text-[9px] font-black tracking-widest uppercase text-slate-400">05. Métricas e AOV</span>
+              <div className="size-8 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center font-bold">
+                <Activity size={15} />
               </div>
-              <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden relative">
-                <motion.div 
-                  initial={{ width: 0 }}
-                  animate={{ width: `${stats.efficiencyRatio}%` }}
-                  transition={{ duration: 1.2, ease: 'easeOut' }}
-                  className={cn(
-                    "h-full rounded-full relative",
-                    stats.efficiencyRatio > 85 ? "bg-emerald-500" : "bg-amber-500"
-                  )}
-                />
-              </div>
+            </div>
+            
+            <div className="space-y-1">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Ticket Médio p/ Venda</span>
+              <h3 className="text-2xl font-black text-slate-900 tracking-tight leading-none uppercase tabular-nums">
+                {formatCurrency(stats.avgTicket)}
+              </h3>
             </div>
           </div>
 
-          {/* Pillar 3: Produtos de Alto Giro (Best Sellers) */}
-          <div className="space-y-3 md:pl-8">
-            <div className="flex justify-between items-center mb-1">
-              <span className="text-[9px] font-black tracking-widest uppercase text-slate-400">03. Produtos de Alto Giro</span>
+          <div className="mt-4 relative z-10 grid grid-cols-2 gap-2 pt-2 border-t border-slate-50">
+            <div>
+              <span className="text-[8px] text-slate-400 font-bold uppercase block">Preço p/ Peça</span>
+              <p className="text-xs font-black text-slate-800 font-mono tracking-tight">{formatCurrency(stats.avgItemPrice)}</p>
+            </div>
+            <div>
+              <span className="text-[8px] text-slate-400 font-bold uppercase block">Itens p/ Carrinho</span>
+              <p className="text-xs font-black text-slate-800 font-mono tracking-tight">{stats.avgItemsPerSale.toFixed(1)} un</p>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Bloco 6: Produtos de Alto Giro (Best Sellers) (col-span-2: Layout assimétrico integrado) */}
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.98, y: 15 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.3 }}
+          whileHover={{ y: -4 }}
+          className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200/60 shadow-sm flex flex-col justify-between relative overflow-hidden group md:col-span-2 lg:col-span-2 min-h-[220px]"
+        >
+          <div className="relative z-10 w-full">
+            <div className="flex justify-between items-center mb-4">
+              <span className="text-[9px] font-black tracking-widest uppercase text-slate-400 font-mono">06. Artigos mais vendidos</span>
               <div className="size-8 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center font-bold">
-                <Sparkles size={14} className="text-blue-500 animate-spin" />
+                <Sparkles size={14} className="text-blue-500" />
               </div>
             </div>
 
-            <div className="space-y-2.5 max-h-[160px] overflow-y-auto pr-1">
+            <div className="space-y-2.5 max-h-[140px] overflow-y-auto pr-1">
               {topGiroProducts.length === 0 ? (
                 <div className="py-6 text-center text-slate-350 text-[10px] font-bold uppercase tracking-wider">Nenhum giro registrado</div>
               ) : (
@@ -1102,9 +1197,9 @@ export default function Dashboard() {
                   const percentOfTop = (p.quantity / maxQty) * 100;
                   return (
                     <div key={p.id} className="space-y-1">
-                      <div className="flex justify-between items-center text-[10px] font-black uppercase text-slate-700 leading-none">
-                        <span className="truncate max-w-[130px] tracking-tight">{idx + 1}. {p.name}</span>
-                        <span className="tabular-nums font-mono text-slate-500">{p.quantity} un <span className="opacity-40">({formatCurrency(p.revenue)})</span></span>
+                      <div className="flex justify-between items-center text-[10.5px] font-black uppercase text-slate-700 leading-none">
+                        <span className="truncate max-w-[140px] tracking-tight">{idx + 1}. {p.name}</span>
+                        <span className="tabular-nums font-mono text-slate-500 pr-1">{p.quantity} un <span className="opacity-40">({formatCurrency(p.revenue)})</span></span>
                       </div>
                       <div className="w-full h-1 bg-slate-100 rounded-full overflow-hidden">
                         <div className="h-full bg-blue-500 rounded-full" style={{ width: `${percentOfTop}%` }} />
@@ -1115,151 +1210,8 @@ export default function Dashboard() {
               )}
             </div>
           </div>
-        </div>
-      </motion.div>
-
-      {/* Outras Métricas Operacionais */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-        {/* Card 3: Operacional & Despesas */}
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.98, y: 12 }}
-          whileInView={{ opacity: 1, scale: 1, y: 0 }}
-          whileHover={{ y: -5 }}
-          viewport={{ once: true }}
-          className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200/50 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.06),0_1px_4px_rgba(0,0,0,0.01)] hover:shadow-[0_24px_60px_-10px_rgba(0,0,0,0.09),0_1px_6px_rgba(0,0,0,0.02)] transition-all duration-300 flex flex-col justify-between group h-full relative overflow-hidden"
-        >
-          <div>
-            <div className="flex justify-between items-center mb-4">
-              <div className="flex items-center gap-2">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
-                </span>
-                <span className="text-[9px] font-black tracking-widest uppercase text-slate-400">Controle Operacional</span>
-              </div>
-              <div className="size-8 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center font-bold transition-transform group-hover:scale-110">
-                <Activity size={16} />
-              </div>
-            </div>
-            
-            <div className="space-y-4">
-              <div className="space-y-1">
-                <div className="flex justify-between items-baseline">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Ticket Médio p/ Venda</span>
-                  <span className="text-[8px] bg-blue-50 text-blue-600 border border-blue-100 font-bold px-1.5 py-0.5 rounded uppercase font-sans">AOV</span>
-                </div>
-                <h3 className="text-2xl font-black text-slate-900 font-display tracking-tight leading-none uppercase tabular-nums">
-                  {formatCurrency(stats.avgTicket)}
-                </h3>
-                <p className="text-[8px] text-slate-400 font-bold uppercase leading-tight">Receita total dividida pelo nº de pedidos</p>
-              </div>
-
-              <div className="h-px w-full bg-gradient-to-r from-transparent via-slate-200/60 to-transparent my-1" />
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-0.5">
-                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Preço Médio p/ Peça</span>
-                  <p className="text-sm font-black text-slate-800 tracking-tight tabular-nums">
-                    {formatCurrency(stats.avgItemPrice)}
-                  </p>
-                  <p className="text-[8px] text-slate-400 font-bold uppercase leading-none">Média por item individual</p>
-                </div>
-                <div className="space-y-0.5">
-                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Itens por Venda</span>
-                  <p className="text-sm font-black text-slate-800 tracking-tight tabular-nums">
-                    {stats.avgItemsPerSale.toFixed(1)} un
-                  </p>
-                  <p className="text-[8px] text-slate-400 font-bold uppercase leading-none">UPT (Itens por Carrinho)</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="h-px w-full bg-gradient-to-r from-transparent via-slate-200/60 to-transparent mt-5 mb-3" />
-
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Despesas Operacionais</span>
-                <span className="text-xs font-black text-slate-700 font-mono tracking-tight tabular-nums">
-                   {formatCurrency(stats.totalExpenses)}
-                </span>
-              </div>
-              {stats.totalRevenue > 0 && (
-                <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-[10px] font-bold rounded-lg uppercase tracking-wider font-mono">
-                  {((stats.totalExpenses / stats.totalRevenue) * 100).toFixed(1)}% do Fatur.
-                </span>
-              )}
-            </div>
-
-            <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-              <motion.div 
-                initial={{ width: 0 }}
-                animate={{ width: `${stats.totalRevenue > 0 ? Math.min(100, Math.max(0, (stats.totalExpenses / stats.totalRevenue) * 100)) : 0}%` }}
-                transition={{ duration: 1, ease: 'easeOut' }}
-                className="h-full bg-blue-500 rounded-full"
-              />
-            </div>
-          </div>
         </motion.div>
 
-        {/* Card 4: Logística, Lotes & Tributações */}
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.98, y: 12 }}
-          whileInView={{ opacity: 1, scale: 1, y: 0 }}
-          whileHover={{ y: -5 }}
-          viewport={{ once: true }}
-          className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200/50 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.06),0_1px_4px_rgba(0,0,0,0.01)] hover:shadow-[0_24px_60px_-10px_rgba(0,0,0,0.09),0_1px_6px_rgba(0,0,0,0.02)] transition-all duration-300 flex flex-col justify-between group h-full relative overflow-hidden"
-        >
-          <div>
-            <div className="flex justify-between items-center mb-4">
-              <div className="flex items-center gap-2">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-purple-500"></span>
-                </span>
-                <span className="text-[9px] font-black tracking-widest uppercase text-slate-400">Importação & Logística</span>
-              </div>
-              <div className="size-8 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center font-bold transition-transform group-hover:scale-110">
-                <Truck size={16} />
-              </div>
-            </div>
-            
-            <div className="space-y-1">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Tributação Aduaneira Geral</span>
-              <h3 className="text-2xl font-black text-slate-900 font-display tracking-tight leading-none uppercase tabular-nums">
-                {formatCurrency(stats.paidTaxes + stats.pendingTaxes)}
-              </h3>
-            </div>
-          </div>
-
-          <div className="h-px w-full bg-gradient-to-r from-transparent via-slate-200/60 to-transparent mt-5 mb-3" />
-
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Logística Ativa</span>
-                <span className="text-xs font-black text-purple-700 font-mono tracking-tight">
-                  {shipments.filter(s => s.status !== 'Entregue').length} Lotes Ativos
-                </span>
-              </div>
-              {stats.totalOrders > 0 && (
-                <span className="px-2 py-0.5 bg-purple-50 text-purple-700 text-[10px] font-black rounded-lg uppercase tracking-wider font-mono">
-                  {((stats.dropshippingOrders / stats.totalOrders) * 100).toFixed(1)}% Dropship
-                </span>
-              )}
-            </div>
-
-            <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-              <motion.div 
-                initial={{ width: 0 }}
-                animate={{ width: `${stats.totalOrders > 0 ? Math.min(100, Math.max(0, (stats.dropshippingOrders / stats.totalOrders) * 100)) : 0}%` }}
-                transition={{ duration: 1, ease: 'easeOut' }}
-                className="h-full bg-purple-500 rounded-full"
-              />
-            </div>
-          </div>
-        </motion.div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">

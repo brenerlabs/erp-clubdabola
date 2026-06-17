@@ -134,16 +134,17 @@ const replaceOklch = (cssText: string): string => {
     result = result.replace(/oklch\(([^)]+)\)/gi, (match, inner) => {
       try {
         const parts = inner.trim().split(/[\s,+/]+/);
-        if (parts.length >= 3) {
-          const l = parseColorValue(parts[0], true);
-          const c = parseColorValue(parts[1]);
-          const h = parseColorValue(parts[2]);
+        const filteredParts = parts.filter(p => p !== '');
+        if (filteredParts.length >= 3) {
+          const l = parseColorValue(filteredParts[0], true);
+          const c = parseColorValue(filteredParts[1]);
+          const h = parseColorValue(filteredParts[2]);
           if (isNaN(l) || isNaN(c) || isNaN(h)) {
             return 'rgba(0, 0, 0, 0)';
           }
           let alpha = 1;
-          if (parts[3]) {
-            alpha = parseColorValue(parts[3], parts[3].endsWith('%'));
+          if (filteredParts[3]) {
+            alpha = parseColorValue(filteredParts[3], filteredParts[3].endsWith('%'));
           }
           const [r, g, b] = oklchToRgb(l, c, h);
           return `rgba(${r}, ${g}, ${b}, ${alpha})`;
@@ -159,16 +160,17 @@ const replaceOklch = (cssText: string): string => {
     result = result.replace(/oklab\(([^)]+)\)/gi, (match, inner) => {
       try {
         const parts = inner.trim().split(/[\s,+/]+/);
-        if (parts.length >= 3) {
-          const l = parseColorValue(parts[0], true);
-          const a = parseColorValue(parts[1]);
-          const b = parseColorValue(parts[2]);
+        const filteredParts = parts.filter(p => p !== '');
+        if (filteredParts.length >= 3) {
+          const l = parseColorValue(filteredParts[0], true);
+          const a = parseColorValue(filteredParts[1]);
+          const b = parseColorValue(filteredParts[2]);
           if (isNaN(l) || isNaN(a) || isNaN(b)) {
             return 'rgba(0, 0, 0, 0)';
           }
           let alpha = 1;
-          if (parts[3]) {
-            alpha = parseColorValue(parts[3], parts[3].endsWith('%'));
+          if (filteredParts[3]) {
+            alpha = parseColorValue(filteredParts[3], filteredParts[3].endsWith('%'));
           }
           const [r, g, b_rgb] = oklabToRgb(l, a, b);
           return `rgba(${r}, ${g}, ${b_rgb}, ${alpha})`;
@@ -181,6 +183,36 @@ const replaceOklch = (cssText: string): string => {
   }
 
   return result;
+};
+
+const createStyleProxy = (style: CSSStyleDeclaration) => {
+  return new Proxy(style, {
+    get(target, prop, receiver) {
+      if (typeof prop === 'symbol') {
+        return Reflect.get(target, prop, receiver);
+      }
+      const val = (target as any)[prop];
+      if (typeof val === 'function') {
+        return function(this: any, ...args: any[]) {
+          if (prop === 'getPropertyValue') {
+            const propName = args[0];
+            const originalVal = target.getPropertyValue(propName);
+            if (originalVal && (originalVal.toLowerCase().includes('oklch') || originalVal.toLowerCase().includes('oklab'))) {
+              return replaceOklch(originalVal);
+            }
+            return originalVal;
+          }
+          return val.apply(target, args);
+        };
+      }
+      if (typeof val === 'string') {
+        if (val.toLowerCase().includes('oklch') || val.toLowerCase().includes('oklab')) {
+          return replaceOklch(val);
+        }
+      }
+      return val;
+    }
+  });
 };
 
 export default function PDV() {
@@ -210,6 +242,13 @@ export default function PDV() {
   const [clickedProductId, setClickedProductId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmDirectBillId, setConfirmDirectBillId] = useState<string | null>(null);
+
+  // AI Copilot & Quick Customer states
+  const [copilotText, setCopilotText] = useState('');
+  const [isCopilotProcessing, setIsCopilotProcessing] = useState(false);
+  const [showQuickCustomerModal, setShowQuickCustomerModal] = useState(false);
+  const [quickCustName, setQuickCustName] = useState('');
+  const [quickCustContact, setQuickCustContact] = useState('');
 
   useEffect(() => {
     setIsSidebarOpen(false);
@@ -258,6 +297,96 @@ export default function PDV() {
         isDropshipping: product.isDropshipping || false,
         gender: product.gender || 'Ambos'
       }]);
+    }
+  };
+
+  const handleCopilotSubmit = async () => {
+    if (!copilotText.trim()) return;
+    setIsCopilotProcessing(true);
+    try {
+      const res = await fetch('/api/pdv/copilot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: copilotText })
+      });
+      if (!res.ok) throw new Error('Falha ao processar comando com IA');
+      const data = await res.json();
+
+      let addedCount = 0;
+      // 1. Process items
+      if (data.items && Array.isArray(data.items)) {
+        data.items.forEach((item: { productSearch: string, quantity: number }) => {
+          const matchedProd = products.find(p => 
+            p.name.toLowerCase().includes(item.productSearch.toLowerCase()) || 
+            item.productSearch.toLowerCase().includes(p.name.toLowerCase())
+          );
+          if (matchedProd) {
+            // Pick appropriate variation or default
+            const variation = matchedProd.variations && matchedProd.variations.length > 0
+              ? matchedProd.variations[0]
+              : { id: 'unica', size: 'ÚNICA', color: '', stock: matchedProd.totalStock || 0 };
+            
+            // Add items corresponding to quantity
+            const qtyToAdd = item.quantity || 1;
+            for (let i = 0; i < qtyToAdd; i++) {
+              addToCart(matchedProd, variation);
+            }
+            addedCount += qtyToAdd;
+          }
+        });
+      }
+
+      // 2. Process customer Name/WhatsApp
+      if (data.customerName) {
+        const foundCust = customers.find(c => 
+          c.name.toLowerCase().includes(data.customerName.toLowerCase()) ||
+          data.customerName.toLowerCase().includes(c.name.toLowerCase())
+        );
+        if (foundCust) {
+          setSelectedCustomer(foundCust);
+        } else {
+          // Open quick-customer modal filled!
+          setQuickCustName(data.customerName);
+          setQuickCustContact(data.customerWhatsapp || '');
+          setShowQuickCustomerModal(true);
+        }
+      }
+
+      if (addedCount > 0) {
+        alert(`Copilot processou com sucesso e inseriu ${addedCount} item(ns) no carrinho! ✨`);
+      } else {
+        alert('Copilot analisou o áudio/texto com IA, mas nenhum item compatível foi localizado no estoque.');
+      }
+      setCopilotText('');
+    } catch (err: any) {
+      console.error(err);
+      alert('Erro ao processar áudio/texto por IA: ' + (err.message || err));
+    } finally {
+      setIsCopilotProcessing(false);
+    }
+  };
+
+  const registerQuickCustomer = async (name: string, contact: string) => {
+    if (!name.trim()) return alert('Nome do cliente é obrigatório!');
+    try {
+      const docRef = await addDoc(collection(db, 'customers'), {
+        name: name.trim(),
+        contact: contact.trim(),
+        totalDebt: 0,
+        createdAt: new Date().toISOString()
+      });
+      const newCust = {
+        id: docRef.id,
+        name: name.trim(),
+        contact: contact.trim(),
+        totalDebt: 0
+      } as Customer;
+      setSelectedCustomer(newCust);
+      setShowQuickCustomerModal(false);
+      alert(`Cliente ${name} cadastrado com sucesso e selecionado no carrinho! ⚽`);
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao cadastrar cliente de faturamento rápido.');
     }
   };
 
@@ -1362,6 +1491,87 @@ export default function PDV() {
         )}
       </AnimatePresence>
 
+      {/* Cadastro Rápido de Cliente (Quick-Customer Modal) */}
+      <AnimatePresence>
+        {showQuickCustomerModal && (
+          <div className="fixed inset-0 z-[130] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }}
+              onClick={() => setShowQuickCustomerModal(false)}
+              className="absolute inset-0 bg-slate-955/80 backdrop-blur-sm" 
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }} 
+              animate={{ opacity: 1, scale: 1, y: 0 }} 
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+              className="bg-white rounded-[24px] border border-slate-200 shadow-2xl p-6 w-full max-w-md relative z-10 overflow-hidden"
+            >
+              <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
+                <div className="flex items-center gap-2">
+                  <span className="p-2 bg-amber-50 text-amber-600 rounded-xl">
+                    <User size={18} />
+                  </span>
+                  <div>
+                    <h3 className="text-sm font-black text-slate-800 uppercase tracking-tight">Faturamento Rápido</h3>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Novo Cliente do Carrinho</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setShowQuickCustomerModal(false)} 
+                  className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition-all"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Nome Completo</label>
+                  <input 
+                    type="text"
+                    placeholder="Ex: Rafael Santos"
+                    value={quickCustName}
+                    onChange={e => setQuickCustName(e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-250 rounded-xl text-slate-800 text-sm font-semibold outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">WhatsApp / Contato</label>
+                  <input 
+                    type="text"
+                    placeholder="Ex: 11999998888"
+                    value={quickCustContact}
+                    onChange={e => setQuickCustContact(e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-250 rounded-xl text-slate-800 text-sm font-semibold outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all"
+                  />
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowQuickCustomerModal(false)}
+                    className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-black uppercase text-[10px] tracking-widest rounded-xl transition-all active:scale-95 cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => registerQuickCustomer(quickCustName, quickCustContact)}
+                    className="flex-1 py-3 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black uppercase text-[10px] tracking-widest rounded-xl transition-all active:scale-95 cursor-pointer shadow-md shadow-amber-500/10"
+                  >
+                    Cadastrar e Usar ⚽
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Guia de Costuras / Inteligente Jogador vs Torcedor Modal */}
       <AnimatePresence>
         {showSizeGuideModal && (
@@ -1487,56 +1697,72 @@ export default function PDV() {
                       const element = document.getElementById('size-guide-content');
                       if (!element) return;
                       
+                      const originalGetComputedStyle = window.getComputedStyle;
                       try {
+                        const patchedGetComputedStyle = (elt: Element, pseudoElt?: string | null) => {
+                          const style = originalGetComputedStyle(elt, pseudoElt);
+                          return createStyleProxy(style);
+                        };
+
+                        // Temporarily override main window.getComputedStyle
+                        window.getComputedStyle = patchedGetComputedStyle;
+
                         const canvas = await html2canvas(element, {
                           backgroundColor: '#ffffff',
                           scale: 2,
                           logging: false,
                           useCORS: true,
                           onclone: (clonedDoc) => {
-                            // 1. Compile and sanitize all global CSS rules
-                            const parentStyleNodes = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'));
-                            const clonedStyleNodes = Array.from(clonedDoc.querySelectorAll('style, link[rel="stylesheet"]'));
+                            // Also patch the cloned document view if it exists
+                            if (clonedDoc.defaultView) {
+                              const originalClonedGetComputedStyle = clonedDoc.defaultView.getComputedStyle;
+                              clonedDoc.defaultView.getComputedStyle = (elt: Element, pseudoElt?: string | null) => {
+                                const style = originalClonedGetComputedStyle(elt, pseudoElt);
+                                return createStyleProxy(style);
+                              };
+                            }
 
-                            const sheetsToRemove = new Set<Element>();
+                            // 1. Compile and sanitize all global CSS rules from both rules and raw style tag content
                             let combinedCSS = '';
 
+                            // Retrieve rules from parent document style sheets
                             Array.from(document.styleSheets).forEach((sheet) => {
                               try {
                                 const rules = Array.from(sheet.cssRules || sheet.rules);
                                 rules.forEach((rule) => {
                                   combinedCSS += rule.cssText + '\n';
                                 });
-                                if (sheet.ownerNode) {
-                                  const idx = parentStyleNodes.indexOf(sheet.ownerNode as Element);
-                                  if (idx !== -1 && idx < clonedStyleNodes.length) {
-                                    sheetsToRemove.add(clonedStyleNodes[idx]);
-                                  }
-                                }
                               } catch (e) {
                                 // Ignore cross-origin stylesheet reading restrictions if any
                               }
                             });
 
-                            if (combinedCSS) {
+                            // Retrieve text content from raw style tags (just in case rules are not accessible)
+                            Array.from(document.querySelectorAll('style')).forEach((st) => {
+                              try {
+                                if (st.textContent) {
+                                  combinedCSS += st.textContent + '\n';
+                                }
+                              } catch (e) {
+                                // Ignore
+                              }
+                            });
+
+                            // 2. Remove all existing style and link tag elements from the cloned document.
+                            // This ensures that no raw/unconverted oklch or oklab styles remain in any form.
+                            const allStyleAndLinkElements = Array.from(clonedDoc.querySelectorAll('style, link[rel="stylesheet"]'));
+                            allStyleAndLinkElements.forEach((node) => {
+                              node.parentNode?.removeChild(node);
+                            });
+
+                            // 3. Inject our fully sanitized and safe combined stylesheet block
+                            if (combinedCSS.trim()) {
                               const cleanStyle = clonedDoc.createElement('style');
                               cleanStyle.textContent = replaceOklch(combinedCSS);
                               clonedDoc.head.appendChild(cleanStyle);
-
-                              // Only remove style sheets that we successfully read and combined
-                              sheetsToRemove.forEach((node) => {
-                                node.parentNode?.removeChild(node);
-                              });
-                            } else {
-                              // Fallback style replacement for iframe style tags if rules were empty
-                              const styleElements = clonedDoc.getElementsByTagName('style');
-                              for (let i = 0; i < styleElements.length; i++) {
-                                const styleEl = styleElements[i];
-                                styleEl.innerHTML = replaceOklch(styleEl.innerHTML);
-                              }
                             }
 
-                            // 2. Sanitize element inline styles
+                            // 4. Sanitize element inline styles
                             const styledEls = clonedDoc.querySelectorAll('[style]');
                             styledEls.forEach((el) => {
                               const htmlEl = el as HTMLElement;
@@ -1546,7 +1772,7 @@ export default function PDV() {
                               }
                             });
 
-                            // 3. Convert all SVG fill/stroke colors
+                            // 5. Convert all SVG fill/stroke colors
                             const svgProperties = clonedDoc.querySelectorAll('[fill], [stroke]');
                             svgProperties.forEach((el) => {
                               const fill = el.getAttribute('fill');
@@ -1598,6 +1824,8 @@ export default function PDV() {
                       } catch (err) {
                         console.error('Erro ao gerar foto do guia:', err);
                         alert('Não foi possível gerar a foto automaticamente neste navegador. Tire um print da tela para salvar!');
+                      } finally {
+                        window.getComputedStyle = originalGetComputedStyle;
                       }
                     }}
                     className="flex-1 py-3 bg-amber-500 hover:bg-amber-600 text-slate-950 rounded-xl font-black uppercase tracking-widest text-[9.5px] transition-all flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer shadow-md shadow-amber-500/10"
@@ -1672,6 +1900,45 @@ export default function PDV() {
                 value={search}
                 onChange={e => setSearch(e.target.value)}
               />
+            </div>
+
+            {/* AI Copilot PDV */}
+            <div className="mt-4 pt-4 border-t border-slate-100">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1.5">
+                  <Sparkles size={12} className="text-amber-500 animate-pulse" />
+                  AI Copilot (Entrada Rápida)
+                </span>
+                <HelpCircle size={12} className="text-slate-300 hover:text-slate-400 cursor-help" title='Digite um pedido corrido como: "Dois mantos do flamengo para o Renato de WhatsApp 11999998888"' />
+              </div>
+              <div className="flex gap-2">
+                <input 
+                  type="text" 
+                  placeholder='Fale ou digite: "Rodrigo quer 2 mantos do brasil G e 1 do flamengo..."'
+                  className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-1 focus:ring-amber-500 transition-all font-semibold text-xs placeholder:text-slate-400 text-slate-800"
+                  value={copilotText}
+                  onChange={e => setCopilotText(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') handleCopilotSubmit();
+                  }}
+                  disabled={isCopilotProcessing}
+                />
+                <button
+                  type="button"
+                  onClick={handleCopilotSubmit}
+                  disabled={isCopilotProcessing || !copilotText.trim()}
+                  className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 disabled:bg-slate-100 disabled:text-slate-300 text-slate-950 font-black rounded-xl text-[10px] uppercase tracking-widest transition-all flex items-center gap-1 active:scale-95 cursor-pointer shadow-sm disabled:pointer-events-none"
+                >
+                  {isCopilotProcessing ? (
+                    <div className="size-3.5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <>
+                      <span>Processar</span>
+                      <Sparkles size={11} />
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1870,19 +2137,33 @@ export default function PDV() {
                       )}
                     </div>
                     {/* Customer Selector */}
-                    <div className="relative group">
-                      <User className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 size-4 group-focus-within:text-amber-500 z-10 pointer-events-none" />
-                      <select 
-                        className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-base md:text-xs font-black uppercase outline-none appearance-none hover:bg-white/10 focus:ring-1 focus:ring-amber-500 transition-all text-white/80"
-                        value={selectedCustomer?.id || ''}
-                        onChange={e => {
-                          const c = customers.find(cust => cust.id === e.target.value);
-                          setSelectedCustomer(c || null);
+                    <div className="flex gap-1.5 items-center">
+                      <div className="relative group flex-1">
+                        <User className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 size-4 group-focus-within:text-amber-500 z-10 pointer-events-none" />
+                        <select 
+                          className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-base md:text-xs font-black uppercase outline-none appearance-none hover:bg-white/10 focus:ring-1 focus:ring-amber-500 transition-all text-white/80"
+                          value={selectedCustomer?.id || ''}
+                          onChange={e => {
+                            const c = customers.find(cust => cust.id === e.target.value);
+                            setSelectedCustomer(c || null);
+                          }}
+                        >
+                          <option value="" className="bg-slate-900 text-white">Consumidor Final</option>
+                          {customers.map(c => <option key={c.id} value={c.id} className="bg-slate-900 text-white">{c.name}</option>)}
+                        </select>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setQuickCustName('');
+                          setQuickCustContact('');
+                          setShowQuickCustomerModal(true);
                         }}
+                        className="p-2.5 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-amber-500/40 text-amber-500 rounded-xl flex items-center justify-center transition-all active:scale-95 cursor-pointer shadow-sm"
+                        title="Cadastrar Cliente Rápido"
                       >
-                        <option value="" className="bg-slate-900 text-white">Consumidor Final</option>
-                        {customers.map(c => <option key={c.id} value={c.id} className="bg-slate-900 text-white">{c.name}</option>)}
-                      </select>
+                        <Plus size={16} />
+                      </button>
                     </div>
 
                     {/* Shipping Region Selector */}
@@ -2197,11 +2478,12 @@ export default function PDV() {
                               );
                             })()}
                           </div>
+                          
                           <div className="flex items-center gap-3">
                             <div className="flex items-center bg-black/40 rounded-xl p-1 border border-white/5 shadow-inner">
-                              <button onClick={() => updateQuantity(item.productId, item.variationId, -1)} className="size-8 flex items-center justify-center hover:bg-white/10 rounded-lg transition-colors text-white/60 hover:text-white"><Minus size={14} /></button>
+                              <motion.button whileTap={{ scale: 0.85 }} onClick={() => updateQuantity(item.productId, item.variationId, -1)} className="size-8 flex items-center justify-center hover:bg-white/10 rounded-lg transition-colors text-white/60 hover:text-white cursor-pointer"><Minus size={14} /></motion.button>
                               <span className="w-10 text-center font-black text-sm text-white tabular-nums">{item.quantity}</span>
-                              <button onClick={() => updateQuantity(item.productId, item.variationId, 1)} className="size-8 flex items-center justify-center hover:bg-white/10 rounded-lg transition-colors text-white/60 hover:text-white"><Plus size={14} /></button>
+                              <motion.button whileTap={{ scale: 0.85 }} onClick={() => updateQuantity(item.productId, item.variationId, 1)} className="size-8 flex items-center justify-center hover:bg-white/10 rounded-lg transition-colors text-white/60 hover:text-white cursor-pointer"><Plus size={14} /></motion.button>
                             </div>
                             {(() => {
                               const productObj = products.find(p => p.id === item.productId);
@@ -2209,17 +2491,18 @@ export default function PDV() {
                                                (item.name || '').toLowerCase().includes('camisa');
                               const hasCustom = item.isCustomized && isCamisa;
                               return (
-                                <div className="text-[9px] font-black text-white/30 uppercase tracking-widest">
+                                <div className="text-[9px] font-black text-white/30 uppercase tracking-widest block">
                                   Un: {formatCurrency(item.price)}{hasCustom && ` + ${formatCurrency(30)}`}
                                 </div>
                               );
                             })()}
-                            <button 
+                            <motion.button 
+                              whileTap={{ scale: 0.85 }}
                               onClick={() => setCart(cart.filter(c => c.variationId !== item.variationId))}
-                              className="ml-auto size-9 flex items-center justify-center text-red-500/40 hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-all"
+                              className="ml-auto size-9 flex items-center justify-center text-red-500/40 hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-all cursor-pointer"
                             >
                               <Trash2 size={18} />
-                            </button>
+                            </motion.button>
                           </div>
 
                           {/* Customization Details (Executive Jersey Print) */}
