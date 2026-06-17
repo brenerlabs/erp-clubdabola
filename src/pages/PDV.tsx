@@ -53,6 +53,69 @@ const formatLocalYMD = (date: Date) => {
   return `${year}-${month}-${day}`;
 };
 
+const oklchToRgb = (l: number, c: number, h: number): [number, number, number] => {
+  const hRad = (h * Math.PI) / 180;
+  const a = c * Math.cos(hRad);
+  const b = c * Math.sin(hRad);
+
+  const L_lms = l + 0.3963377774 * a + 0.2158037573 * b;
+  const M_lms = l - 0.1055613458 * a - 0.0638541728 * b;
+  const S_lms = l - 0.0894841775 * a - 1.2914855480 * b;
+
+  const l_cubed = L_lms * L_lms * L_lms;
+  const m_cubed = M_lms * M_lms * M_lms;
+  const s_cubed = S_lms * S_lms * S_lms;
+
+  const r = +4.0767416621 * l_cubed - 3.3077115913 * m_cubed + 0.2309699292 * s_cubed;
+  const g = -1.2684380046 * l_cubed + 2.6097574011 * m_cubed - 0.3413193965 * s_cubed;
+  const b_rgb = -0.0041960863 * l_cubed - 0.7034186147 * m_cubed + 1.7076147010 * s_cubed;
+
+  const toSRGB = (cVal: number) => {
+    const clamped = Math.max(0, Math.min(1, cVal));
+    return clamped <= 0.0031308
+      ? clamped * 12.92
+      : 1.055 * Math.pow(clamped, 1 / 2.4) - 0.055;
+  };
+
+  return [
+    Math.round(toSRGB(r) * 255),
+    Math.round(toSRGB(g) * 255),
+    Math.round(toSRGB(b_rgb) * 255)
+  ];
+};
+
+const replaceOklch = (cssText: string): string => {
+  if (!cssText || typeof cssText !== 'string' || !cssText.toLowerCase().includes('oklch')) {
+    return cssText;
+  }
+  return cssText.replace(/oklch\(([^)]+)\)/gi, (match, inner) => {
+    try {
+      const parts = inner.trim().split(/[\s,+/]+/);
+      if (parts.length >= 3) {
+        const l = parseFloat(parts[0]);
+        const c = parseFloat(parts[1]);
+        const h = parseFloat(parts[2]);
+        if (isNaN(l) || isNaN(c) || isNaN(h)) {
+          return 'rgba(0, 0, 0, 0)';
+        }
+        let alpha = 1;
+        if (parts[3]) {
+          if (parts[3].endsWith('%')) {
+            alpha = parseFloat(parts[3]) / 100;
+          } else {
+            alpha = parseFloat(parts[3]);
+          }
+        }
+        const [r, g, b] = oklchToRgb(l, c, h);
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+      }
+    } catch {
+      // fallback
+    }
+    return 'rgba(0, 0, 0, 0)';
+  });
+};
+
 export default function PDV() {
   const { setIsSidebarOpen } = useContext(SidebarContext);
   const [products, setProducts] = useState<Product[]>([]);
@@ -74,6 +137,7 @@ export default function PDV() {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showBudgetModal, setShowBudgetModal] = useState(false);
   const [showSizeGuideModal, setShowSizeGuideModal] = useState(false);
+  const [generatedSizeGuideImg, setGeneratedSizeGuideImg] = useState<string | null>(null);
   const [lastSale, setLastSale] = useState<any>(null);
   const [sendWhatsAppOnFinish, setSendWhatsAppOnFinish] = useState(true);
   const [clickedProductId, setClickedProductId] = useState<string | null>(null);
@@ -1360,13 +1424,88 @@ export default function PDV() {
                           backgroundColor: '#ffffff',
                           scale: 2,
                           logging: false,
-                          useCORS: true
+                          useCORS: true,
+                          onclone: (clonedDoc) => {
+                            // 1. Compile and sanitize all global CSS rules
+                            const newStyle = clonedDoc.createElement('style');
+                            let combinedCSS = '';
+
+                            Array.from(document.styleSheets).forEach((sheet) => {
+                              try {
+                                const rules = Array.from(sheet.cssRules || sheet.rules);
+                                rules.forEach((rule) => {
+                                  combinedCSS += rule.cssText + '\n';
+                                });
+                              } catch (e) {
+                                // Ignore cross-origin stylesheet reading restrictions if any
+                              }
+                            });
+
+                            if (combinedCSS) {
+                              newStyle.innerHTML = replaceOklch(combinedCSS);
+                              clonedDoc.head.appendChild(newStyle);
+
+                              // Remove original styles and links so html2canvas doesn't try to parse them
+                              const originalStyles = Array.from(clonedDoc.querySelectorAll('style, link[rel="stylesheet"]'));
+                              originalStyles.forEach((el) => {
+                                if (el !== newStyle) {
+                                  el.parentNode?.removeChild(el);
+                                }
+                              });
+                            } else {
+                              // Fallback style replacement for iframe style tags
+                              const styleElements = clonedDoc.getElementsByTagName('style');
+                              for (let i = 0; i < styleElements.length; i++) {
+                                const styleEl = styleElements[i];
+                                styleEl.innerHTML = replaceOklch(styleEl.innerHTML);
+                              }
+                            }
+
+                            // 2. Sanitize element inline styles
+                            const styledEls = clonedDoc.querySelectorAll('[style]');
+                            styledEls.forEach((el) => {
+                              const htmlEl = el as HTMLElement;
+                              const styleAttr = htmlEl.getAttribute('style');
+                              if (styleAttr && styleAttr.toLowerCase().includes('oklch')) {
+                                htmlEl.setAttribute('style', replaceOklch(styleAttr));
+                              }
+                            });
+                          }
                         });
                         const image = canvas.toDataURL('image/png');
+                        
+                        // Try native Web Share on mobile devices (including iOS Safari!)
+                        if (navigator.share) {
+                          try {
+                            const res = await fetch(image);
+                            const blob = await res.blob();
+                            const file = new File([blob], 'guia-de-tamanhos-club-da-bola.png', { type: 'image/png' });
+                            
+                            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                              await navigator.share({
+                                files: [file],
+                                title: 'Guia de Tamanhos',
+                                text: 'Jogador vs Torcedor: Guia de caimento inteligente!'
+                              });
+                              return; // sharing succeeded!
+                            }
+                          } catch (innerShareErr) {
+                            console.log('Sharing rejected or unsupported:', innerShareErr);
+                          }
+                        }
+
+                        // Fallback: Set image state for tap & hold to copy/save modal UI
+                        setGeneratedSizeGuideImg(image);
+                        
+                        // Desktop fallback: standard programmatic anchor click
                         const link = document.createElement('a');
                         link.href = image;
                         link.download = 'guia-de-tamanhos-club-da-bola.png';
-                        link.click();
+                        try {
+                          link.click();
+                        } catch (clickErr) {
+                          console.log('Programmatic trigger failed:', clickErr);
+                        }
                       } catch (err) {
                         console.error('Erro ao gerar foto do guia:', err);
                         alert('Não foi possível gerar a foto automaticamente neste navegador. Tire um print da tela para salvar!');
@@ -1379,12 +1518,50 @@ export default function PDV() {
                 </div>
                 <button 
                   type="button"
-                  onClick={() => setShowSizeGuideModal(false)}
+                  onClick={() => {
+                    setShowSizeGuideModal(false);
+                    setGeneratedSizeGuideImg(null);
+                  }}
                   className="w-full py-3 bg-slate-900 hover:bg-black text-white font-black rounded-xl transition-all uppercase tracking-widest text-[9.5px] shadow-md cursor-pointer"
                 >
                   Fechar
                 </button>
               </div>
+
+              {/* Touch-to-Save Image Fallback Overlay for iOS/mobile */}
+              {generatedSizeGuideImg && (
+                <div className="absolute inset-0 z-[130] bg-slate-950 flex flex-col p-6 overflow-y-auto">
+                  <div className="text-center mb-4 text-white">
+                    <div className="w-12 h-12 bg-amber-500/20 text-amber-400 rounded-full flex items-center justify-center mx-auto mb-2.5">
+                      <Sparkles size={20} />
+                    </div>
+                    <h4 className="text-sm font-black uppercase tracking-wider text-amber-400">Pronto para salvar! 📸</h4>
+                    <p className="text-[10.5px] text-white/70 font-medium leading-relaxed max-w-sm mx-auto mt-1">
+                      Toque e segure o dedo na imagem abaixo para <strong>Salvar na Galeria</strong> ou <strong>Copiar</strong> para enviar diretamente no WhatsApp!
+                    </p>
+                  </div>
+                  
+                  <div className="flex-1 flex items-center justify-center min-h-[250px] mb-4">
+                    <img 
+                      src={generatedSizeGuideImg} 
+                      alt="Guia de Tamanhos Club da Bola" 
+                      className="max-h-[50vh] object-contain rounded-2xl border border-white/10 shadow-2xl bg-white"
+                      referrerPolicy="no-referrer"
+                    />
+                  </div>
+
+                  <div className="space-y-3 mt-auto">
+                    <p className="text-[9px] text-white/45 uppercase font-semibold tracking-widest text-center">Tonalidade e proporções preservadas na imagem</p>
+                    <button
+                      type="button"
+                      onClick={() => setGeneratedSizeGuideImg(null)}
+                      className="w-full py-3 bg-red-800 hover:bg-red-900 active:scale-[0.98] text-white font-black rounded-xl transition-all uppercase tracking-widest text-[9.5px] shadow-lg cursor-pointer text-center"
+                    >
+                      Voltar ao Guia ↩
+                    </button>
+                  </div>
+                </div>
+              )}
             </motion.div>
           </div>
         )}
