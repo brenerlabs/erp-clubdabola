@@ -140,6 +140,8 @@ export default function Reports() {
 
     // Map each sale as a record
     sales.forEach(sale => {
+      const isAdjustment = sale.isAdjustment || (sale.items || []).some(item => item && item.productId === 'sistema_ajuste_auditoria');
+      if (isAdjustment) return;
       const linkedShip = getLinkedShipment(sale.id);
       records.push({
         id: sale.id?.substring(0, 8).toUpperCase() || 'VDA-' + Math.random().toString(36).substring(2, 5).toUpperCase(),
@@ -257,8 +259,10 @@ export default function Reports() {
     }} = {};
 
     sales.forEach(sale => {
-      // Skip cancelled
+      // Skip cancelled & adjustments
       if (sale.status === 'Cancelada') return;
+      const isAdjustment = sale.isAdjustment || (sale.items || []).some(item => item && item.productId === 'sistema_ajuste_auditoria');
+      if (isAdjustment) return;
 
       sale.items.forEach(item => {
         if (!statsMap[item.productId]) {
@@ -298,6 +302,8 @@ export default function Reports() {
 
     sales.forEach(sale => {
       if (sale.status === 'Cancelada') return;
+      const isAdjustment = sale.isAdjustment || (sale.items || []).some(item => item && item.productId === 'sistema_ajuste_auditoria');
+      if (isAdjustment) return;
       const cId = sale.customerId || 'final-consumer';
       const cName = sale.customerName || 'Consumidor Final';
 

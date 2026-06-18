@@ -553,7 +553,9 @@ export default function Products() {
   const sizeAnalysis = React.useMemo(() => {
     const counts: Record<string, { size: string; quantity: number; revenue: number }> = {};
     sales.forEach(sale => {
-      if (sale.status === 'Pré-venda') return;
+      if (sale.status === 'Pré-venda' || sale.status === 'Cancelada') return;
+      const isAdjustment = sale.isAdjustment || (sale.items || []).some(item => item && item.productId === 'sistema_ajuste_auditoria');
+      if (isAdjustment) return;
       (sale.items || []).forEach(item => {
         const cleaned = cleanVariationName(item.variationName);
         if (!cleaned) return;
@@ -1439,7 +1441,10 @@ export default function Products() {
       {/* Product Purchase History Modal */}
       <AnimatePresence>
         {historyProduct && (() => {
-          const productSales = sales.filter(s => (s.items || []).some(item => item.productId === historyProduct.id));
+          const productSales = sales.filter(s => {
+            const isAdjustment = s.isAdjustment || (s.items || []).some(i => i && i.productId === 'sistema_ajuste_auditoria');
+            return !isAdjustment && (s.items || []).some(item => item.productId === historyProduct.id);
+          });
           
           const totalUnitsSold = productSales.reduce((acc, sale) => {
             const matching = (sale.items || []).filter(item => item.productId === historyProduct.id);

@@ -164,7 +164,7 @@ export default function Finance() {
     return Math.max(0, sale.total - paymentsForSale);
   };
 
-  const totalInvoiced = sales.filter(s => s.status !== 'Pré-venda' && s.status !== 'Cancelada').reduce((acc, s) => acc + s.total, 0);
+  const totalInvoiced = sales.filter(s => s.status !== 'Pré-venda' && s.status !== 'Cancelada' && !s.isAdjustment && !(s.items || []).some(item => item && item.productId === 'sistema_ajuste_auditoria')).reduce((acc, s) => acc + s.total, 0);
   const totalReceived = transactions.filter(t => t.type === 'payment').reduce((acc, t) => acc + t.amount, 0);
   const totalPaidTaxes = shipments.filter(s => s.taxPaid).reduce((acc, s) => acc + (s.taxAmount || 0), 0);
   const totalExpenses = expenses.reduce((acc, e) => acc + e.amount, 0);
@@ -179,7 +179,7 @@ export default function Finance() {
   
   const cashFlow = totalReceived - totalPaidTaxes - totalExpenses;
 
-  const totalCostOfGoods = sales.filter(s => s.status !== 'Pré-venda' && s.status !== 'Cancelada').reduce((acc, s) => {
+  const totalCostOfGoods = sales.filter(s => s.status !== 'Pré-venda' && s.status !== 'Cancelada' && !s.isAdjustment && !(s.items || []).some(item => item && item.productId === 'sistema_ajuste_auditoria')).reduce((acc, s) => {
     return acc + s.items.reduce((itemAcc, item) => {
       const product = products.find(p => p.id === item.productId);
       return itemAcc + ((product?.costPrice || 0) * item.quantity);
@@ -272,7 +272,7 @@ export default function Finance() {
     // 1. Audit Gaps by Day
     Object.keys(dayGroups).forEach(day => {
       const group = dayGroups[day];
-      const activeSales = group.sales.filter(s => s.status !== 'Cancelada' && s.status !== 'Pré-venda');
+      const activeSales = group.sales.filter(s => s.status !== 'Cancelada' && s.status !== 'Pré-venda' && !s.isAdjustment && !(s.items || []).some(item => item && item.productId === 'sistema_ajuste_auditoria'));
       const payments = group.transactions.filter(t => t.type === 'payment' && t.paymentMethod !== 'Fiado');
 
       const salesSum = activeSales.reduce((acc, s) => acc + s.total, 0);
@@ -529,6 +529,71 @@ export default function Finance() {
     } catch (err) {
       console.error(err);
       showAlert("Erro", "Erro ao corrigir o saldo devedor do cliente no Firestore.", "error");
+    }
+  };
+
+  const handleAdjustLedgerToCustomerDebt = async (customerId: string, customerName: string, savedDebt: number, expectedDebt: number) => {
+    const discrepancy = savedDebt - expectedDebt;
+    if (Math.abs(discrepancy) < 0.01) return;
+
+    if (discrepancy > 0) {
+      showConfirm({
+        title: "⚙️ AJUSTAR HISTÓRICO (LEDGER) ⚙️",
+        description: `Deseja criar uma venda de ajuste de Fiado no histórico (Ledger) do cliente ${customerName} no valor de R$ ${discrepancy.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}? Isto irá igualar o seu histórico físico ao saldo real de R$ ${savedDebt.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} que o cliente te deve hoje, fazendo com que esta divergência suma do sistema!`,
+        confirmText: "Sim, Lançar Ajuste",
+        cancelText: "Cancelar",
+        onConfirm: async () => {
+          try {
+            await addDoc(collection(db, 'sales'), {
+              customerId,
+              customerName,
+              items: [{
+                productId: 'sistema_ajuste_auditoria',
+                variationId: 'sistema_ajuste_auditoria',
+                name: 'Ajuste de Saldo Devedor Histórico (Auditoria)',
+                variationName: 'Ajuste de Fluxo',
+                quantity: 1,
+                price: discrepancy
+              }],
+              subtotal: discrepancy,
+              discount: 0,
+              total: discrepancy,
+              paymentMethod: 'Fiado',
+              status: 'Concluída',
+              createdAt: serverTimestamp(),
+              isAdjustment: true
+            });
+            showAlert("✅ Ledger Ajustado!", `O histórico (Ledger) de ${customerName} foi perfeitamente corrigido com um lançamento compensatório de R$ ${discrepancy.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`, "success");
+          } catch (err) {
+            console.error(err);
+            showAlert("Erro", "Erro ao gravar ajuste do histórico no Firestore.", "error");
+          }
+        }
+      });
+    } else {
+      const paymentAdjustment = Math.abs(discrepancy);
+      showConfirm({
+        title: "⚙️ LANÇAR AMORTIZAÇÃO DE AJUSTE ⚙️",
+        description: `O histórico calcula que o cliente ${customerName} deve mais do que o saldo atual de R$ ${savedDebt.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}. Deseja registrar um lançamento de pagamento histórico compensatório de R$ ${paymentAdjustment.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}? Isso reduzirá o cálculo do Ledger para coincidir perfeitamente com a realidade de R$ ${savedDebt.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`,
+        confirmText: "Sim, Lançar Ajuste",
+        cancelText: "Cancelar",
+        onConfirm: async () => {
+          try {
+            await addDoc(collection(db, 'transactions'), {
+              customerId,
+              amount: paymentAdjustment,
+              type: 'payment',
+              paymentMethod: 'Outros',
+              notes: 'Compensação de Ajuste de Auditoria - Saldo Devedor',
+              createdAt: serverTimestamp()
+            });
+            showAlert("✅ Pagamento Ajustado!", `Registrada a amortização de ajuste no ledger de ${customerName} no valor de R$ ${paymentAdjustment.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`, "success");
+          } catch (err) {
+            console.error(err);
+            showAlert("Erro", "Erro ao registrar transação de ajuste no Firestore.", "error");
+          }
+        }
+      });
     }
   };
 
@@ -895,7 +960,8 @@ export default function Finance() {
     // Filter sales of the current month
     const monthlySales = sales.filter(s => {
       const d = getElementDate(s);
-      return s.status !== 'Pré-venda' && s.status !== 'Cancelada' && d && d.getFullYear() === currentYear && d.getMonth() === currentMonth;
+      const isAdjustment = s.isAdjustment || (s.items || []).some(item => item && item.productId === 'sistema_ajuste_auditoria');
+      return s.status !== 'Pré-venda' && s.status !== 'Cancelada' && !isAdjustment && d && d.getFullYear() === currentYear && d.getMonth() === currentMonth;
     });
 
     // Filter shipments of the current month
@@ -1334,6 +1400,9 @@ export default function Finance() {
               <div className="p-6 space-y-4">
                 {(() => {
                   const filteredSales = sales.filter(s => {
+                    const isAdjustment = s.isAdjustment || (s.items || []).some(item => item && item.productId === 'sistema_ajuste_auditoria');
+                    if (isAdjustment) return false;
+
                     // 1. Search filter
                     const term = salesSearch.toLowerCase().trim();
                     const matchesSearch = !term || 
@@ -2097,26 +2166,35 @@ export default function Finance() {
                     ) : (
                       <div className="space-y-3">
                         {auditResults.customerDebtMismatches.map((item, idx) => (
-                          <div key={idx} className="p-4 bg-amber-50/20 border border-amber-100 rounded-xl flex items-center justify-between gap-4 flex-wrap">
-                            <div className="space-y-1">
-                              <div className="flex items-center gap-2">
-                                <span className="text-[10px] font-black pointer-events-none text-amber-800 bg-amber-100 px-2 py-0.5 rounded uppercase">
+                          <div key={idx} className="p-4 bg-amber-50/25 border border-amber-200/80 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div className="space-y-1.5 min-w-[200px] flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-[10px] font-black pointer-events-none text-amber-850 bg-amber-100 border border-amber-200 px-2 py-0.5 rounded-lg uppercase">
                                   {item.customer.name}
                                 </span>
                                 {item.customer.contact && <span className="text-[9.5px] text-slate-400 font-mono">({item.customer.contact})</span>}
                               </div>
                               <p className="text-[10px] text-slate-500 font-sans leading-relaxed">
-                                Cadastrado na ficha do cliente: <strong className="text-amber-800 font-mono">{formatCurrency(item.savedDebt)}</strong> • Calculado pelo ledger de compras Fiado: <strong className="text-slate-800 font-mono">{formatCurrency(item.expectedDebt)}</strong>.
-                                <span className="block mt-0.5 text-red-900 font-bold text-[9px]">Diferença absoluta: {formatCurrency(item.diff)}</span>
+                                Cadastrado na ficha do cliente: <strong className="text-amber-800 font-mono font-bold">{formatCurrency(item.savedDebt)}</strong> • Calculado pelo ledger de compras Fiado: <strong className="text-slate-800 font-mono">{formatCurrency(item.expectedDebt)}</strong>.
+                                <span className="block mt-1 text-red-700 font-black text-[9px] uppercase tracking-wider">Diferença absoluta: {formatCurrency(item.diff)}</span>
                               </p>
                             </div>
-                            <button
-                              onClick={() => handleFixCustomerDebt(item.customer.id!, item.expectedDebt)}
-                              className="px-3.5 py-2 bg-amber-650 hover:bg-amber-700 text-white rounded-xl text-[9.5px] font-black uppercase tracking-wider flex items-center gap-2 cursor-pointer transition-all active:scale-95 shadow-sm shadow-amber-200"
-                            >
-                              <RefreshCw size={11} className="animate-spin-[10s]" />
-                              Sincronizar Ledger ({formatCurrency(item.expectedDebt)})
-                            </button>
+                            <div className="shrink-0 flex flex-col gap-2 w-full md:w-auto">
+                              <button
+                                onClick={() => handleAdjustLedgerToCustomerDebt(item.customer.id!, item.customer.name, item.savedDebt, item.expectedDebt)}
+                                className="w-full md:w-auto px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer transition-all active:scale-95 shadow-sm shadow-emerald-200/50"
+                              >
+                                <Plus size={11} />
+                                Lançar Ajuste no Ledger (+{formatCurrency(item.diff)})
+                              </button>
+                              <button
+                                onClick={() => handleFixCustomerDebt(item.customer.id!, item.expectedDebt)}
+                                className="w-full md:w-auto px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-800 rounded-lg text-[8px] font-black uppercase tracking-wider flex items-center justify-center gap-1 cursor-pointer transition-all active:scale-95 border border-slate-200/50"
+                              >
+                                <RefreshCw size={9} />
+                                Forçar Perfil p/ R$ {item.expectedDebt.toFixed(2)}
+                              </button>
+                            </div>
                           </div>
                         ))}
                       </div>

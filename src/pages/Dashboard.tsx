@@ -45,10 +45,12 @@ import {
   Pie, 
   Cell,
   LineChart,
-  Line
+  Line,
+  ComposedChart
 } from 'recharts';
 
 export default function Dashboard() {
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [sales, setSales] = useState<Sale[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
@@ -89,6 +91,7 @@ export default function Dashboard() {
   }, [productSearch, products]);
   const [salesLimit, setSalesLimit] = useState(10);
   const [showInsights, setShowInsights] = useState(true);
+  const [insightsFilter, setInsightsFilter] = useState<'all' | 'warning' | 'success' | 'info'>('all');
   const [expandedSuppliers, setExpandedSuppliers] = useState<Record<string, boolean>>({});
 
   const toggleSupplierExpanded = (name: string) => {
@@ -110,28 +113,73 @@ export default function Dashboard() {
   }, [products]);
 
   useEffect(() => {
+    let salesLoaded = false;
+    let productsLoaded = false;
+    let customersLoaded = false;
+    let transactionsLoaded = false;
+    let shipmentsLoaded = false;
+    let expensesLoaded = false;
+
+    const checkAllLoaded = () => {
+      if (salesLoaded && productsLoaded && customersLoaded && transactionsLoaded && shipmentsLoaded && expensesLoaded) {
+        setTimeout(() => {
+          setIsInitialLoading(false);
+        }, 350);
+      }
+    };
+
     const unsubSales = onSnapshot(query(collection(db, 'sales'), orderBy('createdAt', 'desc')), (snapshot) => {
       setSales(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Sale)));
+      salesLoaded = true;
+      checkAllLoaded();
+    }, () => {
+      salesLoaded = true;
+      checkAllLoaded();
     });
 
     const unsubProd = onSnapshot(collection(db, 'products'), (snapshot) => {
       setProducts(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Product)));
+      productsLoaded = true;
+      checkAllLoaded();
+    }, () => {
+      productsLoaded = true;
+      checkAllLoaded();
     });
 
     const unsubCust = onSnapshot(collection(db, 'customers'), (snapshot) => {
       setCustomers(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Customer)));
+      customersLoaded = true;
+      checkAllLoaded();
+    }, () => {
+      customersLoaded = true;
+      checkAllLoaded();
     });
 
     const unsubTrans = onSnapshot(collection(db, 'transactions'), (snapshot) => {
       setTransactions(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Transaction)));
+      transactionsLoaded = true;
+      checkAllLoaded();
+    }, () => {
+      transactionsLoaded = true;
+      checkAllLoaded();
     });
 
     const unsubShip = onSnapshot(collection(db, 'shipments'), (snapshot) => {
       setShipments(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Shipment)));
+      shipmentsLoaded = true;
+      checkAllLoaded();
+    }, () => {
+      shipmentsLoaded = true;
+      checkAllLoaded();
     });
 
     const unsubExp = onSnapshot(collection(db, 'expenses'), (snapshot) => {
       setExpenses(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Expense)));
+      expensesLoaded = true;
+      checkAllLoaded();
+    }, () => {
+      expensesLoaded = true;
+      checkAllLoaded();
     });
 
     return () => { 
@@ -148,6 +196,10 @@ export default function Dashboard() {
   const filteredSales = React.useMemo(() => {
     return sales.filter(sale => {
       if (sale.status === 'Pré-venda' || sale.status === 'Cancelada') return false;
+      
+      // Exclude administrative/auditor ledger adjustments from commercial dashboard
+      const isAdjustment = sale.isAdjustment || (sale.items || []).some(item => item && item.productId === 'sistema_ajuste_auditoria');
+      if (isAdjustment) return false;
       
       const matchesCustomer = customerFilter === 'all' || sale.customerId === customerFilter;
       const matchesProduct = productFilter === 'all' || (sale.items || []).some(item => item && item.productId === productFilter);
@@ -492,7 +544,9 @@ export default function Dashboard() {
 
     // Accumulate Sales
     sales.forEach(sale => {
-      if (sale.status === 'Pré-venda') return;
+      if (sale.status === 'Pré-venda' || sale.status === 'Cancelada') return;
+      const isAdjustment = sale.isAdjustment || (sale.items || []).some(item => item && item.productId === 'sistema_ajuste_auditoria');
+      if (isAdjustment) return;
       const d = getElementDate(sale);
       if (!d) return;
       const year = d.getFullYear();
@@ -526,7 +580,7 @@ export default function Dashboard() {
   const customerRanking = React.useMemo(() => {
     const ranking: Record<string, { name: string, total: number, count: number }> = {};
     
-    sales.filter(s => s.status !== 'Pré-venda' && s.status !== 'Cancelada').forEach(sale => {
+    sales.filter(s => s.status !== 'Pré-venda' && s.status !== 'Cancelada' && !s.isAdjustment && !(s.items || []).some(item => item && item.productId === 'sistema_ajuste_auditoria')).forEach(sale => {
       if (!sale.customerId) return;
       if (!ranking[sale.customerId]) {
         ranking[sale.customerId] = { name: sale.customerName || 'Cliente sem nome', total: 0, count: 0 };
@@ -653,7 +707,7 @@ export default function Dashboard() {
     // 5. Customer Concentration Insight
     if (sales.length > 0 && stats.totalRevenue > 0) {
       const ranking: Record<string, { name: string, total: number }> = {};
-      sales.filter(s => s.status !== 'Pré-venda' && s.status !== 'Cancelada').forEach(sale => {
+      sales.filter(s => s.status !== 'Pré-venda' && s.status !== 'Cancelada' && !s.isAdjustment && !(s.items || []).some(item => item && item.productId === 'sistema_ajuste_auditoria')).forEach(sale => {
         if (!sale.customerId) return;
         if (!ranking[sale.customerId]) {
           ranking[sale.customerId] = { name: sale.customerName || 'Cliente', total: 0 };
@@ -797,7 +851,7 @@ export default function Dashboard() {
     // NEW INSIGHT 12: Curva ABC (Concentração de Faturamento por SKU / Pareto)
     if (sales.length > 0 && stats.totalRevenue > 0) {
       const productSales: Record<string, { name: string; total: number }> = {};
-      sales.filter(s => s.status !== 'Pré-venda' && s.status !== 'Cancelada').forEach(sale => {
+      sales.filter(s => s.status !== 'Pré-venda' && s.status !== 'Cancelada' && !s.isAdjustment && !(s.items || []).some(item => item && item.productId === 'sistema_ajuste_auditoria')).forEach(sale => {
         (sale.items || []).forEach(item => {
           if (!item || !item.productId) return;
           if (!productSales[item.productId]) {
@@ -854,7 +908,7 @@ export default function Dashboard() {
     }
 
     // NEW INSIGHT 14: Cross-selling (Quantidade Média de Itens por Carrinho)
-    const completedSales = sales.filter(s => s.status !== 'Pré-venda' && s.status !== 'Cancelada');
+    const completedSales = sales.filter(s => s.status !== 'Pré-venda' && s.status !== 'Cancelada' && !s.isAdjustment && !(s.items || []).some(item => item && item.productId === 'sistema_ajuste_auditoria'));
     if (completedSales.length > 0) {
       const totalItemsCount = completedSales.reduce((acc, s) => acc + s.items.reduce((sum, i) => sum + i.quantity, 0), 0);
       const avgItemsPerSale = totalItemsCount / completedSales.length;
@@ -906,7 +960,7 @@ export default function Dashboard() {
     // NEW INSIGHT 16: Clientes Registrados Inativos / Churn
     if (customers.length > 0) {
       const inactiveCustomers = customers.filter(c => {
-        const hasPurchases = sales.some(s => s.customerId === c.id && s.status !== 'Cancelada');
+        const hasPurchases = sales.some(s => s.customerId === c.id && s.status !== 'Cancelada' && !s.isAdjustment && !(s.items || []).some(item => item && item.productId === 'sistema_ajuste_auditoria'));
         return !hasPurchases;
       });
       const roundedRatio = Math.min(100, (inactiveCustomers.length / customers.length) * 100);
@@ -1048,6 +1102,130 @@ export default function Dashboard() {
       }
     }
 
+    // NEW INSIGHT 20: Dead Stock (Estoque Parado)
+    const physicalProducts = products.filter(p => !p.isDropshipping && p.totalStock > 0);
+    if (physicalProducts.length > 0) {
+      const soldProductIds = new Set<string>();
+      completedSales.forEach(s => {
+        (s.items || []).forEach(item => {
+          if (item && item.productId) {
+            soldProductIds.add(item.productId);
+          }
+        });
+      });
+
+      const unsoldProducts = physicalProducts.filter(p => !soldProductIds.has(p.id));
+      const deadStockValue = unsoldProducts.reduce((acc, p) => acc + (p.costPrice || 0) * p.totalStock, 0);
+
+      if (unsoldProducts.length > 0 && deadStockValue > 0) {
+        list.push({
+          id: 'dead-stock-alert',
+          type: 'warning',
+          title: '📦 Capital Imobilizado: Alerta de Estoque Parado',
+          desc: `Existem ${unsoldProducts.length} produto(s) no seu catálogo que ainda não tiveram nenhuma venda comercial registrada, totalizando ${formatCurrency(deadStockValue)} em custo de mercadoria imobilizado nas prateleiras. Promova combos promocionais ou queima de estoque para girar esses ativos rápido.`
+        });
+      } else {
+        list.push({
+          id: 'dead-stock-clean',
+          type: 'success',
+          title: '🔥 Catálogo de Alta Rotação: Giro Saudável de Estoque',
+          desc: 'Excelente! Todos os seus produtos físicos ativos cadastrados tiveram pelo menos uma venda realizada. Não há capital "morto" parado em suas prateleiras!'
+        });
+      }
+    }
+
+    // NEW INSIGHT 21: High-Risk Debtors (Inadimplência Alvo de Cobrança)
+    if (debtors.length > 0) {
+      const nowMs = new Date().getTime(); // Current local time
+      const highRiskDebtorsList: string[] = [];
+      let highRiskDebtSum = 0;
+
+      debtors.forEach(d => {
+        const dSales = completedSales.filter(s => s.customerId === d.id);
+        let lastPurchaseDate: Date | null = null;
+        
+        dSales.forEach(s => {
+          let date: Date | null = null;
+          if (s.createdAt) {
+            if (typeof s.createdAt.seconds === 'number') date = new Date(s.createdAt.seconds * 1000);
+            else if (s.createdAt instanceof Date) date = s.createdAt;
+            else if (typeof s.createdAt.toDate === 'function') date = s.createdAt.toDate();
+            else if (typeof s.createdAt._seconds === 'number') date = new Date(s.createdAt._seconds * 1000);
+          }
+          if (date && (!lastPurchaseDate || date > lastPurchaseDate)) {
+            lastPurchaseDate = date;
+          }
+        });
+
+        const lastPurchaseAgeDays = lastPurchaseDate 
+          ? (nowMs - lastPurchaseDate.getTime()) / (1000 * 60 * 60 * 24)
+          : 999; // no purchases or very old
+
+        if (lastPurchaseAgeDays > 45 && (d.totalDebt || 0) > 0) {
+          highRiskDebtorsList.push(d.name);
+          highRiskDebtSum += (d.totalDebt || 0);
+        }
+      });
+
+      if (highRiskDebtorsList.length > 0) {
+        list.push({
+          id: 'high-risk-dept',
+          type: 'warning',
+          title: '🚨 Cobrança Recomendada: Inadimplências Estagnadas',
+          desc: `Identificamos que ${highRiskDebtorsList.length} cliente(s) (${highRiskDebtorsList.slice(0, 2).join(', ')}${highRiskDebtorsList.length > 2 ? ' e outros' : ''}) devem um total de ${formatCurrency(highRiskDebtSum)} e estão sem comprar há mais de 45 dias. Recomendamos entrar em contato amigável de cobrança para recuperar esse caixa.`
+        });
+      }
+    }
+
+    // NEW INSIGHT 22: Sales Hour Distribution (Produtividade de Turnos)
+    if (completedSales.length > 0) {
+      let morningRev = 0;
+      let afternoonRev = 0;
+      let eveningRev = 0;
+
+      completedSales.forEach(s => {
+        let date: Date | null = null;
+        if (s.createdAt) {
+          if (typeof s.createdAt.seconds === 'number') date = new Date(s.createdAt.seconds * 1000);
+          else if (s.createdAt instanceof Date) date = s.createdAt;
+          else if (typeof s.createdAt.toDate === 'function') date = s.createdAt.toDate();
+          else if (typeof s.createdAt._seconds === 'number') date = new Date(s.createdAt._seconds * 1000);
+        }
+        if (date) {
+          const hour = date.getHours();
+          const totalValue = s.total || 0;
+          if (hour >= 6 && hour < 12) {
+            morningRev += totalValue;
+          } else if (hour >= 12 && hour < 18) {
+            afternoonRev += totalValue;
+          } else {
+            eveningRev += totalValue;
+          }
+        }
+      });
+
+      const maxTurnRev = Math.max(morningRev, afternoonRev, eveningRev);
+      if (maxTurnRev > 0) {
+        let peakTurn = 'Tarde (12h às 18h)';
+        let displayDesc = `Seu turno mais aquecido é o da Tarde, somando ${formatCurrency(afternoonRev)} em faturamento. Foco total em responder orçamentos rápidos e despachar produtos nesse horário!`;
+
+        if (maxTurnRev === morningRev) {
+          peakTurn = 'Manhã (6h às 12h)';
+          displayDesc = `Seu turno mais aquecido é o da Manhã, somando ${formatCurrency(morningRev)} em faturamento. Garanta que o atendimento comercial esteja online bem cedo para capitalizar esses contatos!`;
+        } else if (maxTurnRev === eveningRev) {
+          peakTurn = 'Noite (18h às 24h)';
+          displayDesc = `Seu turno mais aquecido é o da Noite, somando ${formatCurrency(eveningRev)} em faturamento. Considere disparar novidades e campanhas nas redes sociais no início da noite!`;
+        }
+
+        list.push({
+          id: 'shift-peak-analysis',
+          type: 'success',
+          title: `🌅 Pico de Turno Operacional: Turno da ${peakTurn}`,
+          desc: displayDesc
+        });
+      }
+    }
+
     return list;
   }, [products, sales, debtors, stats, getSaleBalance, customers, shipments]);
   
@@ -1120,51 +1298,93 @@ export default function Dashboard() {
           whileHover={{ y: -4 }}
           className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200/60 shadow-sm flex flex-col justify-between relative overflow-hidden group md:col-span-2 lg:col-span-2 min-h-[220px]"
         >
-          <div className="absolute top-0 right-0 p-6 opacity-[0.03] group-hover:opacity-[0.07] transition-all group-hover:scale-110">
-            <TrendingUp size={110} />
-          </div>
-          <div className="relative z-10 w-full">
-            <div className="flex justify-between items-center mb-6">
-              <span className="text-[9px] font-black tracking-widest uppercase text-slate-400">01. Desempenho Comercial</span>
-              <div className="size-8 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center font-bold">
-                <TrendingUp size={16} />
-              </div>
-            </div>
-            
-            <div className="space-y-1">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Faturamento Bruto</span>
-              <h3 className="text-3xl font-black text-slate-900 font-display tracking-tight leading-none uppercase tabular-nums">
-                <RollingCounter value={formatCurrency(stats.totalRevenue)} />
-              </h3>
-            </div>
-          </div>
+          <AnimatePresence mode="wait">
+            {isInitialLoading ? (
+              <motion.div
+                key="skeleton-1"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="animate-pulse space-y-4 w-full h-full flex flex-col justify-between"
+              >
+                <div className="w-full">
+                  <div className="flex justify-between items-center mb-6">
+                    <div className="h-2.5 bg-slate-150 rounded-full w-40" />
+                    <div className="size-8 bg-slate-100 rounded-xl" />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="h-2 bg-slate-100 rounded-full w-24" />
+                    <div className="h-7 bg-slate-200 rounded-lg w-48" />
+                  </div>
+                </div>
+                <div>
+                  <div className="h-px bg-slate-100 w-full my-4" />
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <div className="h-2 bg-slate-150 rounded-full w-32" />
+                      <div className="h-4 bg-slate-100 rounded-md w-14" />
+                    </div>
+                    <div className="h-1.5 bg-slate-100 w-full rounded-full" />
+                  </div>
+                </div>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="content-1"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, ease: "easeOut" }}
+                className="w-full h-full flex flex-col justify-between"
+              >
+                <div className="absolute top-0 right-0 p-6 opacity-[0.03] group-hover:opacity-[0.07] transition-all group-hover:scale-110 pointer-events-none">
+                  <TrendingUp size={110} />
+                </div>
+                <div className="relative z-10 w-full">
+                  <div className="flex justify-between items-center mb-6">
+                    <span className="text-[9px] font-black tracking-widest uppercase text-slate-400">01. Desempenho Comercial</span>
+                    <div className="size-8 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center font-bold">
+                      <TrendingUp size={16} />
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Faturamento Bruto</span>
+                    <h3 className="text-3xl font-black text-slate-900 font-display tracking-tight leading-none uppercase tabular-nums">
+                      <RollingCounter value={formatCurrency(stats.totalRevenue)} />
+                    </h3>
+                  </div>
+                </div>
 
-          <div className="h-px w-full bg-slate-100 my-5 relative z-10" />
-          
-          <div className="space-y-3 relative z-10 w-full">
-            <div className="flex items-center justify-between">
-              <div>
-                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Lucro Líquido Real</span>
-                <span className="text-sm font-black text-emerald-600 font-mono tracking-tight tabular-nums block mt-0.5">
-                  <RollingCounter value={formatCurrency(stats.totalProfit)} />
-                </span>
-              </div>
-              {stats.totalRevenue > 0 && (
-                <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 text-[10px] font-black rounded-lg uppercase tracking-wider font-mono">
-                  {((stats.totalProfit / stats.totalRevenue) * 100).toFixed(1)}% Margem
-                </span>
-              )}
-            </div>
+                <div className="h-px w-full bg-slate-100 my-5 relative z-10" />
+                
+                <div className="space-y-3 relative z-10 w-full">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Lucro Líquido Real</span>
+                      <span className="text-sm font-black text-emerald-600 font-mono tracking-tight tabular-nums block mt-0.5">
+                        <RollingCounter value={formatCurrency(stats.totalProfit)} />
+                      </span>
+                    </div>
+                    {stats.totalRevenue > 0 && (
+                      <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 text-[10px] font-black rounded-lg uppercase tracking-wider font-mono">
+                        {((stats.totalProfit / stats.totalRevenue) * 100).toFixed(1)}% Margem
+                      </span>
+                    )}
+                  </div>
 
-            <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-              <motion.div 
-                initial={{ width: 0 }}
-                animate={{ width: `${stats.totalRevenue > 0 ? Math.min(100, Math.max(0, (stats.totalProfit / stats.totalRevenue) * 100)) : 0}%` }}
-                transition={{ duration: 1, ease: 'easeOut' }}
-                className="h-full bg-emerald-500 rounded-full"
-              />
-            </div>
-          </div>
+                  <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                    <motion.div 
+                      initial={{ width: 0 }}
+                      animate={{ width: `${stats.totalRevenue > 0 ? Math.min(100, Math.max(0, (stats.totalProfit / stats.totalRevenue) * 100)) : 0}%` }}
+                      transition={{ duration: 1, ease: 'easeOut' }}
+                      className="h-full bg-emerald-500 rounded-full"
+                    />
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </motion.div>
 
         {/* Bloco 2: Encomendas a Caminho (Destacado em tons de escuros e indicador ativo - col-span-1) */}
@@ -1175,43 +1395,81 @@ export default function Dashboard() {
           whileHover={{ y: -4 }}
           className="bg-slate-900 text-white p-6 rounded-[32px] border border-slate-800 shadow-md flex flex-col justify-between relative overflow-hidden group col-span-1 min-h-[220px]"
         >
-          <div className="absolute top-0 right-0 p-6 opacity-[0.05] group-hover:opacity-[0.10] transition-all group-hover:scale-110">
-            <Truck size={100} />
-          </div>
-          <div className="relative z-10">
-            <div className="flex justify-between items-center mb-6">
-              <span className="text-[9px] font-black tracking-widest uppercase text-slate-400">02. Fluxo Logístico</span>
-              <span className="relative flex h-2.5 w-2.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-indigo-500"></span>
-              </span>
-            </div>
-            
-            <div className="space-y-1">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Encomendas a Caminho</span>
-              <div className="flex items-baseline gap-1.5">
-                <h3 className="text-4.5xl font-black text-white font-display tracking-tight leading-none uppercase">
-                  {shipments.filter(s => s.status !== 'Entregue').length}
-                </h3>
-                <span className="text-[10px] text-indigo-300 font-bold uppercase tracking-widest font-mono">lotes ativos</span>
-              </div>
-            </div>
-          </div>
+          <AnimatePresence mode="wait">
+            {isInitialLoading ? (
+              <motion.div
+                key="skeleton-2"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="animate-pulse space-y-4 w-full h-full flex flex-col justify-between"
+              >
+                <div className="w-full">
+                  <div className="flex justify-between items-center mb-6">
+                    <div className="h-2.5 bg-slate-800 rounded-full w-28" />
+                    <span className="relative flex h-2.5 w-2.5">
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-slate-800 animate-pulse"></span>
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="h-2 bg-slate-800 rounded-full w-20" />
+                    <div className="h-9 bg-slate-800 rounded-xl w-24" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <div className="h-2 bg-slate-800 rounded-full w-full" />
+                  <div className="h-1 bg-slate-850 w-2/3 rounded-full" />
+                </div>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="content-2"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, ease: "easeOut" }}
+                className="w-full h-full flex flex-col justify-between"
+              >
+                <div className="absolute top-0 right-0 p-6 opacity-[0.05] group-hover:opacity-[0.10] transition-all group-hover:scale-110 pointer-events-none">
+                  <Truck size={100} />
+                </div>
+                <div className="relative z-10">
+                  <div className="flex justify-between items-center mb-6">
+                    <span className="text-[9px] font-black tracking-widest uppercase text-slate-400">02. Fluxo Logístico</span>
+                    <span className="relative flex h-2.5 w-2.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-indigo-500"></span>
+                    </span>
+                  </div>
+                  
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Encomendas a Caminho</span>
+                    <div className="flex items-baseline gap-1.5">
+                      <h3 className="text-4.5xl font-black text-white font-display tracking-tight leading-none uppercase">
+                        {shipments.filter(s => s.status !== 'Entregue').length}
+                      </h3>
+                      <span className="text-[10px] text-indigo-300 font-bold uppercase tracking-widest font-mono">lotes ativos</span>
+                    </div>
+                  </div>
+                </div>
 
-          <div className="mt-4 relative z-10">
-            <p className="text-[8.5px] text-slate-400 font-black uppercase tracking-widest leading-normal">
-              {stats.dropshippingOrders} pedidos via Dropshipping ({stats.totalOrders > 0 ? ((stats.dropshippingOrders / stats.totalOrders) * 100).toFixed(0) : 0}% do faturamento ativo)
-            </p>
-            <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden mt-2">
-              <div 
-                className="h-full bg-indigo-500 rounded-full" 
-                style={{ width: `${stats.totalOrders > 0 ? (stats.dropshippingOrders / stats.totalOrders) * 100 : 0}%` }} 
-              />
-            </div>
-          </div>
+                <div className="mt-4 relative z-10">
+                  <p className="text-[8.5px] text-slate-400 font-black uppercase tracking-widest leading-normal">
+                    {stats.dropshippingOrders} pedidos via Dropshipping ({stats.totalOrders > 0 ? ((stats.dropshippingOrders / stats.totalOrders) * 100).toFixed(0) : 0}% do faturamento ativo)
+                  </p>
+                  <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden mt-2">
+                    <div 
+                      className="h-full bg-indigo-500 rounded-full" 
+                      style={{ width: `${stats.totalOrders > 0 ? (stats.dropshippingOrders / stats.totalOrders) * 100 : 0}%` }} 
+                    />
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </motion.div>
 
-        {/* Bloco 3: Taxas Pendentes (Destaque visual vibrante em vermelho/rose - col-span-1) */}
+         {/* Bloco 3: Taxas Pendentes (Destaque visual vibrante em vermelho/rose - col-span-1) */}
         <motion.div 
           initial={{ opacity: 0, scale: 0.98, y: 15 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -1219,32 +1477,68 @@ export default function Dashboard() {
           whileHover={{ y: -4 }}
           className="bg-rose-50/60 p-6 rounded-[32px] border border-rose-100/80 shadow-sm flex flex-col justify-between relative overflow-hidden group col-span-1 min-h-[220px]"
         >
-          <div className="absolute top-0 right-0 p-6 opacity-[0.03] group-hover:opacity-[0.08] transition-all group-hover:scale-110">
-            <DollarSign size={100} />
-          </div>
-          <div className="relative z-10">
-            <div className="flex justify-between items-center mb-6">
-              <span className="text-[9px] font-black tracking-widest uppercase text-rose-500">03. Custos Aduaneiros</span>
-              <div className="size-8 bg-rose-100/50 text-rose-600 rounded-xl flex items-center justify-center font-bold">
-                <Receipt size={16} />
-              </div>
-            </div>
-            
-            <div className="space-y-1">
-              <span className="text-[10px] font-bold text-rose-600/75 uppercase tracking-wider block">Taxas Pendentes</span>
-              <h3 className="text-3xl font-black text-rose-950 font-display tracking-tight leading-none uppercase tabular-nums">
-                <RollingCounter value={formatCurrency(stats.pendingTaxes)} />
-              </h3>
-            </div>
-          </div>
+          <AnimatePresence mode="wait">
+            {isInitialLoading ? (
+              <motion.div
+                key="skeleton-3"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="animate-pulse space-y-4 w-full h-full flex flex-col justify-between"
+              >
+                <div className="w-full">
+                  <div className="flex justify-between items-center mb-6">
+                    <div className="h-2.5 bg-rose-200/50 rounded-full w-28" />
+                    <div className="size-8 bg-rose-100/40 rounded-xl flex items-center justify-center font-bold" />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="h-2 bg-rose-150/40 rounded-full w-20" />
+                    <div className="h-8 bg-rose-200/50 rounded-xl w-32" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <div className="h-2 bg-rose-200/30 rounded-full w-32" />
+                  <div className="h-1 bg-rose-200/20 w-16 rounded-full" />
+                </div>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="content-3"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, ease: "easeOut" }}
+                className="w-full h-full flex flex-col justify-between"
+              >
+                <div className="absolute top-0 right-0 p-6 opacity-[0.03] group-hover:opacity-[0.08] transition-all group-hover:scale-110 pointer-events-none">
+                  <DollarSign size={100} />
+                </div>
+                <div className="relative z-10">
+                  <div className="flex justify-between items-center mb-6">
+                    <span className="text-[9px] font-black tracking-widest uppercase text-rose-500">03. Custos Aduaneiros</span>
+                    <div className="size-8 bg-rose-100/50 text-rose-600 rounded-xl flex items-center justify-center font-bold">
+                      <Receipt size={16} />
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold text-rose-600/75 uppercase tracking-wider block">Taxas Pendentes</span>
+                    <h3 className="text-3xl font-black text-rose-950 font-display tracking-tight leading-none uppercase tabular-nums">
+                      <RollingCounter value={formatCurrency(stats.pendingTaxes)} />
+                    </h3>
+                  </div>
+                </div>
 
-          <div className="mt-4 relative z-10">
-            <p className="text-[8.5px] text-rose-700 font-bold uppercase tracking-widest leading-none flex items-center gap-1">
-              <span className="size-1.5 bg-rose-600 rounded-full inline-block animate-pulse"></span>
-              Aguardando Liquidação Fiscal
-            </p>
-            <p className="text-[8px] text-slate-400 mt-1 uppercase font-bold">Consolidação de Lotes de Importação</p>
-          </div>
+                <div className="mt-4 relative z-10">
+                  <p className="text-[8.5px] text-rose-700 font-bold uppercase tracking-widest leading-none flex items-center gap-1">
+                    <span className="size-1.5 bg-rose-600 rounded-full inline-block animate-pulse"></span>
+                    Aguardando Liquidação Fiscal
+                  </p>
+                  <p className="text-[8px] text-slate-400 mt-1 uppercase font-bold">Consolidação de Lotes de Importação</p>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </motion.div>
 
         {/* Bloco 4: Crédito, Carteira & Fiados (col-span-1) */}
@@ -1255,31 +1549,69 @@ export default function Dashboard() {
           whileHover={{ y: -4 }}
           className="bg-white p-6 rounded-[32px] border border-slate-200/60 shadow-sm flex flex-col justify-between relative overflow-hidden group col-span-1 min-h-[220px]"
         >
-          <div className="relative z-10">
-            <div className="flex justify-between items-center mb-6">
-              <span className="text-[9px] font-black tracking-widest uppercase text-slate-400">04. Crédito & Carteira</span>
-              <div className="size-8 bg-amber-50 text-amber-500 rounded-xl flex items-center justify-center font-bold">
-                <Wallet size={15} />
-              </div>
-            </div>
-            
-            <div className="space-y-1">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Contas a Receber (Fiado)</span>
-              <h3 className="text-2xl font-black text-slate-900 tracking-tight leading-none uppercase tabular-nums">
-                <RollingCounter value={formatCurrency(stats.totalDebt)} />
-              </h3>
-            </div>
-          </div>
+          <AnimatePresence mode="wait">
+            {isInitialLoading ? (
+              <motion.div
+                key="skeleton-4"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="animate-pulse space-y-4 w-full h-full flex flex-col justify-between"
+              >
+                <div className="w-full">
+                  <div className="flex justify-between items-center mb-6">
+                    <div className="h-2.5 bg-slate-150 rounded-full w-28" />
+                    <div className="size-8 bg-slate-100 rounded-xl" />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="h-2 bg-slate-100 rounded-full w-20" />
+                    <div className="h-8 bg-slate-200 rounded-xl w-32" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <div className="h-2 bg-slate-150 rounded-full w-full" />
+                  <div className="h-1.5 bg-slate-100 w-2/3 rounded-full" />
+                </div>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="content-4"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, ease: "easeOut" }}
+                className="w-full h-full flex flex-col justify-between"
+              >
+                <div className="relative z-10 w-full h-full flex flex-col justify-between">
+                  <div>
+                    <div className="flex justify-between items-center mb-6">
+                      <span className="text-[9px] font-black tracking-widest uppercase text-slate-400">04. Crédito & Carteira</span>
+                      <div className="size-8 bg-amber-50 text-amber-500 rounded-xl flex items-center justify-center font-bold">
+                        <Wallet size={15} />
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Contas a Receber (Fiado)</span>
+                      <h3 className="text-2xl font-black text-slate-900 tracking-tight leading-none uppercase tabular-nums">
+                        <RollingCounter value={formatCurrency(stats.totalDebt)} />
+                      </h3>
+                    </div>
+                  </div>
 
-          <div className="mt-4 relative z-10 space-y-1.5">
-            <div className="flex items-center justify-between text-[9px] font-bold uppercase">
-              <span className="text-slate-400 block">Eficiência Líquida</span>
-              <span className="text-amber-600 font-mono">{stats.efficiencyRatio.toFixed(1)}%</span>
-            </div>
-            <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-              <div className="h-full bg-amber-500 rounded-full" style={{ width: `${stats.efficiencyRatio}%` }} />
-            </div>
-          </div>
+                  <div className="mt-4 relative z-10 space-y-1.5">
+                    <div className="flex items-center justify-between text-[9px] font-bold uppercase">
+                      <span className="text-slate-400 block">Eficiência Líquida</span>
+                      <span className="text-amber-600 font-mono">{stats.efficiencyRatio.toFixed(1)}%</span>
+                    </div>
+                    <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                      <div className="h-full bg-amber-500 rounded-full" style={{ width: `${stats.efficiencyRatio}%` }} />
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </motion.div>
 
         {/* Bloco 5: Controle Operacional - Ticket Médio, AOV e Peças (col-span-1) */}
@@ -1290,36 +1622,80 @@ export default function Dashboard() {
           whileHover={{ y: -4 }}
           className="bg-white p-6 rounded-[32px] border border-slate-200/60 shadow-sm flex flex-col justify-between relative overflow-hidden group col-span-1 min-h-[220px]"
         >
-          <div className="relative z-10 w-full">
-            <div className="flex justify-between items-center mb-6">
-              <span className="text-[9px] font-black tracking-widest uppercase text-slate-400">05. Métricas e AOV</span>
-              <div className="size-8 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center font-bold">
-                <Activity size={15} />
-              </div>
-            </div>
-            
-            <div className="space-y-1">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Ticket Médio p/ Venda</span>
-              <h3 className="text-2xl font-black text-slate-900 tracking-tight leading-none uppercase tabular-nums">
-                <RollingCounter value={formatCurrency(stats.avgTicket)} />
-              </h3>
-            </div>
-          </div>
+          <AnimatePresence mode="wait">
+            {isInitialLoading ? (
+              <motion.div
+                key="skeleton-5"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="animate-pulse space-y-4 w-full h-full flex flex-col justify-between"
+              >
+                <div className="w-full">
+                  <div className="flex justify-between items-center mb-6">
+                    <div className="h-2.5 bg-slate-150 rounded-full w-28" />
+                    <div className="size-8 bg-slate-100 rounded-xl" />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="h-2 bg-slate-100 rounded-full w-20" />
+                    <div className="h-8 bg-slate-200 rounded-xl w-32" />
+                  </div>
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-2 pt-2 border-t border-slate-100">
+                  <div className="space-y-1">
+                    <div className="h-1.5 bg-slate-100 rounded-full w-12" />
+                    <div className="h-3.5 bg-slate-150 rounded-md w-16" />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="h-1.5 bg-slate-100 rounded-full w-12" />
+                    <div className="h-3.5 bg-slate-150 rounded-md w-16" />
+                  </div>
+                </div>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="content-5"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, ease: "easeOut" }}
+                className="w-full h-full flex flex-col justify-between"
+              >
+                <div className="relative z-10 w-full h-full flex flex-col justify-between">
+                  <div>
+                    <div className="flex justify-between items-center mb-6">
+                      <span className="text-[9px] font-black tracking-widest uppercase text-slate-400">05. Métricas e AOV</span>
+                      <div className="size-8 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center font-bold">
+                        <Activity size={15} />
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Ticket Médio p/ Venda</span>
+                      <h3 className="text-2xl font-black text-slate-900 tracking-tight leading-none uppercase tabular-nums">
+                        <RollingCounter value={formatCurrency(stats.avgTicket)} />
+                      </h3>
+                    </div>
+                  </div>
 
-          <div className="mt-4 relative z-10 grid grid-cols-2 gap-2 pt-2 border-t border-slate-50">
-            <div>
-              <span className="text-[8px] text-slate-400 font-bold uppercase block">Preço p/ Peça</span>
-              <p className="text-xs font-black text-slate-800 font-mono tracking-tight leading-none mt-0.5">
-                <RollingCounter value={formatCurrency(stats.avgItemPrice)} />
-              </p>
-            </div>
-            <div>
-              <span className="text-[8px] text-slate-400 font-bold uppercase block">Itens p/ Carrinho</span>
-              <p className="text-xs font-black text-slate-800 font-mono tracking-tight leading-none mt-0.5">
-                <RollingCounter value={stats.avgItemsPerSale.toFixed(1)} /> un
-              </p>
-            </div>
-          </div>
+                  <div className="mt-4 relative z-10 grid grid-cols-2 gap-2 pt-2 border-t border-slate-50">
+                    <div>
+                      <span className="text-[8px] text-slate-400 font-bold uppercase block">Preço p/ Peça</span>
+                      <p className="text-xs font-black text-slate-800 font-mono tracking-tight leading-none mt-0.5">
+                        <RollingCounter value={formatCurrency(stats.avgItemPrice)} />
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-[8px] text-slate-400 font-bold uppercase block">Itens p/ Carrinho</span>
+                      <p className="text-xs font-black text-slate-800 font-mono tracking-tight leading-none mt-0.5">
+                        <RollingCounter value={stats.avgItemsPerSale.toFixed(1)} /> un
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </motion.div>
 
         {/* Bloco 6: Produtos de Alto Giro (Best Sellers) (col-span-2: Layout assimétrico integrado) */}
@@ -1330,36 +1706,75 @@ export default function Dashboard() {
           whileHover={{ y: -4 }}
           className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-200/60 shadow-sm flex flex-col justify-between relative overflow-hidden group md:col-span-2 lg:col-span-2 min-h-[220px]"
         >
-          <div className="relative z-10 w-full">
-            <div className="flex justify-between items-center mb-4">
-              <span className="text-[9px] font-black tracking-widest uppercase text-slate-400 font-mono">06. Artigos mais vendidos</span>
-              <div className="size-8 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center font-bold">
-                <Sparkles size={14} className="text-blue-500" />
-              </div>
-            </div>
-
-            <div className="space-y-2.5 max-h-[140px] overflow-y-auto pr-1">
-              {topGiroProducts.length === 0 ? (
-                <div className="py-6 text-center text-slate-350 text-[10px] font-bold uppercase tracking-wider">Nenhum giro registrado</div>
-              ) : (
-                topGiroProducts.map((p, idx) => {
-                  const maxQty = topGiroProducts[0].quantity || 1;
-                  const percentOfTop = (p.quantity / maxQty) * 100;
-                  return (
-                    <div key={p.id} className="space-y-1">
-                      <div className="flex justify-between items-center text-[10.5px] font-black uppercase text-slate-700 leading-none">
-                        <span className="truncate max-w-[140px] tracking-tight">{idx + 1}. {p.name}</span>
-                        <span className="tabular-nums font-mono text-slate-500 pr-1">{p.quantity} un <span className="opacity-40">({formatCurrency(p.revenue)})</span></span>
+          <AnimatePresence mode="wait">
+            {isInitialLoading ? (
+              <motion.div
+                key="skeleton-6"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="animate-pulse space-y-4 w-full h-full flex flex-col justify-between"
+              >
+                <div className="w-full">
+                  <div className="flex justify-between items-center mb-4">
+                    <div className="h-2.5 bg-slate-150 rounded-full w-40" />
+                    <div className="size-8 bg-slate-100 rounded-xl" />
+                  </div>
+                  <div className="space-y-3.5 pr-1">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="space-y-1.5">
+                        <div className="flex justify-between items-center">
+                          <div className="h-2 bg-slate-150 rounded-full w-28" />
+                          <div className="h-2 bg-slate-100 rounded-full w-16" />
+                        </div>
+                        <div className="h-1 bg-slate-100 w-full rounded-full animate-pulse" />
                       </div>
-                      <div className="w-full h-1 bg-slate-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-blue-500 rounded-full" style={{ width: `${percentOfTop}%` }} />
-                      </div>
+                    ))}
+                  </div>
+                </div>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="content-6"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, ease: "easeOut" }}
+                className="w-full h-full flex flex-col justify-between"
+              >
+                <div className="relative z-10 w-full">
+                  <div className="flex justify-between items-center mb-4">
+                    <span className="text-[9px] font-black tracking-widest uppercase text-slate-400 font-mono">06. Artigos mais vendidos</span>
+                    <div className="size-8 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center font-bold">
+                      <Sparkles size={14} className="text-blue-500" />
                     </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
+                  </div>
+
+                  <div className="space-y-2.5 max-h-[140px] overflow-y-auto pr-1">
+                    {topGiroProducts.length === 0 ? (
+                      <div className="py-6 text-center text-slate-350 text-[10px] font-bold uppercase tracking-wider">Nenhum giro registrado</div>
+                    ) : (
+                      topGiroProducts.map((p, idx) => {
+                        const maxQty = topGiroProducts[0].quantity || 1;
+                        const percentOfTop = (p.quantity / maxQty) * 100;
+                        return (
+                          <div key={p.id} className="space-y-1">
+                            <div className="flex justify-between items-center text-[10.5px] font-black uppercase text-slate-700 leading-none">
+                              <span className="truncate max-w-[140px] tracking-tight">{idx + 1}. {p.name}</span>
+                              <span className="tabular-nums font-mono text-slate-500 pr-1">{p.quantity} un <span className="opacity-40">({formatCurrency(p.revenue)})</span></span>
+                            </div>
+                            <div className="w-full h-1 bg-slate-100 rounded-full overflow-hidden">
+                              <div className="h-full bg-blue-500 rounded-full" style={{ width: `${percentOfTop}%` }} />
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </motion.div>
 
       </div>
@@ -1422,35 +1837,92 @@ export default function Dashboard() {
 
         {/* Chart Section */}
         <div className="xl:col-span-2 bg-white p-8 rounded-[32px] border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-          <div className="flex items-center justify-between mb-8">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
             <div>
               <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
                 <Calendar size={18} className="text-red-800" />
                 Matriz de Desempenho
               </h3>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Série Temporal (10 DIB)</p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Série Temporal (10 Dias de Balanço)</p>
             </div>
-            <div className="flex items-center gap-4 text-[9px] font-black uppercase tracking-widest">
-              <div className="flex items-center gap-1.5"><span className="size-2 bg-red-800 rounded-full"></span> Receita</div>
-              <div className="flex items-center gap-1.5"><span className="size-2 bg-amber-500 rounded-full"></span> Unidades</div>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[9px] font-black uppercase tracking-widest">
+              <div className="flex items-center gap-2">
+                <span className="w-3.5 h-2.5 rounded bg-gradient-to-t from-red-800/20 to-red-800 block border border-red-800/40"></span>
+                <span>Faturamento (Colunas)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-5 h-[3px] bg-amber-500 block relative rounded-full flex items-center justify-center shrink-0">
+                  <span className="size-1.5 bg-white border-2 border-amber-500 rounded-full"></span>
+                </span>
+                <span>Volume de Itens (Linha)</span>
+              </div>
             </div>
           </div>
           <div className="flex-1 min-h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={salesByDay}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: '#64748b' }} />
-                <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: '#64748b' }} />
-                <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 700, fill: '#64748b' }} />
-                <Tooltip 
-                   cursor={{ fill: 'rgba(140, 40, 40, 0.02)' }}
-                   contentStyle={{ borderRadius: '16px', border: '1px solid #cbd5e1', backgroundColor: '#ffffff', boxShadow: '0 10px 30px rgba(0, 0, 0, 0.06)', padding: '16px' }}
-                   itemStyle={{ fontSize: '12px', fontWeight: 'bold' }}
-                   labelStyle={{ fontWeight: 'black', marginBottom: '8px', color: '#0f172a' }}
+              <ComposedChart data={salesByDay}>
+                <defs>
+                  <linearGradient id="execRedGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#8c2828" stopOpacity={0.9} />
+                    <stop offset="100%" stopColor="#8c2828" stopOpacity={0.15} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis 
+                  dataKey="date" 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fontSize: 10, fontWeight: 800, fill: '#64748b' }} 
                 />
-                <Bar yAxisId="left" dataKey="total" fill="#8c2828" radius={[6, 6, 0, 0]} />
-                <Bar yAxisId="right" dataKey="quantity" fill="#c69c3a" radius={[6, 6, 0, 0]} />
-              </BarChart>
+                <YAxis 
+                  yAxisId="left" 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fontSize: 9, fontWeight: 700, fill: '#64748b' }}
+                  tickFormatter={(val) => `R$ ${val >= 1000 ? (val / 1000).toFixed(0) + 'k' : val}`}
+                />
+                <YAxis 
+                  yAxisId="right" 
+                  orientation="right" 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fontSize: 9, fontWeight: 700, fill: '#64748b' }}
+                  tickFormatter={(val) => `${val} un`}
+                />
+                <Tooltip 
+                   cursor={{ fill: 'rgba(140, 40, 40, 0.03)' }}
+                   contentStyle={{ 
+                     borderRadius: '16px', 
+                     border: '1px solid #e2e8f0', 
+                     backgroundColor: '#ffffff', 
+                     boxShadow: '0 12px 30px rgba(15, 23, 42, 0.08)', 
+                     padding: '14px' 
+                   }}
+                   formatter={(value: any, name: any) => {
+                     if (name === "total") return [formatCurrency(Number(value || 0)), "Receita Comercial"];
+                     if (name === "quantity") return [`${value || 0} unidades`, "Volume Despachado"];
+                     return [value, name];
+                   }}
+                   itemStyle={{ fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', padding: '2px 0' }}
+                   labelStyle={{ fontWeight: 900, fontSize: '12px', marginBottom: '6px', color: '#0f172a', fontFamily: 'monospace' }}
+                />
+                <Bar 
+                  yAxisId="left" 
+                  dataKey="total" 
+                  fill="url(#execRedGradient)" 
+                  radius={[6, 6, 0, 0]} 
+                  barSize={32}
+                />
+                <Line 
+                  yAxisId="right" 
+                  type="monotone" 
+                  dataKey="quantity" 
+                  stroke="#c69c3a" 
+                  strokeWidth={3} 
+                  dot={{ r: 4, strokeWidth: 2, fill: '#ffffff', stroke: '#c69c3a' }} 
+                  activeDot={{ r: 6, strokeWidth: 0, fill: '#c69c3a' }} 
+                />
+              </ComposedChart>
             </ResponsiveContainer>
           </div>
         </div>
@@ -1460,29 +1932,39 @@ export default function Dashboard() {
           <div className="flex flex-col mb-6">
             <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
               <TrendingUp size={18} className="text-red-800" />
-              Sales vs. Amortização
+              Giro vs. Amortização
             </h3>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Comparativo Mensal (6 Meses)</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Comparativo Mensal (Ativos 6 Meses)</p>
           </div>
 
-          <div className="flex items-center gap-4 text-[9px] font-black uppercase tracking-widest mb-6">
+          <div className="flex flex-wrap gap-x-3 gap-y-1.5 text-[9px] font-black uppercase tracking-widest mb-6 border-b border-slate-100 pb-4">
             <div className="flex items-center gap-1.5">
-              <span className="size-2 bg-red-800 rounded-full" style={{ backgroundColor: '#8c2828' }}></span> Vendas
+              <span className="w-3 h-2 rounded bg-gradient-to-t from-slate-900/20 to-slate-900 block border border-slate-900/30"></span>
+              <span>Faturamento (Barras)</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="size-2 bg-amber-500 rounded-full" style={{ backgroundColor: '#c69c3a' }}></span> Amortizado (Fiado)
+              <span className="w-4 h-[2px] bg-amber-500 block relative rounded-full flex items-center justify-center shrink-0">
+                <span className="size-1 bg-white border border-amber-500 rounded-full"></span>
+              </span>
+              <span>Recebido (Linha)</span>
             </div>
           </div>
 
           <div className="flex-1 min-h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={monthlyComparisonData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+              <ComposedChart data={monthlyComparisonData}>
+                <defs>
+                  <linearGradient id="execSlateGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#0f172a" stopOpacity={0.9} />
+                    <stop offset="100%" stopColor="#0f172a" stopOpacity={0.15} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis 
                   dataKey="monthLabel" 
                   axisLine={false} 
                   tickLine={false} 
-                  tick={{ fontSize: 9, fontWeight: 700, fill: '#64748b' }} 
+                  tick={{ fontSize: 9, fontWeight: 800, fill: '#64748b' }} 
                 />
                 <YAxis 
                   axisLine={false} 
@@ -1491,15 +1973,39 @@ export default function Dashboard() {
                   tickFormatter={(val) => `R$ ${val >= 1000 ? (val / 1000).toFixed(0) + 'k' : val}`}
                 />
                 <Tooltip 
-                  cursor={{ fill: 'rgba(140, 40, 40, 0.02)' }}
-                  contentStyle={{ borderRadius: '16px', border: '1px solid #cbd5e1', backgroundColor: '#ffffff', boxShadow: '0 10px 30px rgba(0, 0, 0, 0.06)', padding: '16px' }}
-                  itemStyle={{ fontSize: '11px', fontWeight: 'bold' }}
-                  labelStyle={{ fontWeight: 'black', marginBottom: '8px', color: '#0f172a' }}
-                  formatter={(value: any) => [formatCurrency(Number(value)), '']}
+                  cursor={{ fill: 'rgba(15, 23, 42, 0.02)' }}
+                  contentStyle={{ 
+                    borderRadius: '16px', 
+                    border: '1px solid #e2e8f0', 
+                    backgroundColor: '#ffffff', 
+                    boxShadow: '0 12px 30px rgba(15, 23, 42, 0.08)', 
+                    padding: '14px' 
+                  }}
+                  formatter={(value: any, name: any) => {
+                    if (name === "salesTotal") return [formatCurrency(Number(value || 0)), "Total Faturado"];
+                    if (name === "amortizedTotal") return [formatCurrency(Number(value || 0)), "Total Liquidado"];
+                    return [formatCurrency(Number(value || 0)), name];
+                  }}
+                  itemStyle={{ fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', padding: '2px 0' }}
+                  labelStyle={{ fontWeight: 900, fontSize: '11px', marginBottom: '6px', color: '#0f172a', fontFamily: 'monospace' }}
                 />
-                <Bar dataKey="salesTotal" name="Vendas" fill="#8c2828" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="amortizedTotal" name="Amortizado" fill="#c69c3a" radius={[4, 4, 0, 0]} />
-              </BarChart>
+                <Bar 
+                  dataKey="salesTotal" 
+                  name="salesTotal" 
+                  fill="url(#execSlateGradient)" 
+                  radius={[5, 5, 0, 0]} 
+                  barSize={24}
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="amortizedTotal" 
+                  name="amortizedTotal" 
+                  stroke="#c69c3a" 
+                  strokeWidth={3} 
+                  dot={{ r: 4, strokeWidth: 2, fill: '#ffffff', stroke: '#c69c3a' }}
+                  activeDot={{ r: 6, strokeWidth: 0, fill: '#c69c3a' }}
+                />
+              </ComposedChart>
             </ResponsiveContainer>
           </div>
         </div>
@@ -1866,17 +2372,46 @@ export default function Dashboard() {
               transition={{ duration: 0.3 }}
               className="overflow-hidden"
             >
+              {/* Filtros de Insights */}
+              <div className="flex flex-wrap gap-1.5 mb-5 border-b border-slate-100 pb-4">
+                {[
+                  { key: 'all', label: 'Todos os Insights', count: businessInsights.length },
+                  { key: 'warning', label: 'Alertas Críticos', count: businessInsights.filter(i => i.type === 'warning').length },
+                  { key: 'success', label: 'Conquistas / Sucessos', count: businessInsights.filter(i => i.type === 'success').length },
+                  { key: 'info', label: 'Oportunidades', count: businessInsights.filter(i => i.type === 'info').length },
+                ].map(btn => (
+                  <button
+                    key={btn.key}
+                    onClick={() => setInsightsFilter(btn.key as any)}
+                    className={cn(
+                      "px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer border border-slate-200/60",
+                      insightsFilter === btn.key 
+                        ? "bg-slate-900 text-white border-slate-900 shadow-md shadow-slate-900/10 scale-[1.02]" 
+                        : "bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-800"
+                    )}
+                  >
+                    {btn.label}
+                    <span className={cn(
+                      "ml-0.5 px-1.5 py-0.5 rounded-full text-[8.5px] font-black",
+                      insightsFilter === btn.key ? "bg-white/20 text-white" : "bg-slate-200 text-slate-600"
+                    )}>
+                      {btn.count}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {businessInsights.map((insight) => (
+                {businessInsights.filter(insight => insightsFilter === 'all' || insight.type === insightsFilter).map((insight) => (
                   <div 
                     key={insight.id} 
                     className={cn(
                       "p-4 rounded-2xl border transition-all duration-300 flex gap-3.5 items-start",
                       insight.type === 'warning' 
-                        ? "bg-amber-50/50 border-amber-100 text-amber-900 shadow-sm shadow-amber-500/5" 
+                        ? "bg-amber-50/50 border-amber-100 text-amber-900 shadow-sm shadow-amber-500/5 cursor-default hover:bg-amber-50" 
                         : insight.type === 'success' 
-                        ? "bg-emerald-50/40 border-emerald-100 text-emerald-950" 
-                        : "bg-blue-50/40 border-blue-100 text-blue-950"
+                        ? "bg-emerald-50/40 border-emerald-100 text-emerald-950 cursor-default hover:bg-emerald-50/80" 
+                        : "bg-blue-50/40 border-blue-100 text-blue-950 cursor-default hover:bg-blue-50/85"
                     )}
                   >
                     <div className={cn(
@@ -1905,6 +2440,11 @@ export default function Dashboard() {
                     </div>
                   </div>
                 ))}
+                {businessInsights.filter(insight => insightsFilter === 'all' || insight.type === insightsFilter).length === 0 && (
+                  <div className="col-span-2 text-center py-6 text-slate-400 text-xs font-bold font-sans">
+                    Nenhum insight encontrado para esta categoria.
+                  </div>
+                )}
               </div>
             </motion.div>
           )}

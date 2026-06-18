@@ -57,6 +57,7 @@ export interface Sale {
   createdAt: any;
   history?: any[];
   debtAmount?: number;
+  isAdjustment?: boolean;
 }
 
 export interface ShipmentItem {
