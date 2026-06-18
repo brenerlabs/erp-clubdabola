@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../lib/firebase';
-import { collection, query, onSnapshot, orderBy, writeBatch, doc, getDocs, serverTimestamp, addDoc, deleteDoc, getDoc, where } from 'firebase/firestore';
+import { collection, query, onSnapshot, orderBy, writeBatch, doc, getDocs, serverTimestamp, addDoc, deleteDoc, getDoc, where, updateDoc } from 'firebase/firestore';
 import { Transaction, Sale, Shipment, Customer, Product, Expense } from '../types';
 import { 
   ArrowDownCircle, 
@@ -28,7 +28,11 @@ import {
   XCircle,
   RotateCcw,
   CheckCircle,
-  Sparkles
+  Sparkles,
+  Percent,
+  TrendingDown,
+  Scale,
+  RefreshCw
 } from 'lucide-react';
 import { formatCurrency, cn, cleanVariationName, cleanProductNameWithVariation, formatVariationWithGender, formatProductNameWithGender } from '../lib/utils';
 import { motion } from 'motion/react';
@@ -51,6 +55,44 @@ export default function Finance() {
   const [isCancellingSale, setIsCancellingSale] = useState<string | null>(null);
   const [auditTab, setAuditTab] = useState<'sales' | 'transactions' | 'auditor'>('sales');
   const [expandedAuditDay, setExpandedAuditDay] = useState<string | null>(null);
+
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    description: string;
+    confirmText?: string;
+    cancelText?: string;
+    onConfirm: () => void;
+    showCancel?: boolean;
+    type?: 'warning' | 'success' | 'error';
+  } | null>(null);
+
+  const showConfirm = (options: {
+    title: string;
+    description: string;
+    confirmText?: string;
+    cancelText?: string;
+    onConfirm: () => void;
+    showCancel?: boolean;
+    type?: 'warning' | 'success' | 'error';
+  }) => {
+    setConfirmModal({
+      isOpen: true,
+      ...options
+    });
+  };
+
+  const showAlert = (title: string, description: string, type: 'warning' | 'success' | 'error' = 'success') => {
+    setConfirmModal({
+      isOpen: true,
+      title,
+      description,
+      confirmText: 'Ok',
+      onConfirm: () => {},
+      showCancel: false,
+      type
+    });
+  };
 
   // Unified dynamic transaction filters
   const [periodFilter, setPeriodFilter] = useState<'all' | 'today' | '7days' | 'month' | 'custom'>('all');
@@ -179,6 +221,25 @@ export default function Finance() {
       transactions: Transaction[];
     }> = [];
 
+    const customerDebtMismatches: Array<{
+      customer: Customer;
+      expectedDebt: number;
+      savedDebt: number;
+      diff: number;
+    }> = [];
+
+    const suspiciousMargins: Array<{
+      sale: Sale;
+      revenue: number;
+      cost: number;
+      margin: number;
+    }> = [];
+
+    const suspiciousTransactions: Array<{
+      transaction: Transaction;
+      issue: string;
+    }> = [];
+
     // Helper map to group by day (YYYY-MM-DD)
     const dayGroups: {
       [day: string]: {
@@ -212,11 +273,9 @@ export default function Finance() {
     Object.keys(dayGroups).forEach(day => {
       const group = dayGroups[day];
       const activeSales = group.sales.filter(s => s.status !== 'Cancelada' && s.status !== 'Pré-venda');
-      // Look for payments registered on this day (ignoring debtor balance setup logs)
       const payments = group.transactions.filter(t => t.type === 'payment' && t.paymentMethod !== 'Fiado');
 
       const salesSum = activeSales.reduce((acc, s) => acc + s.total, 0);
-      const transSum = group.transactions.reduce((acc, t) => acc + t.amount, 0);
 
       // Warn if active sales were made but no payments recorded (excluding pure credit/Fiado sales)
       if (activeSales.length > 0 && activeSales.every(s => s.paymentMethod !== 'Fiado') && payments.length === 0) {
@@ -232,25 +291,19 @@ export default function Finance() {
           transactions: []
         });
       } else if (activeSales.length === 0 && group.transactions.length > 0) {
-        // Only classify as "Lançamento Sem Venda Base" if there are actual orphan target transactions.
-        // A transaction is NOT an orphan if:
-        // - It is of type 'expense' (no customer or sale expected)
-        // - It has a saleId that corresponds to an existing sale in 'sales' (even if that sale is on a different day, as this is a compensation/deferred payment)
-        // - It does NOT have a saleId, but has a customerId that exists in 'customers' (general customer payment/amortization)
         const orphanTransactions = group.transactions.filter(t => {
           if (t.type === 'payment') {
             if (t.saleId) {
               const matchedSale = sales.find(s => s.id === t.saleId);
               if (!matchedSale) return true; // Orphan: references a non-existent sale!
-              if (matchedSale.status === 'Cancelada') return false; // Already reported under Category A (Cancelamentos Órfãos)
-              return false; // Legitimate payment for an active sale!
+              if (matchedSale.status === 'Cancelada') return false; 
+              return false; 
             } else {
-              // General payment: must have a valid customer reference
               if (t.customerId) {
                 const matchedCustomer = customers.find(c => c.id === t.customerId);
-                return !matchedCustomer; // Orphan: references a non-existent customer
+                return !matchedCustomer; 
               }
-              return true; // Orphan: payment with no sale and no customer reference
+              return true; 
             }
           }
           return false;
@@ -292,7 +345,6 @@ export default function Finance() {
           });
         }
       } else if (sale.status !== 'Pré-venda') {
-        // Active non-cancelled sale.
         if (sale.paymentMethod !== 'Fiado') {
           const paidSum = relatedTransactions.filter(t => t.type === 'payment').reduce((acc, t) => acc + t.amount, 0);
           if (Math.abs(paidSum - sale.total) > 0.1) {
@@ -304,7 +356,6 @@ export default function Finance() {
             });
           }
         } else {
-          // Fiado Down payment check (Initial checkout payment)
           const downPaymentVal = sale.downPayment || 0;
           if (downPaymentVal > 0) {
             const saleDate = getParsedDate(sale);
@@ -313,7 +364,6 @@ export default function Finance() {
               if (t.paymentMethod === 'Fiado') return false;
               const transDate = getParsedDate(t);
               if (!transDate || !saleDate) return false;
-              // Check if payment was registered within 60 seconds of checkout
               return Math.abs(transDate.getTime() - saleDate.getTime()) < 60000;
             });
             const sumDown = downPaymentsTrans.reduce((acc, t) => acc + t.amount, 0);
@@ -327,7 +377,6 @@ export default function Finance() {
             }
           }
 
-          // Limit of payments check: Ensure sum of all payments doesn't exceed total sale price
           const totalPaid = relatedTransactions.filter(t => t.type === 'payment' && t.paymentMethod !== 'Fiado').reduce((acc, t) => acc + t.amount, 0);
           if (totalPaid > sale.total + 0.1) {
             valueMismatches.push({
@@ -341,41 +390,108 @@ export default function Finance() {
       }
     });
 
-    const isHealthy = unreconciledCancellations.length === 0 && valueMismatches.length === 0 && missingTransactionsDays.length === 0;
+    // 3. New Insight: Gross Margin & Profit Check (Category D)
+    sales.forEach(sale => {
+      if (sale.status === 'Cancelada' || sale.status === 'Pré-venda') return;
+      const saleCost = sale.items.reduce((acc, item) => {
+        const product = products.find(p => p.id === item.productId);
+        return acc + ((product?.costPrice || 0) * item.quantity);
+      }, 0);
+      const profit = sale.total - saleCost;
+      const margin = sale.total > 0 ? (profit / sale.total) * 100 : 0;
+      if (margin < 5) {
+        suspiciousMargins.push({
+          sale,
+          revenue: sale.total,
+          cost: saleCost,
+          margin
+        });
+      }
+    });
+
+    // 4. New Insight: Customer Debt Ledger vs Saved Debt Divergence (Category E)
+    customers.forEach(c => {
+      const custSales = sales.filter(s => s.customerId === c.id && s.paymentMethod === 'Fiado' && s.status !== 'Cancelada' && s.status !== 'Pré-venda');
+      const totalDebtCreated = custSales.reduce((acc, s) => acc + (s.debtAmount !== undefined ? s.debtAmount : s.total), 0);
+      const totalPaymentsMade = transactions.filter(t => t.customerId === c.id && t.type === 'payment' && t.paymentMethod !== 'Fiado').reduce((acc, t) => acc + t.amount, 0);
+      const expectedDebt = Math.max(0, totalDebtCreated - totalPaymentsMade);
+      const savedDebt = c.totalDebt || 0;
+      if (Math.abs(savedDebt - expectedDebt) > 0.5) {
+        customerDebtMismatches.push({
+          customer: c,
+          expectedDebt,
+          savedDebt,
+          diff: Math.abs(savedDebt - expectedDebt)
+        });
+      }
+    });
+
+    // 5. New Insight: Suspicious Transactions Channels (Empty / Unknown Option) (Category F)
+    transactions.forEach(t => {
+      if (t.type === 'payment') {
+        const hasNoMethod = !t.paymentMethod || t.paymentMethod.trim() === '';
+        const isOthersWithoutNotes = t.paymentMethod === 'Outros' && (!t.notes || t.notes.trim() === '');
+        if (hasNoMethod || isOthersWithoutNotes) {
+          suspiciousTransactions.push({
+            transaction: t,
+            issue: hasNoMethod ? 'Meio de pagamento nulo' : 'Canal "Outros" sem notas descritivas'
+          });
+        }
+      }
+    });
+
+    const totalIssues = 
+      unreconciledCancellations.length + 
+      valueMismatches.length + 
+      missingTransactionsDays.length + 
+      customerDebtMismatches.length + 
+      suspiciousMargins.length + 
+      suspiciousTransactions.length;
+
+    const healthPercent = Math.max(0, Math.min(100, 100 - (totalIssues * 6)));
+    const isHealthy = totalIssues === 0;
 
     return {
       unreconciledCancellations,
       valueMismatches,
       missingTransactionsDays,
+      customerDebtMismatches,
+      suspiciousMargins,
+      suspiciousTransactions,
+      healthPercent,
       isHealthy
     };
-  }, [sales, transactions, shipments]);
+  }, [sales, transactions, shipments, customers, products]);
 
-  const handleReconcileSale = async (saleId: string) => {
+  const handleReconcileSale = (saleId: string) => {
     if (!saleId) return;
-    if (!confirm(`⚠️ FORÇAR RECONCILIAÇÃO DIGITAL ⚠️\n\nDeseja realizar a remoção imediata de todos os lançamentos financeiros de caixa e logística órfãos pertencentes à venda cancelada #${saleId.slice(-5).toUpperCase()}?\n\nIsso estornará os lançamentos do fluxo de caixa operacional para reequilibrar os relatórios com precisão de centavos!`)) {
-      return;
-    }
+    showConfirm({
+      title: "⚠️ FORÇAR RECONCILIAÇÃO DIGITAL ⚠️",
+      description: `Deseja realizar a remoção imediata de todos os lançamentos financeiros de caixa e logística órfãos pertencentes à venda cancelada #${saleId.slice(-5).toUpperCase()}? Isso estornará os lançamentos do fluxo de caixa operacional para reequilibrar os relatórios com precisão de centavos!`,
+      confirmText: "Sim, Reconciliar",
+      cancelText: "Cancelar",
+      onConfirm: async () => {
+        try {
+          const batch = writeBatch(db);
+          
+          const relatedTrans = transactions.filter(t => t.saleId === saleId);
+          relatedTrans.forEach(t => {
+            if (t.id) batch.delete(doc(db, 'transactions', t.id));
+          });
 
-    try {
-      const batch = writeBatch(db);
-      
-      const relatedTrans = transactions.filter(t => t.saleId === saleId);
-      relatedTrans.forEach(t => {
-        if (t.id) batch.delete(doc(db, 'transactions', t.id));
-      });
+          const relatedShipments = shipments.filter(sh => sh.items?.some(it => it.saleId === saleId));
+          relatedShipments.forEach(sh => {
+            if (sh.id) batch.delete(doc(db, 'shipments', sh.id));
+          });
 
-      const relatedShipments = shipments.filter(sh => sh.items?.some(it => it.saleId === saleId));
-      relatedShipments.forEach(sh => {
-        if (sh.id) batch.delete(doc(db, 'shipments', sh.id));
-      });
-
-      await batch.commit();
-      alert(`✅ Sucesso! Os lançamentos de caixa e transporte órfãos vinculados à venda #${saleId.slice(-5).toUpperCase()} foram reconciliados e excluídos do banco.`);
-    } catch (err) {
-      console.error(err);
-      alert("Erro ao executar a reconciliação fiscal no Firestore.");
-    }
+          await batch.commit();
+          showAlert("✅ Reconciliado!", `Os lançamentos de caixa e transporte órfãos vinculados à venda #${saleId.slice(-5).toUpperCase()} foram reconciliados e excluídos com sucesso.`, "success");
+        } catch (err) {
+          console.error(err);
+          showAlert("Erro", "Erro ao executar a reconciliação fiscal no Firestore.", "error");
+        }
+      }
+    });
   };
 
   const handleInspectTransaction = (tId: string) => {
@@ -385,14 +501,34 @@ export default function Finance() {
     setSalesSearch(tId);
   };
 
-  const handleDeleteTransactionInline = async (tId: string, amount: number) => {
-    if (!confirm(`⚠️ EXCLUSÃO DEFINITIVA ⚠️\n\nDeseja excluir o lançamento financeiro órfão de ${formatCurrency(amount)}?\n\nEsta ação reordenará imediatamente os relatórios, compensações, faturamentos médios e o fluxo de caixa histórico.`)) return;
+  const handleDeleteTransactionInline = (tId: string, amount: number) => {
+    showConfirm({
+      title: "⚠️ EXCLUSÃO DEFINITIVA ⚠️",
+      description: `Deseja excluir o lançamento financeiro de ${formatCurrency(amount)}? Esta ação reordenará imediatamente os relatórios, compensações, faturamentos médios e o fluxo de caixa histórico.`,
+      confirmText: "Sim, Excluir",
+      cancelText: "Cancelar",
+      onConfirm: async () => {
+        try {
+          await deleteDoc(doc(db, 'transactions', tId));
+          showAlert("✅ Excluído!", "Lançamento excluído com sucesso do banco de dados!", "success");
+        } catch (err) {
+          console.error(err);
+          showAlert("Erro", "Erro ao remover o lançamento financeiro do Firestore.", "error");
+        }
+      }
+    });
+  };
+
+  const handleFixCustomerDebt = async (customerId: string, expectedDebt: number) => {
     try {
-      await deleteDoc(doc(db, 'transactions', tId));
-      alert("✅ Lançamento excluído com sucesso do banco de dados!");
+      await updateDoc(doc(db, 'customers', customerId), {
+        totalDebt: expectedDebt,
+        updatedAt: serverTimestamp()
+      });
+      showAlert("✅ Saldo Ajustado!", "O saldo devedor do cliente foi recalculado e perfeitamente sincronizado com o histórico de compras e amortizações.", "success");
     } catch (err) {
       console.error(err);
-      alert("Erro ao remover o lançamento financeiro do Firestore.");
+      showAlert("Erro", "Erro ao corrigir o saldo devedor do cliente no Firestore.", "error");
     }
   };
 
@@ -436,114 +572,124 @@ export default function Finance() {
     }
   };
 
-  const handleCancelSale = async (sale: Sale) => {
+  const handleCancelSale = (sale: Sale) => {
     if (!sale.id) return;
     if (sale.status === 'Cancelada') {
-      alert("Esta venda já está cancelada!");
+      showAlert("Aviso", "Esta venda já está cancelada!", "warning");
       return;
     }
 
-    if (!confirm(`⚠️ CANCELAMENTO DE VENDA #${sale.id.slice(-5).toUpperCase()} ⚠️\n\nTem certeza de que deseja realizar o cancelamento completo e estornar esta venda?\n\nIsso irá:\n1. Devolver os produtos de estoque nas grades respectivas.\n2. Estornar débitos criados se for Fiado (${formatCurrency(sale.debtAmount || 0)}).\n3. Deletar os lançamentos financeiros vinculados.\n4. Remover faturamento logístico ativo.\n\nEsta operação é definitiva e altera o faturamento do ERP.`)) {
-      return;
-    }
+    showConfirm({
+      title: `⚠️ CANCELAMENTO DE VENDA #${sale.id.slice(-5).toUpperCase()} ⚠️`,
+      description: `Tem certeza de que deseja realizar o cancelamento completo e estornar esta venda? Isso devolverá produtos ao estoque, estornará débitos criados de Fiado (${formatCurrency(sale.debtAmount || 0)}), deletará envios e lançamentos financeiros associados.`,
+      confirmText: "Sim, Cancelar Venda",
+      cancelText: "Voltar",
+      onConfirm: async () => {
+        try {
+          setIsCancellingSale(sale.id!);
+          const batch = writeBatch(db);
 
-    try {
-      setIsCancellingSale(sale.id);
-      const batch = writeBatch(db);
+          // 1. Return stock of products (skip if pre-sale or if is dropshipping)
+          if (sale.status !== 'Pré-venda') {
+            for (const item of sale.items) {
+              if (item.isDropshipping || !item.productId || !item.variationId) continue;
+              
+              const prodRef = doc(db, 'products', item.productId);
+              const prodSnap = await getDoc(prodRef);
+              if (prodSnap.exists()) {
+                const productData = { id: prodSnap.id, ...prodSnap.data() } as Product;
+                const updatedVariations = productData.variations.map(v => {
+                  if (v.id === item.variationId) {
+                    return { ...v, stock: v.stock + item.quantity };
+                  }
+                  return v;
+                });
+                const updatedTotalStock = updatedVariations.reduce((acc, v) => acc + v.stock, 0);
 
-      // 1. Return stock of products (skip if pre-sale or if is dropshipping)
-      if (sale.status !== 'Pré-venda') {
-        for (const item of sale.items) {
-          if (item.isDropshipping || !item.productId || !item.variationId) continue;
-          
-          // Fetch current product to avoid overwriting newer stock
-          const prodRef = doc(db, 'products', item.productId);
-          const prodSnap = await getDoc(prodRef);
-          if (prodSnap.exists()) {
-            const productData = { id: prodSnap.id, ...prodSnap.data() } as Product;
-            const updatedVariations = productData.variations.map(v => {
-              if (v.id === item.variationId) {
-                return { ...v, stock: v.stock + item.quantity };
+                batch.update(prodRef, {
+                  variations: updatedVariations,
+                  totalStock: updatedTotalStock,
+                  updatedAt: serverTimestamp()
+                });
               }
-              return v;
-            });
-            const updatedTotalStock = updatedVariations.reduce((acc, v) => acc + v.stock, 0);
-
-            batch.update(prodRef, {
-              variations: updatedVariations,
-              totalStock: updatedTotalStock,
-              updatedAt: serverTimestamp()
-            });
+            }
           }
-        }
-      }
 
-      // 2. Revert customer debt in Firestore if Fiado
-      if (sale.customerId && sale.paymentMethod === 'Fiado' && sale.status !== 'Pré-venda') {
-        const custRef = doc(db, 'customers', sale.customerId);
-        const custSnap = await getDoc(custRef);
-        if (custSnap.exists()) {
-          const customerData = custSnap.data() as Customer;
-          const rollbackDebt = sale.debtAmount || 0;
-          const nextDebt = Math.max(0, (customerData.totalDebt || 0) - rollbackDebt);
-          
-          batch.update(custRef, {
-            totalDebt: nextDebt,
-            updatedAt: serverTimestamp()
+          // 2. Revert customer debt in Firestore if Fiado
+          if (sale.customerId && sale.paymentMethod === 'Fiado' && sale.status !== 'Pré-venda') {
+            const custRef = doc(db, 'customers', sale.customerId);
+            const custSnap = await getDoc(custRef);
+            if (custSnap.exists()) {
+              const customerData = custSnap.data() as Customer;
+              const rollbackDebt = sale.debtAmount || 0;
+              const nextDebt = Math.max(0, (customerData.totalDebt || 0) - rollbackDebt);
+              
+              batch.update(custRef, {
+                totalDebt: nextDebt,
+                updatedAt: serverTimestamp()
+              });
+            }
+          }
+
+          // 3. Delete related shipments in Firestore
+          const relatedShipments = shipments.filter(ship => ship.items?.some(i => i.saleId === sale.id));
+          relatedShipments.forEach(ship => {
+            if (ship.id) {
+              batch.delete(doc(db, 'shipments', ship.id));
+            }
           });
+
+          // 4. Delete related transactions in Firestore
+          const transactionsRef = collection(db, 'transactions');
+          const qTrans = query(transactionsRef, where('saleId', '==', sale.id));
+          const transSnap = await getDocs(qTrans);
+          transSnap.forEach(tDoc => {
+            batch.delete(doc(db, 'transactions', tDoc.id));
+          });
+
+          // 5. Update sale status to 'Cancelada'
+          const saleRef = doc(db, 'sales', sale.id!);
+          batch.update(saleRef, {
+            status: 'Cancelada',
+            history: [
+              ...(sale.history || []),
+              {
+                status: 'Cancelada',
+                updatedAt: new Date(),
+                notes: 'Venda cancelada com estorno de estoque e devolução de valores'
+              }
+            ]
+          });
+
+          await batch.commit();
+          showAlert("✅ Cancelamento Concluído!", `A venda #${sale.id!.slice(-5).toUpperCase()} foi cancelada com sucesso. O estoque e o balanço financeiro foram atualizados.`, "success");
+        } catch (err) {
+          console.error("Erro ao cancelar venda no Firestore:", err);
+          showAlert("Erro", "Não foi possível prosseguir com o cancelamento da venda. Tente novamente.", "error");
+        } finally {
+          setIsCancellingSale(null);
         }
       }
-
-      // 3. Delete related shipments in Firestore (using local state to figure out which shipments are linked)
-      const relatedShipments = shipments.filter(ship => ship.items?.some(i => i.saleId === sale.id));
-      relatedShipments.forEach(ship => {
-        if (ship.id) {
-          batch.delete(doc(db, 'shipments', ship.id));
-        }
-      });
-
-      // 4. Delete related transactions in Firestore
-      const transactionsRef = collection(db, 'transactions');
-      const qTrans = query(transactionsRef, where('saleId', '==', sale.id));
-      const transSnap = await getDocs(qTrans);
-      transSnap.forEach(tDoc => {
-        batch.delete(doc(db, 'transactions', tDoc.id));
-      });
-
-      // 5. Update sale status to 'Cancelada'
-      const saleRef = doc(db, 'sales', sale.id);
-      batch.update(saleRef, {
-        status: 'Cancelada',
-        history: [
-          ...(sale.history || []),
-          {
-            status: 'Cancelada',
-            updatedAt: new Date(),
-            notes: 'Venda cancelada com estorno de estoque e devolução de valores'
-          }
-        ]
-      });
-
-      await batch.commit();
-      alert(`✅ Sucesso! A venda #${sale.id.slice(-5).toUpperCase()} foi cancelada. O estoque foi devolvido e o balanço financeiro recalculado.`);
-    } catch (err) {
-      console.error("Erro ao cancelar venda no Firestore:", err);
-      alert("Não foi possível prosseguir com o cancelamento da venda. Tente novamente.");
-    } finally {
-      setIsCancellingSale(null);
-    }
+    });
   };
 
-  const handleDeleteExpense = async (id?: string) => {
+  const handleDeleteExpense = (id?: string) => {
     if (!id) return;
-    if (confirm("Confirmar exclusão desta despesa operadora?")) {
-      try {
-        await deleteDoc(doc(db, 'expenses', id));
-      } catch (err) {
-        console.error("Erro ao deletar despesa:", err);
-        alert("Não foi possível excluir a despesa.");
+    showConfirm({
+      title: "Confirmar Exclusão",
+      description: "Deseja realmente excluir permanentemente esta despesa operacional?",
+      confirmText: "Sim, Excluir",
+      cancelText: "Voltar",
+      onConfirm: async () => {
+        try {
+          await deleteDoc(doc(db, 'expenses', id));
+          showAlert("✅ Sucesso!", "A despesa operacional selecionada foi removida do banco.", "success");
+        } catch (err) {
+          console.error("Erro ao deletar despesa:", err);
+          showAlert("Erro", "Não foi possível excluir a despesa.", "error");
+        }
       }
-    }
+    });
   };
 
   const exportToPDF = () => {
@@ -1565,72 +1711,151 @@ export default function Finance() {
             ) : (
               /* New Auditor Tab Panel */
               <div className="p-8 space-y-8">
-                {/* 1. Explanatory Banner */}
-                <div className="p-6 bg-slate-50 border border-slate-200 rounded-[24px] space-y-4">
-                  <div className="flex items-start gap-4">
-                    <div className="size-10 bg-slate-900 text-white rounded-xl flex items-center justify-center font-bold font-sans shrink-0">
-                      %
+                {/* 1. Auditing Health Index & Explanatory Banner */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  <div className="lg:col-span-2 p-6 bg-slate-50 border border-slate-200 rounded-[24px] space-y-4">
+                    <div className="flex items-start gap-4">
+                      <div className="size-10 bg-slate-900 text-white rounded-xl flex items-center justify-center font-bold font-sans shrink-0">
+                        %
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">Como funciona o Auditor de Lançamentos de Caixa?</h4>
+                        <p className="text-[10px] text-slate-500 mt-1 leading-relaxed max-w-3xl">
+                          Nossa inteligência examina a integridade referencial cruzada entre vendas operacionais no PDV, logs físicos de fluxo de caixa, parcelamentos e tracking logístico. Ele sinaliza erros de digitação, valores órfãos gerados por estornos e divergências históricas entre o saldo devedor do cliente e seu histórico de compras.
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">Por que o Faturamento Bruto difere do Volume Rastreado nos Relatórios?</h4>
-                      <p className="text-[10px] text-slate-500 mt-1 leading-relaxed max-w-3xl">
-                        A inconsistência aparente decorre do regime e do fluxo de caixa:
-                      </p>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-200/60 text-[10px] text-slate-600 leading-relaxed font-sans">
+                      <div className="bg-white p-4.5 rounded-2xl border border-slate-100 shadow-sm">
+                        <strong className="text-red-800 uppercase block mb-1">1. Faturamento Bruto de Vendas (ERP Operational)</strong>
+                        Calcula as <strong>operações de vendas finalizadas líquidas</strong> de cancelamentos (exclui pré-vendas/orçamentos e vendas "Canceladas"). Representa a receita faturada exata do PDV.
+                      </div>
+                      <div className="bg-white p-4.5 rounded-2xl border border-slate-150 shadow-sm">
+                        <strong className="text-slate-800 uppercase block mb-1">2. Volume Rastreado de Registros (Histórico)</strong>
+                        Atua como um <strong>ledger unificado</strong> que lista faturas e amortizações de fiados de forma cumulativa. Isso pode duplicar contagens se houver furos em lançamentos manuais pós-fechamento.
+                      </div>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-200/60 text-[10px] text-slate-600 leading-relaxed font-sans">
-                    <div className="bg-white p-4.5 rounded-2xl border border-slate-100 shadow-sm">
-                      <strong className="text-red-800 uppercase block mb-1">1. Faturamento Bruto de Vendas (ERP Operational)</strong>
-                      Calcula as <strong>operações de vendas finalizadas líquidas</strong> de cancelamentos (exclui pré-vendas/orçamentos e vendas "Canceladas"). Representa a receita faturada exata do PDV.
+                  {/* Visual Health Gauge Card */}
+                  <div className="bg-white p-6 rounded-[24px] border border-slate-200 flex flex-col justify-between shadow-sm relative overflow-hidden" style={{
+                    background: 'linear-gradient(135deg, #ffffff 0%, rgba(241, 245, 249, 0.4) 100%)'
+                  }}>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Índice de Integridade</span>
+                        <span className={cn(
+                          "px-2.5 py-1 text-[8.5px] font-mono font-black rounded-lg uppercase border shadow-inner",
+                          auditResults.healthPercent >= 90 ? "bg-emerald-50 text-emerald-700 border-emerald-150" :
+                          auditResults.healthPercent >= 70 ? "bg-amber-50 text-amber-700 border-amber-150" : "bg-rose-50 text-rose-700 border-rose-150"
+                        )}>
+                          {auditResults.healthPercent >= 90 ? "Excelente" : auditResults.healthPercent >= 70 ? "Atenção" : "Crítico"}
+                        </span>
+                      </div>
+                      <div className="pt-2">
+                        <h3 className="text-3xl font-black font-display text-slate-900 tracking-tight tabular-nums flex items-baseline">
+                          {auditResults.healthPercent}%
+                        </h3>
+                        <p className="text-[9.5px] text-slate-400 font-sans leading-relaxed mt-2">
+                          {auditResults.isHealthy 
+                            ? "Todas as faturas, custos, comissões de frete e saldos sob a custódia do PDV estão perfeitamente balanceados."
+                            : "Erros referenciais ou margens negativas detectadas. Siga as recomendações de correção para otimizar seus balanços."
+                          }
+                        </p>
+                      </div>
                     </div>
-                    <div className="bg-white p-4.5 rounded-2xl border border-slate-150 shadow-sm">
-                      <strong className="text-slate-800 uppercase block mb-1">2. Volume Rastreado de Registros (Histórico)</strong>
-                      Atua como um <strong>ledger unificado</strong> que lista fisicamente faturas e amortizações de fiados de forma cumulativa. Isso pode duplicar contagens ao somar vendas brutas com transações de pagamentos de fiados subsequentes.
+
+                    <div className="space-y-2 pt-4">
+                      <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden border border-slate-200/50">
+                        <div 
+                          className={cn(
+                            "h-full rounded-full transition-all duration-700",
+                            auditResults.healthPercent >= 90 ? "bg-emerald-500" :
+                            auditResults.healthPercent >= 70 ? "bg-amber-500" : "bg-rose-600"
+                          )}
+                          style={{ width: `${auditResults.healthPercent}%` }}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between text-[8px] font-black text-slate-400 uppercase tracking-wider">
+                        <span>Ajustado</span>
+                        <span className="text-slate-800">100% Sincronizado</span>
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                {/* 2. Audit Health State */}
-                <div className="p-6 rounded-[24px] border flex flex-col md:flex-row items-center justify-between gap-6" style={{
-                  background: auditResults.isHealthy ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.05) 0%, rgba(16, 185, 129, 0) 100%)' : 'linear-gradient(135deg, rgba(234, 179, 8, 0.05) 0%, rgba(234, 179, 8, 0) 100%)',
-                  borderColor: auditResults.isHealthy ? 'rgba(16, 185, 129, 0.25)' : 'rgba(234, 179, 8, 0.25)'
-                }}>
-                  <div className="flex items-center gap-4">
+                {/* 2. Bento Grid of Audit Metrics KPIs */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                  {/* Card 1: Saúde do Ledger */}
+                  <div className="p-5 bg-white border border-slate-200 rounded-[20px] shadow-sm flex items-center gap-4">
                     <div className={cn(
-                      "size-14 rounded-2xl flex items-center justify-center shadow-lg shrink-0",
-                      auditResults.isHealthy ? "bg-emerald-600 text-white shadow-emerald-250" : "bg-amber-500 text-white shadow-amber-200"
+                      "size-10 rounded-xl flex items-center justify-center",
+                      auditResults.healthPercent >= 90 ? "bg-emerald-50 text-emerald-600" : "bg-amber-50 text-amber-600"
                     )}>
-                      {auditResults.isHealthy ? <CheckCircle size={24} /> : <AlertTriangle size={24} />}
+                      <RefreshCw size={18} className={cn(auditResults.healthPercent < 100 && "animate-spin-[15s]")} />
                     </div>
                     <div>
-                      <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest">
-                        {auditResults.isHealthy ? "Integridade do Banco Conforme (100%)" : "Divergências Encontradas no Banco"}
+                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Status Geral</p>
+                      <h4 className="text-sm font-black text-slate-800 tracking-tight uppercase mt-0.5">
+                        {auditResults.isHealthy ? "Conforme" : "Inconsistente"}
                       </h4>
-                      <p className="text-[10px] text-slate-500 mt-1 max-w-xl">
-                        {auditResults.isHealthy 
-                          ? "Todos os lançamentos financeiros de caixa, vendas registradas e estoque estão perfeitamente reconciliados e emparelhados."
-                          : "A inteligência do auditor detectou inconsistências de lançamentos que requerem reparo para consolidar os relatórios."}
-                      </p>
                     </div>
                   </div>
-                  {auditResults.isHealthy ? (
-                    <span className="px-4 py-2 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl text-[9px] font-black uppercase tracking-widest shadow-sm">
-                      Reconciliador Verde
-                    </span>
-                  ) : (
-                    <span className="px-4 py-2 bg-amber-50 text-amber-700 border border-amber-200 rounded-xl text-[9px] font-black uppercase tracking-widest shadow-sm flex items-center gap-1.5 animate-pulse">
-                      <AlertTriangle size={12} /> Requer Atenção
-                    </span>
-                  )}
+
+                  {/* Card 2: Total Pendências */}
+                  <div className="p-5 bg-white border border-slate-200 rounded-[20px] shadow-sm flex items-center gap-4">
+                    <div className="size-10 rounded-xl bg-slate-50 text-slate-600 flex items-center justify-center">
+                      <Scale size={18} />
+                    </div>
+                    <div>
+                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Total Pendências</p>
+                      <h4 className="text-sm font-black text-slate-800 tracking-tight mt-0.5">
+                        {auditResults.unreconciledCancellations.length + auditResults.valueMismatches.length + auditResults.missingTransactionsDays.length + auditResults.customerDebtMismatches.length + auditResults.suspiciousTransactions.length} Erros
+                      </h4>
+                    </div>
+                  </div>
+
+                  {/* Card 3: Margens Críticas */}
+                  <div className="p-5 bg-white border border-slate-200 rounded-[20px] shadow-sm flex items-center gap-4">
+                    <div className={cn(
+                      "size-10 rounded-xl flex items-center justify-center",
+                      auditResults.suspiciousMargins.length > 0 ? "bg-rose-50 text-rose-600" : "bg-slate-50 text-slate-600"
+                    )}>
+                      <TrendingDown size={18} />
+                    </div>
+                    <div>
+                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Vendas Margem &lt; 5%</p>
+                      <h4 className="text-sm font-black text-slate-800 tracking-tight mt-0.5">
+                        {auditResults.suspiciousMargins.length} Alertas
+                      </h4>
+                    </div>
+                  </div>
+
+                  {/* Card 4: Saldos Desalinhados de Fiados */}
+                  <div className="p-5 bg-white border border-slate-200 rounded-[20px] shadow-sm flex items-center gap-4">
+                    <div className={cn(
+                      "size-10 rounded-xl flex items-center justify-center",
+                      auditResults.customerDebtMismatches.length > 0 ? "bg-amber-50 text-amber-600 animate-pulse" : "bg-slate-50 text-slate-600"
+                    )}>
+                      <Wallet size={18} />
+                    </div>
+                    <div>
+                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Saldos Desalinhados</p>
+                      <h4 className="text-sm font-black text-slate-800 tracking-tight mt-0.5">
+                        {auditResults.customerDebtMismatches.length} Contas
+                      </h4>
+                    </div>
+                  </div>
                 </div>
 
-                {/* 3. Realtime Diagnostic Sections */}
-                <div className="space-y-6">
-                  {/* Category A: Cancelamentos Não Reconciliados */}
+                {/* 3. Realtime Diagnostic Sections (A to F) */}
+                <div className="space-y-8">
+                  
+                  {/* Category A: Cancelamentos Órfãos */}
                   <div className="space-y-3">
-                    <h5 className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                      <span className="size-2 rounded-full bg-rose-600 animate-ping" />
+                    <h5 className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                      <span className="size-2 rounded-full bg-rose-600 shrink-0" />
                       A. Cancelamentos Órfãos ({auditResults.unreconciledCancellations.length})
                     </h5>
                     
@@ -1639,10 +1864,10 @@ export default function Finance() {
                     ) : (
                       <div className="space-y-3">
                         {auditResults.unreconciledCancellations.map(item => (
-                          <div key={item.sale.id} className="p-4 bg-rose-50/50 border border-rose-100 rounded-xl flex items-center justify-between gap-4 flex-wrap">
+                          <div key={item.sale.id} className="p-4 bg-rose-50/40 border border-rose-100 rounded-xl flex items-center justify-between gap-4 flex-wrap">
                             <div>
                               <div className="flex items-center gap-2">
-                                <span className="text-[9.5px] font-mono font-black text-rose-800 uppercase bg-rose-100 border border-rose-200 px-2 py-0.5 rounded">
+                                <span className="text-[9.5px] font-mono font-black text-rose-800 uppercase bg-rose-100 border border-rose-150 px-2 py-0.5 rounded">
                                   VENDA #{item.sale.id?.slice(-5).toUpperCase()}
                                 </span>
                                 <span className="text-[9.5px] font-extrabold text-slate-700">{item.sale.customerName || 'Consumidor Final'}</span>
@@ -1665,8 +1890,8 @@ export default function Finance() {
 
                   {/* Category B: Divergência de Valores */}
                   <div className="space-y-3">
-                    <h5 className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                      <span className="size-2 rounded-full bg-amber-500" />
+                    <h5 className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                      <span className="size-2 rounded-full bg-amber-500 shrink-0" />
                       B. Diferenças de Valores de Venda / Transação ({auditResults.valueMismatches.length})
                     </h5>
 
@@ -1674,32 +1899,71 @@ export default function Finance() {
                       <p className="text-[10px] text-slate-400 italic bg-slate-50/50 p-4 border border-dashed rounded-xl">Todos os totais operacionais de vendas coincidem com os lançamentos de caixa correspondentes.</p>
                     ) : (
                       <div className="space-y-3">
-                        {auditResults.valueMismatches.map(mismatch => (
-                          <div key={mismatch.sale.id} className="p-4 bg-amber-50/40 border border-amber-100 rounded-xl flex items-center justify-between gap-4 flex-wrap">
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-[9.5px] font-mono font-black text-amber-800 uppercase bg-amber-100 border border-amber-200 px-2 py-0.5 rounded">
-                                  PEDIDO #{mismatch.sale.id?.slice(-5).toUpperCase()}
+                        {auditResults.valueMismatches.map(mismatch => {
+                          const relatedTrans = transactions.filter(t => t.saleId === mismatch.sale.id && t.type === 'payment');
+                          return (
+                            <div key={mismatch.sale.id} className="p-4 bg-amber-50/30 border border-amber-100 rounded-xl space-y-3">
+                              <div className="flex items-center justify-between gap-4 flex-wrap">
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[9.5px] font-mono font-black text-amber-800 uppercase bg-amber-100 border border-amber-200 px-2 py-0.5 rounded">
+                                      PEDIDO #{mismatch.sale.id?.slice(-5).toUpperCase()}
+                                    </span>
+                                    <span className="text-[9.5px] font-extrabold text-slate-700">{mismatch.sale.customerName || 'Consumidor Final'}</span>
+                                  </div>
+                                  <p className="text-[9.5px] text-slate-500 mt-1.5 font-sans leading-relaxed">
+                                    Canal: <strong className="text-slate-800 uppercase">{mismatch.paymentMethod}</strong> • Esperado: <strong className="text-slate-800 font-mono">{formatCurrency(mismatch.expected)}</strong> • Lançado na base de dados: <strong className="text-red-700 font-mono font-extrabold">{formatCurrency(mismatch.found)}</strong>
+                                  </p>
+                                </div>
+                                <span className="px-3 py-1 bg-amber-50 border border-amber-200 text-amber-800 rounded-lg text-[9px] font-black uppercase tracking-widest font-sans">
+                                  Valores Inconsistentes
                                 </span>
-                                <span className="text-[9.5px] font-extrabold text-slate-700">{mismatch.sale.customerName || 'Consumidor Final'}</span>
                               </div>
-                              <p className="text-[9.5px] text-slate-500 mt-1.5 font-sans leading-relaxed">
-                                Canal: <strong className="text-slate-800 uppercase">{mismatch.paymentMethod}</strong> • Esperado: <strong className="text-slate-850 font-mono">{formatCurrency(mismatch.expected)}</strong> • Lançado na base de dados: <strong className="text-slate-850 font-mono text-red-700">{formatCurrency(mismatch.found)}</strong>
-                              </p>
+
+                              {relatedTrans.length > 0 && (
+                                <div className="pt-2 border-t border-amber-200/40 space-y-2">
+                                  <p className="text-[8px] font-black uppercase text-amber-800 tracking-widest flex items-center gap-1">
+                                    <span className="size-1 rounded-full bg-amber-650 shrink-0" />
+                                    Lançamentos vinculados localizados na base de dados (Exclua duplicados):
+                                  </p>
+                                  <div className="grid grid-cols-1 gap-1.5">
+                                    {relatedTrans.map(t => (
+                                      <div key={t.id} className="flex items-center justify-between bg-white/70 p-2.5 rounded-lg border border-slate-200/60 text-[9.5px] hover:border-amber-200 transition-colors">
+                                        <div className="flex items-center gap-3">
+                                          <span className="font-mono text-slate-400 bg-slate-100 px-1 py-0.5 rounded font-bold text-[8px]">ID: {t.id?.slice(-5).toUpperCase() || 'SEM ID'}</span>
+                                          <span className="text-slate-650 font-black uppercase text-[8px]">Meio: <strong className="text-slate-800">{t.paymentMethod || 'Outros'}</strong></span>
+                                          <span className="text-slate-400 font-sans text-[8.5px]">
+                                            {t.createdAt?.seconds 
+                                              ? new Date(t.createdAt.seconds * 1000).toLocaleString('pt-BR') 
+                                              : t.createdAt ? new Date(t.createdAt).toLocaleString('pt-BR') : 'Sem data'}
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                          <strong className="text-emerald-700 font-mono">{formatCurrency(t.amount)}</strong>
+                                          <button
+                                            onClick={() => handleDeleteTransactionInline(t.id!, t.amount)}
+                                            className="p-1.5 text-slate-400 hover:text-red-700 hover:bg-rose-50 rounded-lg transition-all cursor-pointer"
+                                            title="Excluir lançamento duplicado para reconciliar"
+                                          >
+                                            <Trash2 size={12} />
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
                             </div>
-                            <span className="px-3 py-1 bg-amber-50 text-amber-700 rounded-lg text-[9.5px] font-black uppercase tracking-widest border border-amber-200 shadow-sm font-sans">
-                              Valores Inconsistentes
-                            </span>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>
 
                   {/* Category C: Dias suspeitos de dados ausentes */}
                   <div className="space-y-3">
-                    <h5 className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                      <span className="size-2 rounded-full bg-slate-400" />
+                    <h5 className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                      <span className="size-2 rounded-full bg-slate-400 shrink-0" />
                       C. Dias com Lacuna de Lançamento de Caixa / Sem Base ({auditResults.missingTransactionsDays.length})
                     </h5>
 
@@ -1710,11 +1974,11 @@ export default function Finance() {
                         {auditResults.missingTransactionsDays.map((day, idx) => {
                           const isExpanded = expandedAuditDay === day.dateString;
                           return (
-                            <div key={idx} className="bg-slate-50 border border-slate-150 rounded-xl overflow-hidden shadow-sm">
+                            <div key={idx} className="bg-slate-50 border border-slate-200 rounded-xl overflow-hidden shadow-sm">
                               <div className="p-4 flex items-center justify-between gap-4 flex-wrap">
                                 <div>
                                   <div className="flex items-center gap-2">
-                                    <span className="text-[9.5px] font-black text-slate-800 uppercase bg-slate-200 border px-2 py-0.5 rounded">
+                                    <span className="text-[9.5px] font-black text-slate-800 uppercase bg-slate-200 border border-slate-300 px-2 py-0.5 rounded">
                                       {day.dateString}
                                     </span>
                                     <span className={cn(
@@ -1724,7 +1988,7 @@ export default function Finance() {
                                   </div>
                                   <p className="text-[9.5px] text-slate-500 mt-1.5 font-sans leading-relaxed">
                                     {day.reason === 'Sem Lançamento de Entrada' 
-                                      ? `Houve ${day.salesCount} venda(s) registradas somando ${formatCurrency(day.salesTotal)}, mas nenhum lançamento de entrada em caixa foi feito neste dia. Pode faltar logar no PDV!` 
+                                      ? `Houve ${day.salesCount} venda(s) registradas somando ${formatCurrency(day.salesTotal)}, mas nenhum lançamento de entrada em caixa foi feito neste dia. Pode faltar registrar o faturamento!` 
                                       : `Houve ${day.transactionsCount} lançamentos financeiros somando ${formatCurrency(day.transactionsTotal)}, mas nenhuma venda correspondente registrada para esta data.`}
                                   </p>
                                 </div>
@@ -1732,7 +1996,7 @@ export default function Finance() {
                                 {day.reason === 'Lançamento Sem Venda Base' && (
                                   <button
                                     onClick={() => setExpandedAuditDay(isExpanded ? null : day.dateString)}
-                                    className="px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-100 rounded-lg text-[9.5px] font-black uppercase tracking-wider flex items-center gap-1 cursor-pointer text-slate-700 transition-colors"
+                                    className="px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-100 rounded-lg text-[9.5px] font-black uppercase tracking-wider flex items-center gap-1 cursor-pointer text-slate-700 transition-colors shadow-sm"
                                   >
                                     {isExpanded ? 'Ocultar Detalhes' : `Exibir Lançamentos (${day.transactionsCount})`}
                                     {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
@@ -1741,7 +2005,7 @@ export default function Finance() {
                               </div>
 
                               {isExpanded && day.reason === 'Lançamento Sem Venda Base' && (
-                                <div className="border-t border-slate-150 bg-white/70 divide-y divide-slate-100">
+                                <div className="border-t border-slate-200 bg-white/70 divide-y divide-slate-150">
                                   {day.transactions.map((t) => (
                                     <div key={t.id} className="p-3.5 px-5 flex items-center justify-between gap-4 flex-wrap">
                                       <div className="space-y-1">
@@ -1783,6 +2047,133 @@ export default function Finance() {
                       </div>
                     )}
                   </div>
+
+                  {/* Category D: Auditoria de Margem e Custos de Vendas (New!) */}
+                  <div className="space-y-3">
+                    <h5 className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                      <span className="size-2 rounded-full bg-rose-700 shrink-0 animate-pulse" />
+                      D. Alertas de Margem de Lucro Crítica / Erro de Custo ({auditResults.suspiciousMargins.length})
+                    </h5>
+
+                    {auditResults.suspiciousMargins.length === 0 ? (
+                      <p className="text-[10px] text-slate-400 italic bg-slate-50/50 p-4 border border-dashed rounded-xl">Todas as vendas ativas operam acima da margem mínima recomendada de segurança (5% lucro bruto).</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {auditResults.suspiciousMargins.map((item, idx) => {
+                          const roundedMargin = item.margin.toFixed(1);
+                          return (
+                            <div key={idx} className="p-4 bg-rose-50/20 border border-rose-100 rounded-xl flex items-center justify-between gap-4 flex-wrap">
+                              <div className="space-y-1.5">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="text-[9.5px] font-mono font-black text-rose-900 uppercase bg-rose-100 border border-rose-250 px-2 py-0.5 rounded">
+                                    VENDA #{item.sale.id?.slice(-5).toUpperCase()}
+                                  </span>
+                                  <span className="text-[9.5px] font-extrabold text-slate-700">Cliente: {item.sale.customerName || 'Consumidor Final'}</span>
+                                  <span className="text-[9px] font-black bg-rose-600 text-white uppercase px-2 py-0.5 rounded shadow-sm flex items-center gap-1">
+                                    {item.margin < 0 ? 'Lucro Negativo' : 'Margem Crítica'} ({roundedMargin}%)
+                                  </span>
+                                </div>
+                                <p className="text-[10px] text-slate-500 font-sans leading-relaxed">
+                                  Esta venda gerou faturamento de <strong className="text-slate-800">{formatCurrency(item.revenue)}</strong>, mas teve um custo estimado de aquisição de mercadorias de <strong className="text-red-800">{formatCurrency(item.cost)}</strong>.
+                                  <span className="block mt-1 text-[9px] italic text-slate-400">🚨 Dica de Auditoria: Revise se os preços de custo dos produtos vendidos ou os descontos aplicados nesta nota fiscal estavam devidamente cadastrados.</span>
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Category E: Divergência de Saldo Devedor de Clientes (New!) */}
+                  <div className="space-y-3">
+                    <h5 className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                      <span className="size-2 rounded-full bg-amber-600 shrink-0" />
+                      E. Divergência de Saldo Devedor do Cliente (Ledger vs Saved Debt) ({auditResults.customerDebtMismatches.length})
+                    </h5>
+
+                    {auditResults.customerDebtMismatches.length === 0 ? (
+                      <p className="text-[10px] text-slate-400 italic bg-slate-50/50 p-4 border border-dashed rounded-xl">Perfeito! O saldo devedor atual de todos os clientes confere exatamente com a somatória histórica do ledger.</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {auditResults.customerDebtMismatches.map((item, idx) => (
+                          <div key={idx} className="p-4 bg-amber-50/20 border border-amber-100 rounded-xl flex items-center justify-between gap-4 flex-wrap">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-black pointer-events-none text-amber-800 bg-amber-100 px-2 py-0.5 rounded uppercase">
+                                  {item.customer.name}
+                                </span>
+                                {item.customer.contact && <span className="text-[9.5px] text-slate-400 font-mono">({item.customer.contact})</span>}
+                              </div>
+                              <p className="text-[10px] text-slate-500 font-sans leading-relaxed">
+                                Cadastrado na ficha do cliente: <strong className="text-amber-800 font-mono">{formatCurrency(item.savedDebt)}</strong> • Calculado pelo ledger de compras Fiado: <strong className="text-slate-800 font-mono">{formatCurrency(item.expectedDebt)}</strong>.
+                                <span className="block mt-0.5 text-red-900 font-bold text-[9px]">Diferença absoluta: {formatCurrency(item.diff)}</span>
+                              </p>
+                            </div>
+                            <button
+                              onClick={() => handleFixCustomerDebt(item.customer.id!, item.expectedDebt)}
+                              className="px-3.5 py-2 bg-amber-650 hover:bg-amber-700 text-white rounded-xl text-[9.5px] font-black uppercase tracking-wider flex items-center gap-2 cursor-pointer transition-all active:scale-95 shadow-sm shadow-amber-200"
+                            >
+                              <RefreshCw size={11} className="animate-spin-[10s]" />
+                              Sincronizar Ledger ({formatCurrency(item.expectedDebt)})
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Category F: Lançamentos com Meio de Pagamento Suspeito (New!) */}
+                  <div className="space-y-3">
+                    <h5 className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                      <span className="size-2 rounded-full bg-slate-500 shrink-0" />
+                      F. Lançamentos com Canal de Pagamento Nulo ou Não Classificado ({auditResults.suspiciousTransactions.length})
+                    </h5>
+
+                    {auditResults.suspiciousTransactions.length === 0 ? (
+                      <p className="text-[10px] text-slate-400 italic bg-slate-50/50 p-4 border border-dashed rounded-xl">Tudo limpo! Todas as transações foram devidamente classificadas com canais de pagamento transparentes (Pix, Dinheiro, Cartão, Fiado).</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {auditResults.suspiciousTransactions.map((item, idx) => (
+                          <div key={idx} className="p-4 bg-slate-50 border border-slate-150 rounded-xl flex items-center justify-between gap-4 flex-wrap">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-[9.5px] font-mono font-black text-slate-800 bg-slate-200 px-2 py-0.5 rounded">
+                                  ID: #{item.transaction.id?.slice(-5).toUpperCase() || 'S/ID'}
+                                </span>
+                                <span className="text-[9px] font-black uppercase tracking-wider bg-rose-550 text-white px-2 py-0.5 rounded">
+                                  {item.issue}
+                                </span>
+                              </div>
+                              <p className="text-[10px] text-slate-500 font-sans">
+                                Lançamento de <strong className="text-slate-800">{formatCurrency(item.transaction.amount)}</strong> cadastrado em{" "}
+                                <strong className="text-slate-700">
+                                  {item.transaction.createdAt?.seconds 
+                                    ? new Date(item.transaction.createdAt.seconds * 1000).toLocaleString('pt-BR') 
+                                    : item.transaction.createdAt ? new Date(item.transaction.createdAt).toLocaleString('pt-BR') : 'Sem data'}
+                                </strong>
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => handleInspectTransaction(item.transaction.id!)}
+                                className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[9.5px] font-black uppercase tracking-wider transition-colors cursor-pointer"
+                              >
+                                Localizar
+                              </button>
+                              <button
+                                onClick={() => handleDeleteTransactionInline(item.transaction.id!, item.transaction.amount)}
+                                className="p-2 bg-rose-50 text-rose-700 hover:bg-rose-100 rounded-lg text-[9.5px] font-black uppercase tracking-wider transition-colors cursor-pointer"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
                 </div>
               </div>
             )}
@@ -1950,6 +2341,53 @@ export default function Finance() {
           * Apenas Transações, Vendas, Encomendas e Histórico Financeiro serão excluídos.
         </p>
       </div>
+
+      {confirmModal && confirmModal.isOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+          <div className="bg-white rounded-[32px] p-8 max-w-md w-full shadow-2xl border border-slate-150 flex flex-col space-y-6">
+            <div className={`size-14 rounded-2xl flex items-center justify-center self-center shadow-lg mb-2 ${
+              confirmModal.type === 'error' 
+                ? 'bg-rose-50 text-rose-600 shadow-rose-100' 
+                : confirmModal.type === 'success' 
+                  ? 'bg-emerald-50 text-emerald-600 shadow-emerald-100' 
+                  : 'bg-amber-50 text-amber-600 shadow-amber-100'
+            }`}>
+              <AlertCircle size={28} />
+            </div>
+            <div className="text-center space-y-3">
+              <h3 className="text-[14px] font-black text-slate-800 uppercase tracking-tight leading-snug">{confirmModal.title}</h3>
+              <p className="text-[11px] text-slate-500 font-sans leading-relaxed whitespace-pre-line">{confirmModal.description}</p>
+            </div>
+            <div className="flex gap-3 pt-2">
+              {confirmModal.showCancel !== false && (
+                <button
+                  type="button"
+                  onClick={() => setConfirmModal(prev => prev ? { ...prev, isOpen: false } : null)}
+                  className="flex-1 py-3 text-[10px] font-black uppercase tracking-wider bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl cursor-pointer transition-all active:scale-95"
+                >
+                  {confirmModal.cancelText || 'Cancelar'}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  confirmModal.onConfirm();
+                  setConfirmModal(prev => prev ? { ...prev, isOpen: false } : null);
+                }}
+                className={`flex-1 py-3 text-[10px] font-black uppercase tracking-wider text-white rounded-xl cursor-pointer transition-all active:scale-95 shadow-md ${
+                  confirmModal.type === 'error' 
+                    ? 'bg-rose-650 hover:bg-rose-700 shadow-rose-200' 
+                    : confirmModal.type === 'success' 
+                      ? 'bg-emerald-650 hover:bg-emerald-700 shadow-emerald-200' 
+                      : 'bg-red-800 hover:bg-slate-900 shadow-red-900/10'
+                }`}
+              >
+                {confirmModal.confirmText || 'Confirmar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </motion.div>
   );
 }
