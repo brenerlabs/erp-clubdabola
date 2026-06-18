@@ -309,17 +309,29 @@ export default function PDV() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: copilotText })
       });
-      if (!res.ok) throw new Error('Falha ao processar comando com IA');
+      
+      if (!res.ok) {
+        let errorMsg = 'Falha ao processar comando com IA';
+        try {
+          const errData = await res.json();
+          if (errData && errData.error) {
+            errorMsg = errData.error;
+          }
+        } catch (_) {}
+        throw new Error(errorMsg);
+      }
+      
       const data = await res.json();
 
       let addedCount = 0;
       // 1. Process items
       if (data.items && Array.isArray(data.items)) {
         data.items.forEach((item: { productSearch: string, quantity: number }) => {
-          const matchedProd = products.find(p => 
-            p.name.toLowerCase().includes(item.productSearch.toLowerCase()) || 
-            item.productSearch.toLowerCase().includes(p.name.toLowerCase())
-          );
+          const matchedProd = products.find(p => {
+            const prodName = (p.name || '').toLowerCase();
+            const searchTxt = (item.productSearch || '').toLowerCase();
+            return searchTxt && (prodName.includes(searchTxt) || searchTxt.includes(prodName));
+          });
           if (matchedProd) {
             // Pick appropriate variation or default
             const variation = matchedProd.variations && matchedProd.variations.length > 0
@@ -338,10 +350,11 @@ export default function PDV() {
 
       // 2. Process customer Name/WhatsApp
       if (data.customerName) {
-        const foundCust = customers.find(c => 
-          c.name.toLowerCase().includes(data.customerName.toLowerCase()) ||
-          data.customerName.toLowerCase().includes(c.name.toLowerCase())
-        );
+        const foundCust = customers.find(c => {
+          const custName = (c.name || '').toLowerCase();
+          const targetName = (data.customerName || '').toLowerCase();
+          return targetName && (custName.includes(targetName) || targetName.includes(custName));
+        });
         if (foundCust) {
           setSelectedCustomer(foundCust);
         } else {
@@ -823,7 +836,12 @@ export default function PDV() {
     }
   };
 
-  const filteredProducts = products.filter(p => p.name.toLowerCase().includes(search.toLowerCase()) || p.category.toLowerCase().includes(search.toLowerCase()));
+  const filteredProducts = products.filter(p => {
+    const nameLower = (p.name || '').toLowerCase();
+    const categoryLower = (p.category || '').toLowerCase();
+    const searchLower = (search || '').toLowerCase();
+    return nameLower.includes(searchLower) || categoryLower.includes(searchLower);
+  });
 
   const shareWhatsApp = (saleToShare?: any) => {
     const sale = saleToShare || lastSale;

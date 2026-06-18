@@ -8,8 +8,13 @@
   --font-serif: "Playfair Display", Georgia, serif;
   --color-primary: #7a1619;
   --color-accent: #b59247;
-  --color-sidebar: #090d16;
+  --color-sidebar: #171717;
   --color-background: #f8fafc;
+  
+  --color-slate-900: #171717;
+  --color-slate-950: #0a0a0a;
+  --color-carbon-matte: #171717;
+  --color-carbon-deep: #0a0a0a;
   
   --color-red-500: #cb4b4d;
   --color-red-600: #b5383a;

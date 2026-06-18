@@ -39,53 +39,100 @@ app.post("/api/pdv/copilot", async (req, res) => {
 
 Texto de entrada: "${text}"`;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            items: {
-              type: Type.ARRAY,
-              description: "Lista de itens extraídos do texto",
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  productSearch: { 
-                    type: Type.STRING,
-                    description: "Termo de busca do produto purificado (ex: 'Flamengo Oficial 2024' ou 'Calça Jeans')"
-                  },
-                  quantity: { 
-                    type: Type.INTEGER,
-                    description: "Quantidade solicitada (padrão 1 caso oculto)"
-                  }
-                },
-                required: ["productSearch", "quantity"]
+    const responseSchema = {
+      type: Type.OBJECT,
+      properties: {
+        items: {
+          type: Type.ARRAY,
+          description: "Lista de itens extraídos do texto",
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              productSearch: { 
+                type: Type.STRING,
+                description: "Termo de busca do produto purificado (ex: 'Flamengo Oficial 2024' ou 'Calça Jeans')"
+              },
+              quantity: { 
+                type: Type.INTEGER,
+                description: "Quantidade solicitada (padrão 1 caso oculto)"
               }
             },
-            customerName: { 
-              type: Type.STRING,
-              description: "Nome do cliente se mencionado, caso contrário nulo ou vazio"
-            },
-            customerWhatsapp: { 
-              type: Type.STRING,
-              description: "Apenas números do WhatsApp do cliente se mencionado"
-            },
-            notes: {
-              type: Type.STRING,
-              description: "Qualquer observação adicional sobre o pedido trazido pelo texto"
+            required: ["productSearch", "quantity"]
+          }
+        },
+        customerName: { 
+          type: Type.STRING,
+          description: "Nome do cliente se mencionado, caso contrário nulo ou vazio"
+        },
+        customerWhatsapp: { 
+          type: Type.STRING,
+          description: "Apenas números do WhatsApp do cliente se mencionado"
+        },
+        notes: {
+          type: Type.STRING,
+          description: "Qualquer observação adicional sobre o pedido trazido pelo texto"
+        }
+      },
+      required: ["items"]
+    };
+
+    // Retry and Fallback models strategy to handle highly loaded or temporarily unavailable models (like 503 errors)
+    // We prioritize gemini-flash-latest for high speed and reliable rate-limits.
+    const modelsToTry = ["gemini-flash-latest", "gemini-3.1-flash-lite", "gemini-3.5-flash"];
+    let lastError: any = null;
+    let resultText = "";
+
+    for (const model of modelsToTry) {
+      let retries = 1; // 1 retry per model is faster to fail-over to the next available model
+      let delay = 500; // start with a short delay for lower latency
+
+      while (retries >= 0) {
+        try {
+          console.log(`[Copilot Engine] Processando requisicao com: ${model} (${retries} tentativas)...`);
+          const response = await ai.models.generateContent({
+            model: model,
+            contents: prompt,
+            config: {
+              responseMimeType: "application/json",
+              responseSchema: responseSchema,
             }
-          },
-          required: ["items"]
+          });
+
+          if (response && response.text) {
+            resultText = response.text;
+            break; // Success! Break out of retry loop
+          }
+          throw new Error("Modelo retornou resposta vazia.");
+        } catch (err: any) {
+          lastError = err;
+          const errorMsg = String(err.message || "").toLowerCase();
+          const isTemporary = errorMsg.includes("503") || 
+                              errorMsg.includes("unavailable") || 
+                              errorMsg.includes("limit") || 
+                              errorMsg.includes("demand") ||
+                              errorMsg.includes("busy") ||
+                              errorMsg.includes("overloaded") ||
+                              errorMsg.includes("resource_exhausted");
+
+          if (isTemporary && retries > 0) {
+            console.log(`[Copilot Engine] Ajuste de conexao temporario com ${model}. Redirecionando tentativa em ${delay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            retries--;
+            delay *= 2; // Exponential backoff
+          } else {
+            console.log(`[Copilot Engine] Mudando de ${model} para proximo modelo disponivel.`);
+            break; // Stop retrying this model, proceed with the next model in modelsToTry
+          }
         }
       }
-    });
 
-    const resultText = response.text;
+      if (resultText) {
+        break; // If we completed successfully with a model, stop trying back-ups
+      }
+    }
+
     if (!resultText) {
-      throw new Error("Resposta da IA vazia");
+      throw lastError || new Error("Todos os canais de IA estao instaveis no momento. Por favor tente novamente.");
     }
 
     const parsedData = JSON.parse(resultText.trim());

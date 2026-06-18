@@ -73,7 +73,19 @@ export default function Dashboard() {
   const [genderFilter, setGenderFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [productSearch, setProductSearch] = useState('');
+  const [showProductSuggestions, setShowProductSuggestions] = useState(false);
   const [salesTableFilter, setSalesTableFilter] = useState<'all' | 'pending-fiado' | 'completed'>('all');
+
+  const suggestedProducts = React.useMemo(() => {
+    if (!productSearch.trim()) return [];
+    const term = productSearch.toLowerCase().trim();
+    return products.filter(p => 
+      (p.name || '').toLowerCase().includes(term) ||
+      (p.category || '').toLowerCase().includes(term) ||
+      (p.gender || '').toLowerCase().includes(term) ||
+      (p.id || '').toLowerCase().includes(term)
+    ).slice(0, 8);
+  }, [productSearch, products]);
   const [salesLimit, setSalesLimit] = useState(10);
   const [showInsights, setShowInsights] = useState(true);
   const [expandedSuppliers, setExpandedSuppliers] = useState<Record<string, boolean>>({});
@@ -137,25 +149,28 @@ export default function Dashboard() {
       if (sale.status === 'Pré-venda' || sale.status === 'Cancelada') return false;
       
       const matchesCustomer = customerFilter === 'all' || sale.customerId === customerFilter;
-      const matchesProduct = productFilter === 'all' || sale.items.some(item => item.productId === productFilter);
+      const matchesProduct = productFilter === 'all' || (sale.items || []).some(item => item && item.productId === productFilter);
       
-      const matchesGender = genderFilter === 'all' || sale.items.some(item => {
+      const matchesGender = genderFilter === 'all' || (sale.items || []).some(item => {
+        if (!item) return false;
         const p = products.find(prod => prod.id === item.productId);
         return p && (p.gender === genderFilter || p.gender === 'Ambos');
       });
       
-      const matchesCategory = categoryFilter === 'all' || sale.items.some(item => {
+      const matchesCategory = categoryFilter === 'all' || (sale.items || []).some(item => {
+        if (!item) return false;
         const p = products.find(prod => prod.id === item.productId);
         return p && p.category === categoryFilter;
       });
       
-      const matchesProductSearch = productSearch.trim() === '' || sale.items.some(item => {
+      const matchesProductSearch = productSearch.trim() === '' || (sale.items || []).some(item => {
+        if (!item) return false;
         const p = products.find(prod => prod.id === item.productId);
-        const term = productSearch.toLowerCase();
+        const term = (productSearch || '').toLowerCase();
         return (
-          (p && p.name.toLowerCase().includes(term)) ||
-          item.productName.toLowerCase().includes(term) ||
-          item.productId.toLowerCase().includes(term)
+          (p && (p.name || '').toLowerCase().includes(term)) ||
+          (item.productName || item.name || '').toLowerCase().includes(term) ||
+          (item.productId || '').toLowerCase().includes(term)
         );
       });
 
@@ -169,13 +184,14 @@ export default function Dashboard() {
     let totalItemsQuantity = 0;
     
     filteredSales.forEach(sale => {
-      revenue += sale.total;
-      sale.items.forEach(item => {
+      revenue += sale.total || 0;
+      (sale.items || []).forEach(item => {
+        if (!item) return;
         const product = products.find(p => p.id === item.productId);
         if (product) {
-          profit += (item.price - product.costPrice) * item.quantity;
+          profit += ((item.price || 0) - (product.costPrice || 0)) * (item.quantity || 0);
         }
-        totalItemsQuantity += item.quantity;
+        totalItemsQuantity += item.quantity || 0;
       });
     });
 
@@ -526,7 +542,8 @@ export default function Dashboard() {
   const topGiroProducts = React.useMemo(() => {
     const counts: Record<string, { id: string; name: string; category: string; quantity: number; revenue: number }> = {};
     filteredSales.forEach(sale => {
-      sale.items.forEach(item => {
+      (sale.items || []).forEach(item => {
+        if (!item) return;
         const prod = products.find(p => p.id === item.productId);
         if (prod) {
           const key = item.productId;
@@ -539,8 +556,8 @@ export default function Dashboard() {
               revenue: 0
             };
           }
-          counts[key].quantity += item.quantity;
-          counts[key].revenue += item.price * item.quantity;
+          counts[key].quantity += item.quantity || 0;
+          counts[key].revenue += (item.price || 0) * (item.quantity || 0);
         }
       });
     });
@@ -780,11 +797,12 @@ export default function Dashboard() {
     if (sales.length > 0 && stats.totalRevenue > 0) {
       const productSales: Record<string, { name: string; total: number }> = {};
       sales.filter(s => s.status !== 'Pré-venda' && s.status !== 'Cancelada').forEach(sale => {
-        sale.items.forEach(item => {
+        (sale.items || []).forEach(item => {
+          if (!item || !item.productId) return;
           if (!productSales[item.productId]) {
-            productSales[item.productId] = { name: item.name, total: 0 };
+            productSales[item.productId] = { name: item.name || item.productName || 'Sem nome', total: 0 };
           }
-          productSales[item.productId].total += item.price * item.quantity;
+          productSales[item.productId].total += (item.price || 0) * (item.quantity || 0);
         });
       });
       
@@ -899,6 +917,133 @@ export default function Dashboard() {
           title: '💤 Clientes Adormecidos: Potencial de Reativação Comercial',
           desc: `${roundedRatio.toFixed(1)}% dos seus clientes cadastrados (${inactiveCustomers.length} cliente(s)) estão sem compras recentes registradas. Envie uma oferta personalizada via WhatsApp para reaquecê-los.`
         });
+      }
+    }
+
+    // NEW INSIGHT 17: Seasonality & Peak Sales Day
+    if (completedSales.length > 0) {
+      const weekdayNames = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+      const revenueByWeekday = [0, 0, 0, 0, 0, 0, 0];
+
+      completedSales.forEach(s => {
+        let date: Date | null = null;
+        if (s.createdAt) {
+          if (typeof s.createdAt.seconds === 'number') date = new Date(s.createdAt.seconds * 1000);
+          else if (s.createdAt instanceof Date) date = s.createdAt;
+          else if (typeof s.createdAt.toDate === 'function') date = s.createdAt.toDate();
+          else if (typeof s.createdAt._seconds === 'number') date = new Date(s.createdAt._seconds * 1000);
+        }
+        if (date) {
+          const day = date.getDay();
+          revenueByWeekday[day] += s.total || 0;
+        }
+      });
+
+      let maxDayIdx = -1;
+      let maxRevenue = 0;
+      for (let i = 0; i < 7; i++) {
+        if (revenueByWeekday[i] > maxRevenue) {
+          maxRevenue = revenueByWeekday[i];
+          maxDayIdx = i;
+        }
+      }
+
+      if (maxDayIdx !== -1 && maxRevenue > 0) {
+        list.push({
+          id: 'seasonality-peak',
+          type: 'success',
+          title: `📅 Dia de Pico Comercial: ${weekdayNames[maxDayIdx]} lidera faturamento`,
+          desc: `O dia da semana com maior performance financeira registrada é ${weekdayNames[maxDayIdx]}, acumulando ${formatCurrency(maxRevenue)}. Planeje publicações nas redes sociais e reforce o atendimento comercial neste dia para capitalizar ao máximo.`
+        });
+      }
+    }
+
+    // NEW INSIGHT 18: Customized Product Elasticity / Premium Markup
+    if (completedSales.length > 0) {
+      let totalItemsCount = 0;
+      let customItemsCount = 0;
+
+      completedSales.forEach(s => {
+        (s.items || []).forEach(item => {
+          if (!item) return;
+          totalItemsCount += item.quantity || 0;
+          if (item.isCustomized || item.customName || item.customNumber) {
+            customItemsCount += item.quantity || 0;
+          }
+        });
+      });
+
+      if (totalItemsCount > 0) {
+        const customRatio = (customItemsCount / totalItemsCount) * 100;
+        if (customRatio > 15) {
+          list.push({
+            id: 'customization-high',
+            type: 'success',
+            title: '🎨 Agregação de Valor por Customização: Alto Engajamento!',
+            desc: `Celebramos o sucesso das customizações! Medimos o percentual exato e ${customRatio.toFixed(1)}% das suas peças esportivas vendidas (${customItemsCount} de ${totalItemsCount} un.) possuem personalização de Nome & Número. Esse excelente engajamento em peças exclusivas consolida um forte valor percebido e maximiza a rentabilidade das vendas.`
+          });
+        } else {
+          list.push({
+            id: 'customization-low',
+            type: 'info',
+            title: '🎨 Agregação de Valor por Customização: Oportunidade de Ticket Médio',
+            desc: `Apenas ${customRatio.toFixed(1)}% de todos os itens vendidos (${customItemsCount} de ${totalItemsCount} un.) contam com personalização ativa de Nome & Número. Sugerimos promover ativamente essa opção premium no ato da venda no PDV para agregar valor e turbinar o ticket médio da loja.`
+          });
+        }
+      }
+    }
+
+    // NEW INSIGHT 19: Portfolio Performance by Gender
+    if (completedSales.length > 0) {
+      let maleRev = 0;
+      let femaleRev = 0;
+      let unisexRev = 0;
+
+      completedSales.forEach(s => {
+        (s.items || []).forEach(item => {
+          if (!item) return;
+          const prodObj = products.find(p => p.id === item.productId);
+          const genderStr = item.gender || prodObj?.gender || 'Ambos';
+          const itemRev = (item.price || 0) * (item.quantity || 0);
+
+          if (genderStr === 'Masculino') {
+            maleRev += itemRev;
+          } else if (genderStr === 'Feminino') {
+            femaleRev += itemRev;
+          } else {
+            unisexRev += itemRev;
+          }
+        });
+      });
+
+      const totalGenderRev = maleRev + femaleRev + unisexRev;
+      if (totalGenderRev > 0) {
+        const maleShare = (maleRev / totalGenderRev) * 100;
+        const femaleShare = (femaleRev / totalGenderRev) * 100;
+        const unisexShare = (unisexRev / totalGenderRev) * 100;
+
+        if (maleShare > 60) {
+          list.push({
+            id: 'gender-male-heavy',
+            type: 'info',
+            title: '⚽ Predomínio do Catálogo: Alta Demanda Masculina',
+            desc: `O segmento Masculino responde por ${maleShare.toFixed(1)}% da receita de produtos (${formatCurrency(maleRev)}). Considere lançar coleções Femininas ou expandir o estoque unissex para equilibrar o público comercial.`
+          });
+        } else if (femaleShare > 40) {
+          list.push({
+            id: 'gender-female-heavy',
+            type: 'success',
+            title: '👚 Força Feminina: Engajamento Público Feminino',
+            desc: `Excelente engajamento feminino! O público de moda feminina representa expressivos ${femaleShare.toFixed(1)}% das suas vendas. Continue diversificando coleções exclusivas com corte feminino.`
+          });
+        } else {
+          list.push({
+            id: 'gender-balanced',
+            type: 'success',
+            title: '⚖️ Equilíbrio Demográfico: Público Unificado e Diversificado',
+            desc: `Sua marca se conecta com todos! O faturamento está saudavelmente distribuído entre Masculino (${maleShare.toFixed(1)}%), Feminino (${femaleShare.toFixed(1)}%) e Unissex (${unisexShare.toFixed(1)}%). Isso reduz dependências de nichos de mercado.`
+          });
+        }
       }
     }
 
@@ -1372,7 +1517,7 @@ export default function Dashboard() {
             <div className="bg-white px-4 py-2.5 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3 group relative">
               <div className="size-8 bg-amber-500/10 text-amber-600 rounded-lg flex items-center justify-center shrink-0">
                  <Search size={14} />
-              </div>
+               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1 font-sans">Buscar Produto</p>
                 <input 
@@ -1380,16 +1525,58 @@ export default function Dashboard() {
                   placeholder="PRODUTO OU SKU..."
                   className="w-full bg-transparent font-black text-slate-900 outline-none text-[11px] placeholder:text-slate-300 uppercase tracking-tight"
                   value={productSearch}
-                  onChange={e => setProductSearch(e.target.value)}
+                  onChange={e => {
+                    setProductSearch(e.target.value);
+                    setShowProductSuggestions(true);
+                  }}
+                  onFocus={() => setShowProductSuggestions(true)}
+                  onBlur={() => {
+                    // Slight timeout to allow clicks to register
+                    setTimeout(() => setShowProductSuggestions(false), 200);
+                  }}
                 />
               </div>
               {productSearch && (
                 <button 
-                  onClick={() => setProductSearch('')}
+                  onClick={() => {
+                    setProductSearch('');
+                    setShowProductSuggestions(false);
+                  }}
                   className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 bg-slate-50 rounded"
                 >
                   <X size={12} />
                 </button>
+              )}
+
+              {/* Suggestions Dropdown */}
+              {showProductSuggestions && suggestedProducts.length > 0 && (
+                <div className="absolute left-0 right-0 top-full mt-2 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto divide-y divide-slate-100 font-sans">
+                  {suggestedProducts.map(p => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onMouseDown={(e) => {
+                        // Prevent loss of focus on the input which triggers onBlur too early
+                        e.preventDefault();
+                      }}
+                      onClick={() => {
+                        setProductSearch(p.name);
+                        setShowProductSuggestions(false);
+                      }}
+                      className="w-full text-left px-4 py-2.5 hover:bg-slate-50 flex items-center justify-between gap-3 transition-colors"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-bold text-slate-700 uppercase truncate tracking-tight">{p.name}</p>
+                        <p className="text-[9px] text-slate-400 uppercase tracking-wide truncate">{p.category} • SKU/ID: {p.id?.substring(0, 8)}</p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <span className="text-[10px] font-bold text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded">
+                          {p.totalStock} Un.
+                        </span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
               )}
             </div>
 

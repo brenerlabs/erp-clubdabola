@@ -14,7 +14,6 @@ export default function Customers() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [search, setSearch] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [filterPending, setFilterPending] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
@@ -44,17 +43,6 @@ export default function Customers() {
       setIsSidebarOpen(true);
     }
   }, [isModalOpen, isHistoryOpen, setIsSidebarOpen]);
-
-  // Debounce search
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedSearch(search);
-    }, 500);
-
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [search]);
 
   useEffect(() => {
     const q = query(collection(db, 'customers'), orderBy('name', 'asc'));
@@ -583,7 +571,7 @@ export default function Customers() {
   };
 
   const filtered = customers.filter(c => {
-    const term = debouncedSearch.toLowerCase();
+    const term = search.toLowerCase();
     const matchesSearch = (c.name || '').toLowerCase().includes(term) || (c.contact || '').includes(term);
     const matchesDebt = filterDebt === 'has-debt' ? c.totalDebt > 0 : filterDebt === 'no-debt' ? c.totalDebt <= 0 : true;
     return matchesSearch && matchesDebt;
