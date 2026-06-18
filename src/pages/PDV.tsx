@@ -3,7 +3,7 @@ import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, query, onSnapshot, addDoc, updateDoc, doc, serverTimestamp, writeBatch, orderBy, deleteDoc } from 'firebase/firestore';
 import { Product, Customer, SaleItem, Variation, Sale, generatePixPayload, getCustomerLoyaltyTier } from '../types';
 import { Search, ShoppingCart, User, Plus, Minus, Trash2, CreditCard, Banknote, QrCode, ClipboardList, Send, X, CheckCircle2, MessageCircle, FileImage, Share2, Receipt, FileText, Sparkles, HelpCircle, Camera, TrendingUp, Truck } from 'lucide-react';
-import { formatCurrency, cn, cleanObject, cleanVariationName, cleanProductNameWithVariation, formatVariationWithGender, formatProductNameWithGender } from '../lib/utils';
+import { formatCurrency, cn, cleanObject, cleanVariationName, cleanProductNameWithVariation, formatVariationWithGender, formatProductNameWithGender, smartSearchMatch } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { SidebarContext } from '../App';
 import jsPDF from 'jspdf';
@@ -328,8 +328,9 @@ export default function PDV() {
       if (data.items && Array.isArray(data.items)) {
         data.items.forEach((item: { productSearch: string, quantity: number }) => {
           const matchedProd = products.find(p => {
-            const prodName = (p.name || '').toLowerCase();
-            const searchTxt = (item.productSearch || '').toLowerCase();
+            const cleanStr = (s: string) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+            const prodName = cleanStr(p.name);
+            const searchTxt = cleanStr(item.productSearch);
             return searchTxt && (prodName.includes(searchTxt) || searchTxt.includes(prodName));
           });
           if (matchedProd) {
@@ -351,8 +352,9 @@ export default function PDV() {
       // 2. Process customer Name/WhatsApp
       if (data.customerName) {
         const foundCust = customers.find(c => {
-          const custName = (c.name || '').toLowerCase();
-          const targetName = (data.customerName || '').toLowerCase();
+          const cleanStr = (s: string) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+          const custName = cleanStr(c.name);
+          const targetName = cleanStr(data.customerName);
           return targetName && (custName.includes(targetName) || targetName.includes(custName));
         });
         if (foundCust) {
@@ -837,10 +839,7 @@ export default function PDV() {
   };
 
   const filteredProducts = products.filter(p => {
-    const nameLower = (p.name || '').toLowerCase();
-    const categoryLower = (p.category || '').toLowerCase();
-    const searchLower = (search || '').toLowerCase();
-    return nameLower.includes(searchLower) || categoryLower.includes(searchLower);
+    return smartSearchMatch([p.name, p.category, p.id], search);
   });
 
   const shareWhatsApp = (saleToShare?: any) => {

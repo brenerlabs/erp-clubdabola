@@ -3,7 +3,7 @@ import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, where, orderBy, writeBatch } from 'firebase/firestore';
 import { Customer, Transaction, Sale, Product, generatePixPayload, getCustomerLoyaltyTier } from '../types';
 import { Plus, Search, Edit2, Trash2, Copy, User, Phone, Wallet, History, ArrowDownCircle, ArrowUpCircle, X, ShoppingBag, Star, FileText, Sparkles } from 'lucide-react';
-import { formatCurrency, cn, cleanVariationName, cleanProductNameWithVariation, formatVariationWithGender, formatProductNameWithGender } from '../lib/utils';
+import { formatCurrency, cn, cleanVariationName, cleanProductNameWithVariation, formatVariationWithGender, formatProductNameWithGender, smartSearchMatch } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { RollingCounter } from '../components/RollingCounter';
 import { SidebarContext } from '../App';
@@ -572,8 +572,7 @@ export default function Customers() {
   };
 
   const filtered = customers.filter(c => {
-    const term = search.toLowerCase();
-    const matchesSearch = (c.name || '').toLowerCase().includes(term) || (c.contact || '').includes(term);
+    const matchesSearch = smartSearchMatch([c.name, c.contact, c.id, c.instagram, c.observations], search);
     const matchesDebt = filterDebt === 'has-debt' ? c.totalDebt > 0 : filterDebt === 'no-debt' ? c.totalDebt <= 0 : true;
     return matchesSearch && matchesDebt;
   });

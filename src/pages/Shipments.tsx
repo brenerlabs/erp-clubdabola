@@ -9,7 +9,7 @@ import {
   ChevronRight, ArrowRight, ShoppingBag, Box, History, CheckSquare, Square, Calculator,
   Sparkles, TrendingUp, Activity, Plane, Globe, RefreshCw
 } from 'lucide-react';
-import { formatCurrency, cn, cleanVariationName, cleanProductNameWithVariation, formatVariationWithGender, formatProductNameWithGender } from '../lib/utils';
+import { formatCurrency, cn, cleanVariationName, cleanProductNameWithVariation, formatVariationWithGender, formatProductNameWithGender, smartSearchMatch } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 
 const SHIPMENT_STATUSES = [
@@ -1387,10 +1387,15 @@ export default function Shipments() {
   };
 
   const filtered = shipments.filter(s => {
-    const matchesSearch = s.trackingCode.toLowerCase().includes(search.toLowerCase()) ||
-      s.supplierName?.toLowerCase().includes(search.toLowerCase()) ||
-      s.items.some(i => i.customerName.toLowerCase().includes(search.toLowerCase())) ||
-      (search.toLowerCase() === 'dropshipping' && s.items.some(i => i.isDropshipping));
+    const normalizedTerm = search.toLowerCase().trim();
+    const matchesSearch = normalizedTerm === 'dropshipping'
+      ? s.items.some(i => i.isDropshipping)
+      : smartSearchMatch([
+          s.trackingCode, 
+          s.supplierName, 
+          ...(s.items || []).map(i => i.customerName), 
+          ...(s.items || []).map(i => i.productName)
+        ], search);
       
     const matchesStatus = statusFilter === 'all' || s.status === statusFilter;
     

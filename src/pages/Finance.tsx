@@ -34,7 +34,7 @@ import {
   Scale,
   RefreshCw
 } from 'lucide-react';
-import { formatCurrency, cn, cleanVariationName, cleanProductNameWithVariation, formatVariationWithGender, formatProductNameWithGender } from '../lib/utils';
+import { formatCurrency, cn, cleanVariationName, cleanProductNameWithVariation, formatVariationWithGender, formatProductNameWithGender, smartSearchMatch } from '../lib/utils';
 import { motion } from 'motion/react';
 import { RollingCounter } from '../components/RollingCounter';
 import jsPDF from 'jspdf';
@@ -1404,10 +1404,7 @@ export default function Finance() {
                     if (isAdjustment) return false;
 
                     // 1. Search filter
-                    const term = salesSearch.toLowerCase().trim();
-                    const matchesSearch = !term || 
-                      (s.customerName || 'Consumidor Final').toLowerCase().includes(term) ||
-                      (s.id || '').toLowerCase().includes(term);
+                    const matchesSearch = smartSearchMatch([s.customerName || 'Consumidor Final', s.id], salesSearch);
 
                     if (!matchesSearch) return false;
 
@@ -1659,9 +1656,8 @@ export default function Finance() {
                     if (filter !== 'all' && t.type !== filter) return false;
  
                     // 2. Search match (customer or transaction id)
-                    const term = salesSearch.toLowerCase().trim();
-                    const customerNameVal = getCustomerName(t.customerId).toLowerCase();
-                    const matchesSearch = !term || customerNameVal.includes(term) || (t.id || '').toLowerCase().includes(term);
+                    const customerNameVal = getCustomerName(t.customerId);
+                    const matchesSearch = smartSearchMatch([customerNameVal, t.id], salesSearch);
                     if (!matchesSearch) return false;
  
                     // 3. Payment Method (Type) Filter

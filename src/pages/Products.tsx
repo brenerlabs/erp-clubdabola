@@ -3,7 +3,7 @@ import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, orderBy, writeBatch } from 'firebase/firestore';
 import { Product, Variation, Sale } from '../types';
 import { Plus, Search, Edit2, Trash2, Copy, Package, Box, X, Eye, FileText, Download, TrendingUp, ShoppingBag, Users, Calendar, Calculator, DollarSign, Percent, ChevronDown, ChevronRight } from 'lucide-react';
-import { formatCurrency, calculateMargin, calculateMarkup, cn, cleanVariationName } from '../lib/utils';
+import { formatCurrency, calculateMargin, calculateMarkup, cn, cleanVariationName, smartSearchMatch } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { SidebarContext } from '../App';
 import jsPDF from 'jspdf';
@@ -598,14 +598,14 @@ export default function Products() {
   }, [sales]);
 
   const filtered = products.filter(p => {
-    const searchTerm = search.toLowerCase();
+    const searchTerm = search.toLowerCase().trim();
     
     // Text search
     const matchesSearch = searchTerm === 'estoque baixo' 
       ? (p.totalStock || 0) <= (p.minStock || 0) && !p.isDropshipping
       : searchTerm === 'dropshipping'
         ? p.isDropshipping
-        : p.name.toLowerCase().includes(searchTerm) || p.category.toLowerCase().includes(searchTerm);
+        : smartSearchMatch([p.name, p.category, p.id], search);
 
     // Category filter
     const matchesCategory = filterCategory === 'Todas' || p.category === filterCategory;

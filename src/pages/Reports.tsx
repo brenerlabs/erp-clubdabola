@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../lib/firebase';
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { Sale, Shipment, Transaction, Customer, Product } from '../types';
-import { formatCurrency, cn } from '../lib/utils';
+import { formatCurrency, cn, smartSearchMatch } from '../lib/utils';
 import { 
   Search, 
   Filter, 
@@ -204,13 +204,13 @@ export default function Reports() {
   const filteredRecords = React.useMemo(() => {
     return unifiedRecords.filter(rec => {
       // 1. Text search (ID, Customer Name, Tracking Code, Product Name)
-      const queryLower = searchQuery.toLowerCase();
-      const matchesSearch = !searchQuery || 
-        rec.id.toLowerCase().includes(queryLower) ||
-        rec.originalRefId.toLowerCase().includes(queryLower) ||
-        rec.customerName.toLowerCase().includes(queryLower) ||
-        rec.linkedTrackingCode?.toLowerCase().includes(queryLower) ||
-        rec.itemsSummary.some(it => it.name.toLowerCase().includes(queryLower));
+      const matchesSearch = smartSearchMatch([
+        rec.id,
+        rec.originalRefId,
+        rec.customerName,
+        rec.linkedTrackingCode,
+        ...(rec.itemsSummary || []).map(it => it.name)
+      ], searchQuery);
 
       // 2. Product filter
       const matchesProduct = selectedProductId === 'all' || 
@@ -429,7 +429,7 @@ export default function Reports() {
       reportTitle = "Estatísticas de Desempenho de Produtos";
       headers = [['Métrica', 'Produto', 'Unidades Vendidas', 'Total Faturado', 'Vendas Cruzadas']];
       body = productStats
-        .filter(p => !searchQuery || p.name.toLowerCase().includes(searchQuery.toLowerCase()))
+        .filter(p => smartSearchMatch([p.name, p.id], searchQuery))
         .map((it, idx) => [
           `#${idx + 1}`,
           it.name,
@@ -441,7 +441,7 @@ export default function Reports() {
       reportTitle = "Histórico de Performance e LTV de Clientes";
       headers = [['Cliente', 'Totais Gastos (LTV)', 'Pedidos Concluídos', 'Itens Comprados', 'Última Compra']];
       body = customerStats
-        .filter(c => !searchQuery || c.name.toLowerCase().includes(searchQuery.toLowerCase()))
+        .filter(c => smartSearchMatch([c.name, c.id], searchQuery))
         .map(cStat => [
           cStat.name,
           formatCurrency(cStat.spentTotal),
@@ -898,7 +898,7 @@ export default function Reports() {
                         </tr>
                       ) : (
                         productStats
-                          .filter(p => !searchQuery || p.name.toLowerCase().includes(searchQuery.toLowerCase()))
+                          .filter(p => smartSearchMatch([p.name, p.id], searchQuery))
                           .map((it, idx) => (
                             <tr key={it.id} className="hover:bg-slate-50/30 transition-colors">
                               <td className="p-4 px-6">
@@ -1002,7 +1002,7 @@ export default function Reports() {
                       </tr>
                     ) : (
                       customerStats
-                        .filter(c => !searchQuery || c.name.toLowerCase().includes(searchQuery.toLowerCase()))
+                        .filter(c => smartSearchMatch([c.name], searchQuery))
                         .map((cStat) => (
                           <tr key={cStat.id} className="hover:bg-slate-50/30 transition-colors">
                             <td className="p-4 px-6 font-bold text-slate-900 text-sm uppercase">{cStat.name}</td>

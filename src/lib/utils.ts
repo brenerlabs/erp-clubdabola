@@ -182,3 +182,28 @@ export function cleanObject(obj: any): any {
   });
   return cleaned;
 }
+
+export function smartSearchMatch(fields: (string | undefined | null | number)[], query: string): boolean {
+  if (!query) return true;
+  
+  const normalize = (s: string) => 
+    s.normalize('NFD') // Decomposes accented characters into base character + combined accent code
+     .replace(/[\u0300-\u036f]/g, '') // Strips away all diacritical mark codes
+     .toLowerCase()
+     .trim();
+
+  const normalizedQuery = normalize(query);
+  
+  // Split using % and spaces as wildcard/AND separators
+  const terms = normalizedQuery.split(/[%\s]+/).map(t => t.trim()).filter(Boolean);
+
+  if (terms.length === 0) return true;
+
+  // Combine all searchable attributes normalized
+  const joinedFields = fields
+    .map(f => (f == null ? '' : normalize(String(f))))
+    .join(' ');
+
+  // Return true if every single term in the query is found somewhere in the combined fields string
+  return terms.every(term => joinedFields.includes(term));
+}

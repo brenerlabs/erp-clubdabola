@@ -3,7 +3,7 @@ import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, query, onSnapshot, addDoc, deleteDoc, doc, updateDoc, setDoc, getDoc, orderBy } from 'firebase/firestore';
 import { Customer, Sale, CustomerPhoto } from '../types';
 import { Plus, Search, Trash2, Camera, Upload, Image as ImageIcon, Sparkles, X, Settings, Check, HelpCircle, FileImage, Copy, Lightbulb, TrendingUp } from 'lucide-react';
-import { formatCurrency, cn } from '../lib/utils';
+import { formatCurrency, cn, smartSearchMatch } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { SidebarContext } from '../App';
 
@@ -171,7 +171,7 @@ export default function Mural() {
 
   // Filtered customers for dropdown autocomplete
   const filteredCustomers = customerSearchQuery
-    ? customers.filter(c => c.name.toLowerCase().includes(customerSearchQuery.toLowerCase()))
+    ? customers.filter(c => smartSearchMatch([c.name, c.contact, c.instagram], customerSearchQuery))
     : customers;
 
   // Sales linked to the selected customer

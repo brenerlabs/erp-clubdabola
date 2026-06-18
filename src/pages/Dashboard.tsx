@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../lib/firebase';
 import { collection, query, onSnapshot, orderBy, limit, doc, updateDoc, writeBatch, serverTimestamp, getDoc } from 'firebase/firestore';
 import { Transaction, Sale, Product, Customer, Shipment, Expense } from '../types';
-import { formatCurrency, cn } from '../lib/utils';
+import { formatCurrency, cn, smartSearchMatch } from '../lib/utils';
 import { RollingCounter } from '../components/RollingCounter';
 import { 
   TrendingUp, 
@@ -81,12 +81,8 @@ export default function Dashboard() {
 
   const suggestedProducts = React.useMemo(() => {
     if (!productSearch.trim()) return [];
-    const term = productSearch.toLowerCase().trim();
     return products.filter(p => 
-      (p.name || '').toLowerCase().includes(term) ||
-      (p.category || '').toLowerCase().includes(term) ||
-      (p.gender || '').toLowerCase().includes(term) ||
-      (p.id || '').toLowerCase().includes(term)
+      smartSearchMatch([p.name, p.category, p.gender, p.id], productSearch)
     ).slice(0, 8);
   }, [productSearch, products]);
   const [salesLimit, setSalesLimit] = useState(10);
@@ -219,12 +215,7 @@ export default function Dashboard() {
       const matchesProductSearch = productSearch.trim() === '' || (sale.items || []).some(item => {
         if (!item) return false;
         const p = products.find(prod => prod.id === item.productId);
-        const term = (productSearch || '').toLowerCase();
-        return (
-          (p && (p.name || '').toLowerCase().includes(term)) ||
-          (item.productName || item.name || '').toLowerCase().includes(term) ||
-          (item.productId || '').toLowerCase().includes(term)
-        );
+        return smartSearchMatch([p?.name, item.productName, item.name, item.productId], productSearch);
       });
 
       return matchesCustomer && matchesProduct && matchesGender && matchesCategory && matchesProductSearch;
