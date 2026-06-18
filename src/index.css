@@ -6,36 +6,41 @@
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
   --font-display: "Outfit", sans-serif;
   --font-serif: "Playfair Display", Georgia, serif;
-  --color-primary: #7a1619;
-  --color-accent: #b59247;
-  --color-sidebar: #171717;
-  --color-background: #f8fafc;
   
-  --color-slate-900: #171717;
-  --color-slate-950: #0a0a0a;
-  --color-carbon-matte: #171717;
-  --color-carbon-deep: #0a0a0a;
+  /* Brand Crimson & Slate Theme Colors mapped to root variables */
+  --color-primary: #be123c; /* brand deep crimson red */
+  --color-accent: #e11d48; /* bright premium scarlet */
+  --color-sidebar: #0f172a; /* deep navy/slate sidebar */
+  --color-background: #f8fafc; /* smooth light-grey background */
   
-  --color-red-500: #cb4b4d;
-  --color-red-600: #b5383a;
-  --color-red-700: #9b282a;
-  --color-red-800: #7a1619;
-  --color-red-900: #4f0b0d;
+  --color-slate-900: #0f172a;
+  --color-slate-950: #020617;
+  
+  /* Redefining red palette to a beautiful scarlet-crimson luxury gradient range */
+  --color-red-500: #f43f5e;
+  --color-red-600: #e11d48;
+  --color-red-700: #be123c;
+  --color-red-800: #9f1239;
+  --color-red-900: #881337;
+  
+  /* Emerald/Green kept elegant for micro profit numbers */
+  --color-emerald-500: #10b981;
+  --color-emerald-600: #059669;
 }
 
 body {
-  @apply font-sans text-slate-800 antialiased bg-[#f6f8fa] selection:bg-rose-100 selection:text-rose-950;
+  @apply font-sans antialiased text-slate-800 bg-[#f8fafc] selection:bg-rose-500/10 selection:text-red-700;
 }
 
 /* Global Font Overrides for High-Fidelity Swiss Design Feel */
 h1, h2, h3, h4, h5, h6 {
   font-family: "Outfit", sans-serif !important;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.015em;
 }
 
-/* Universal Light Mode Styles - Clean & High Contrast */
+/* Bright/Polished Theme Card & Section Dynamics */
 .bg-white {
-  background-color: #ffffff !important; /* Pure white card backgrounds */
+  background-color: #ffffff !important;
 }
 
 header.bg-white, header img, div.bg-white, section.bg-white {
@@ -43,78 +48,61 @@ header.bg-white, header img, div.bg-white, section.bg-white {
 }
 
 .bg-slate-50 {
-  background-color: #f8fafc !important; /* Soft off-white matching body */
+  background-color: #f8fafc !important; /* Soft backdrop */
 }
 
 .bg-slate-100 {
-  background-color: #f1f5f9 !important; /* Soft light gray */
+  background-color: #f1f5f9 !important; /* Slightly more distinct panel grey */
 }
 
-/* High Contrast Readable Text Overrides to prevent low visibility */
-.text-slate-900, .text-slate-850, .text-slate-800 {
-  color: #0d121f !important; /* Strong dark charcoal for headings/text */
+/* Slate & Crimson High contrast texts */
+.text-slate-900, .text-slate-850, .text-slate-800, .text-slate-950 {
+  color: #0f172a !important; 
 }
 
-.text-slate-700, .text-slate-650, .text-slate-600 {
-  color: #2c3a4e !important; /* Highly legible dark slate for secondary text */
+.text-slate-700, .text-slate-655, .text-slate-600 {
+  color: #334155 !important;
 }
 
 .text-slate-500, .text-slate-400 {
-  color: #5d6f88 !important; /* Muted slate gray for subtitles/labels */
+  color: #64748b !important;
 }
 
-.border-slate-50, .border-slate-100, .border-slate-200, .border-slate-350, .border-slate-300 {
-  border-color: rgba(226, 232, 240, 0.75) !important; /* Translucent, delicate high-end borders */
+/* Crisp and subtle micro lines */
+.border-slate-50, .border-slate-100, .border-slate-200, .border-slate-300, .border-slate-350, .border-stone-100, .border-stone-200 {
+  border-color: #e2e8f0 !important;
 }
 
-/* Table Enhancements */
+/* Table Enhancements in High Performance Slate & Crimson Mode */
 table {
-  background-color: #ffffff;
+  background-color: #ffffff !important;
 }
 tr {
   transition: all 0.2s ease-in-out;
 }
 tr:hover {
-  background-color: #f8fafc !important;
+  background-color: rgba(190, 18, 60, 0.02) !important;
 }
 th {
-  background-color: #f1f5f9 !important;
-  color: #475569 !important;
+  background-color: #f8fafc !important;
+  color: #be123c !important; /* Crimson headings */
   font-family: "Outfit", sans-serif !important;
   text-transform: uppercase;
   font-weight: 600;
-  letter-spacing: 0.15em;
+  letter-spacing: 0.1em;
 }
 
+/* Forms & Inputs styled for Premium usage */
 input, select, textarea {
   background-color: #ffffff !important;
   color: #0f172a !important;
   border-color: #cbd5e1 !important;
 }
 
-/* Restabelecer estilos para containers escuros (como o painel de Checkout no PDV) */
-.bg-slate-900 input, .bg-slate-900 select, .bg-slate-900 textarea,
-.bg-slate-950 input, .bg-slate-950 select, .bg-slate-950 textarea,
-.bg-slate-950 select option, .bg-slate-900 select option,
-.dark input, .dark select, .dark textarea,
-[data-theme="dark"] input, [data-theme="dark"] select, [data-theme="dark"] textarea {
-  background-color: rgba(255, 255, 255, 0.05) !important;
-  color: #f1f5f9 !important;
-  border-color: rgba(255, 255, 255, 0.1) !important;
-}
-
 input:focus, select:focus, textarea:focus {
   outline: none !important;
-  border-color: #7a1619 !important;
-  box-shadow: 0 0 0 1px #7a1619 !important;
-}
-
-.bg-slate-900 input:focus, .bg-slate-900 select:focus, .bg-slate-900 textarea:focus,
-.bg-slate-950 input:focus, .bg-slate-950 select:focus, .bg-slate-950 textarea:focus,
-.dark input:focus, .dark select:focus, .dark textarea:focus {
-  outline: none !important;
-  border-color: #b59247 !important;
-  box-shadow: 0 0 0 1px #b59247 !important;
+  border-color: #be123c !important;
+  box-shadow: 0 0 0 1px #be123c !important;
 }
 
 select option {
@@ -122,52 +110,43 @@ select option {
   color: #0f172a !important;
 }
 
-.bg-slate-900 select option, .bg-slate-950 select option, .dark select option {
-  background-color: #0f172a !important;
-  color: #ffffff !important;
-}
-
-/* Readability for status and metrics indicators */
-.text-red-800, .text-red-900, .text-red-700 {
-  color: #7a1619 !important;
+/* Redirect custom critical alerts/buttons to exquisite crimson/scarlet gradient shades */
+.text-red-800, .text-red-900, .text-red-700, .text-red-600 {
+  color: #be123c !important; /* Premium brand deep crimson red */
 }
 
 td.text-red-800, span.text-red-800 {
-  color: #7a1619 !important;
+  color: #be123c !important;
 }
 
-/* Shadow Optimizations: beautiful deep, diffuse executive shadows */
+/* Elegant shadow dynamics */
 .shadow-sm {
-  box-shadow: 0 1px 3px rgba(9, 13, 22, 0.02), 0 1px 2px rgba(9, 13, 22, 0.01) !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04) !important;
 }
 .shadow-md {
-  box-shadow: 0 12px 32px -4px rgba(9, 13, 22, 0.04), 0 2px 8px -2px rgba(9, 13, 22, 0.02) !important;
+  box-shadow: 0 8px 30px rgba(15, 23, 42, 0.04), 0 2px 8px rgba(15, 23, 42, 0.03) !important;
 }
 .shadow-xl {
-  box-shadow: 0 24px 48px -8px rgba(9, 13, 22, 0.06), 0 4px 16px -4px rgba(9, 13, 22, 0.02) !important;
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.06), 0 4px 12px rgba(15, 23, 42, 0.04) !important;
 }
 .shadow-2xl {
-  box-shadow: 0 40px 80px -16px rgba(9, 13, 22, 0.08), 0 8px 32px -8px rgba(9, 13, 22, 0.03) !important;
+  box-shadow: 0 35px 70px rgba(15, 23, 42, 0.09), 0 8px 24px rgba(15, 23, 42, 0.07) !important;
 }
 
-/* Custom Scrollbar Override for Light Mode */
+/* Elegant scrollbars matching crimson */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.12);
+  background: rgba(190, 18, 60, 0.15);
   border-radius: 999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.25);
-}
-
-.analytical-card {
-  /* Semantic class for Framer Motion animated cards in the dashboard */
+  background: rgba(190, 18, 60, 0.3);
 }
 
 .data-value {
@@ -175,44 +154,25 @@ td.text-red-800, span.text-red-800 {
 }
 
 .btn-primary {
-  @apply bg-amber-500 text-slate-950 px-5 py-2.5 rounded-xl font-bold text-[11px] uppercase tracking-wider hover:bg-amber-400 transition-all shadow-md active:scale-95 border-0;
+  @apply bg-gradient-to-r from-red-700 to-rose-600 text-white px-5 py-2.5 rounded-xl font-bold text-[11px] uppercase tracking-wider hover:from-red-600 hover:to-rose-500 transition-all shadow-md active:scale-95 border-0;
 }
 
 .label-analytical {
-  @apply text-[10px] font-bold uppercase tracking-widest text-[#94a3b8];
+  @apply text-[10px] font-bold uppercase tracking-widest text-[#64748b];
 }
 
-/* iOS Safari Automatic Zoom Prevention & Touch Optimizations */
-@media (max-width: 768px) {
-  input, select, textarea, input:focus, select:focus, textarea:focus {
-    font-size: 16px !important;
-  }
-}
-
-/* Hide scrollbars for sliders and horizontal nav menus */
-.no-scrollbar::-webkit-scrollbar {
-  display: none !important;
-}
-.no-scrollbar {
-  -ms-overflow-style: none !important;  /* IE and Edge */
-  scrollbar-width: none !important;  /* Firefox */
-  overflow-y: hidden;
-}
-
-/* Smooth physics scrolling on iOS devices */
-.overflow-momentum {
-  -webkit-overflow-scrolling: touch;
-}
-
-/* Global High-Fidelity Executive Font-Weight Map */
+/* Refined corporate weights */
 .font-black, .font-extrabold {
-  font-weight: 700 !important; /* Elegant corporate bold instead of harsh/exaggerated black */
+  font-weight: 700 !important;
 }
 .font-bold {
-  font-weight: 600 !important; /* Refined semibold for subtle body hierarchy */
+  font-weight: 600 !important;
 }
 .font-semibold {
-  font-weight: 500 !important; /* Medium weight for beautiful metadata indicators */
+  font-weight: 500 !important;
 }
 
-
+/* Custom crimson indicator glows */
+.shadow-glow {
+  box-shadow: 0 0 12px #f43f5e !important;
+}

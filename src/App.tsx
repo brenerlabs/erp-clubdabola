@@ -239,8 +239,8 @@ export default function App() {
       <div className="flex h-screen font-sans overflow-hidden relative bg-gradient-to-tr from-[#f8fafc] via-[#f1f5f9] to-[#e2e8f0] text-slate-900">
         
         {/* Subtle Elegant Ambient Background Gradient Glows */}
-        <div className="absolute top-[-150px] left-[-150px] w-[500px] h-[500px] bg-red-800/10 rounded-full blur-[130px] pointer-events-none" />
-        <div className="absolute bottom-[-100px] right-[50px] w-[600px] h-[600px] bg-amber-500/10 rounded-full blur-[160px] pointer-events-none" />
+        <div className="absolute top-[-150px] left-[-150px] w-[500px] h-[500px] bg-rose-600/5 rounded-full blur-[130px] pointer-events-none" />
+        <div className="absolute bottom-[-100px] right-[50px] w-[600px] h-[600px] bg-red-700/5 rounded-full blur-[160px] pointer-events-none" />
       
       {/* Modern Sidebar - Strictly for Desktop (hidden on mobile) */}
       <AnimatePresence mode="wait">
@@ -261,7 +261,7 @@ export default function App() {
                 animate={{ opacity: 1 }}
                 className="flex items-center gap-3"
               >
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-white border border-slate-850 shadow-lg group-hover:scale-110 transition-transform overflow-hidden relative">
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-white border border-slate-800 shadow-lg group-hover:scale-110 transition-transform overflow-hidden relative">
                   {logoUrl ? (
                     <img 
                       src={logoUrl} 
@@ -277,7 +277,7 @@ export default function App() {
 
                 {isSidebarOpen && (
                   <h1 className="text-white font-bold tracking-tight leading-none text-sm font-display">
-                    ERP CLUB DA <span className="text-amber-500 uppercase font-display">BOLA</span>
+                    ERP CLUB DA <span className="text-red-700 uppercase font-display">BOLA</span>
                   </h1>
                 )}
               </motion.div>
@@ -293,11 +293,11 @@ export default function App() {
                   className={cn(
                     "w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all text-sm font-bold group",
                     activePage === item.id 
-                      ? 'bg-red-800 text-white shadow-lg shadow-red-900/20 border border-white/10' 
+                      ? 'bg-gradient-to-r from-red-700 to-rose-600 text-white shadow-lg shadow-red-700/20 border border-red-500/20' 
                       : 'text-slate-400 hover:bg-white/5 hover:text-slate-100'
                   )}
                 >
-                  <item.icon size={20} className={cn(activePage === item.id ? 'text-white' : 'text-slate-500 group-hover:text-amber-500 transition-colors')} />
+                  <item.icon size={20} className={cn(activePage === item.id ? 'text-white' : 'text-slate-500 group-hover:text-red-500 transition-colors')} />
                   {isSidebarOpen && <span className="tracking-tight">{item.label}</span>}
                   {isSidebarOpen && activePage === item.id && (
                     <motion.div layoutId="activeIndicator" className="ml-auto w-1.5 h-1.5 bg-white rounded-full shadow-glow" />
@@ -308,11 +308,11 @@ export default function App() {
 
             <div className="p-4 mt-auto border-t border-slate-800/50 space-y-4">
               {isSidebarOpen && (
-                <div className="bg-amber-500/5 p-4 rounded-2xl border border-amber-500/10">
-                  <p className="text-[10px] uppercase font-black text-amber-500 mb-1 tracking-widest">Base de Dados</p>
+                <div className="bg-red-700/5 p-4 rounded-2xl border border-red-500/10 animate-pulse">
+                  <p className="text-[10px] uppercase font-black text-red-700 mb-1 tracking-widest">Base de Dados</p>
                   <button 
                     onClick={handleSeed}
-                    className="mt-2 w-full text-[10px] bg-slate-800 text-white py-2 px-3 rounded-xl font-black uppercase hover:bg-red-800 transition-all border border-slate-700 font-sans"
+                    className="mt-2 w-full text-[10px] bg-gradient-to-r from-red-700 to-rose-600 text-white py-2 px-3 rounded-xl font-black uppercase hover:from-red-600 hover:to-rose-500 transition-all border-0 font-sans shadow-md"
                   >
                     Importar Excel
                   </button>
@@ -354,12 +354,12 @@ export default function App() {
                         referrerPolicy="no-referrer" 
                       />
                     ) : (
-                      <LayoutDashboard size={16} className="text-amber-600" />
+                      <LayoutDashboard size={16} className="text-red-700" />
                     )}
                   </div>
                   <div className="flex flex-col -space-y-0.5">
-                    <span className="text-xs font-black uppercase tracking-tight text-slate-900 font-sans">
-                      ERP CLUB DA <span className="text-red-800 uppercase">BOLA</span>
+                    <span className="text-xs font-black uppercase tracking-tight text-slate-950 font-sans">
+                      ERP CLUB DA <span className="text-red-700 uppercase">BOLA</span>
                     </span>
                     <span className="text-[10px] font-bold text-slate-400 uppercase hidden sm:block tracking-widest leading-tight">
                       Inteligência e Logística
@@ -428,8 +428,8 @@ export default function App() {
                   className={cn(
                     "flex items-center gap-2 h-10 px-4 rounded-xl transition-all whitespace-nowrap text-[10px] font-bold uppercase tracking-wider shrink-0 duration-200",
                     IsActive 
-                      ? "bg-red-800 text-white shadow-md shadow-red-900/10" 
-                      : "text-slate-400 hover:text-slate-200"
+                      ? "bg-gradient-to-r from-red-700 to-rose-600 text-white shadow-md shadow-red-700/10" 
+                      : "text-slate-500 hover:text-slate-950"
                   )}
                 >
                   <item.icon size={14} className={IsActive ? 'text-white' : 'text-slate-500'} />

@@ -32,6 +32,7 @@ import {
 } from 'lucide-react';
 import { formatCurrency, cn, cleanVariationName, cleanProductNameWithVariation, formatVariationWithGender, formatProductNameWithGender } from '../lib/utils';
 import { motion } from 'motion/react';
+import { RollingCounter } from '../components/RollingCounter';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
@@ -1035,7 +1036,9 @@ export default function Finance() {
                   </div>
                   <span className="text-[11px] font-black text-slate-700 uppercase tracking-widest">{m.name}</span>
                 </div>
-                <span className="text-lg font-black text-slate-950 font-display tabular-nums tracking-tighter italic">{formatCurrency(m.value)}</span>
+                <span className="text-lg font-black text-slate-950 font-display tabular-nums tracking-tighter italic">
+                  <RollingCounter value={formatCurrency(m.value)} />
+                </span>
               </div>
             ))}
           </div>
@@ -1989,7 +1992,9 @@ function FinanceCard({ title, value, icon: Icon, color, subtitle }: any) {
           "text-[10px] font-black uppercase tracking-[0.3em] mb-2 leading-none",
           color === 'red' || color === 'black' ? "text-white/40" : "text-slate-400"
         )}>{title}</p>
-        <h4 className="text-2xl font-bold tracking-tight leading-none font-display tabular-nums uppercase">{value}</h4>
+        <h4 className="text-2xl font-bold tracking-tight leading-none font-display tabular-nums uppercase">
+          <RollingCounter value={value} />
+        </h4>
         {subtitle && (
           <>
             <div className={cn(

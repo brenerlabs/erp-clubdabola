@@ -5,6 +5,7 @@ import { Customer, Transaction, Sale, Product, generatePixPayload, getCustomerLo
 import { Plus, Search, Edit2, Trash2, Copy, User, Phone, Wallet, History, ArrowDownCircle, ArrowUpCircle, X, ShoppingBag, Star, FileText, Sparkles } from 'lucide-react';
 import { formatCurrency, cn, cleanVariationName, cleanProductNameWithVariation, formatVariationWithGender, formatProductNameWithGender } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
+import { RollingCounter } from '../components/RollingCounter';
 import { SidebarContext } from '../App';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -674,11 +675,15 @@ export default function Customers() {
         <div className="flex items-center gap-8 px-6 border-l border-slate-200 hidden lg:flex font-sans">
            <div className="text-right">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-2">Total Custódia</p>
-              <p className="text-2xl font-black text-slate-900 font-display tabular-nums leading-none tracking-tight">{customers.length}</p>
+              <p className="text-2xl font-black text-slate-900 font-display tabular-nums leading-none tracking-tight">
+                <RollingCounter value={customers.length} />
+              </p>
            </div>
            <div className="text-right">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-2">Exposição Total</p>
-              <p className="text-2xl font-black text-red-800 font-display tabular-nums leading-none tracking-tight">{formatCurrency(customers.reduce((acc, c) => acc + (c.totalDebt || 0), 0))}</p>
+              <p className="text-2xl font-black text-red-800 font-display tabular-nums leading-none tracking-tight">
+                <RollingCounter value={formatCurrency(customers.reduce((acc, c) => acc + (c.totalDebt || 0), 0))} />
+              </p>
            </div>
         </div>
       </div>
@@ -741,7 +746,7 @@ export default function Customers() {
                       "text-xl font-bold tracking-tight",
                       customer.totalDebt > 0 ? 'text-red-800' : 'text-slate-900'
                     )}>
-                      {formatCurrency(customer.totalDebt)}
+                      <RollingCounter value={formatCurrency(customer.totalDebt)} />
                     </div>
                     {customer.totalDebt > 0 && <div className="text-[8px] font-black text-white bg-red-800 rounded-lg px-2 py-0.5 inline-block uppercase tracking-widest mt-1">Atenção Necessária</div>}
                   </td>
@@ -796,7 +801,7 @@ export default function Customers() {
                       "text-sm font-black",
                       customer.totalDebt > 0 ? "text-rose-500" : "text-emerald-600"
                     )}>
-                      {formatCurrency(customer.totalDebt)}
+                      <RollingCounter value={formatCurrency(customer.totalDebt)} />
                     </p>
                   </div>
                 </div>
@@ -892,7 +897,9 @@ export default function Customers() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="bg-slate-950 text-white rounded-2xl p-6 border border-slate-800 shadow-xl">
                         <p className="text-[9px] font-black uppercase text-slate-500 tracking-[0.2em] mb-1">Dívida Total</p>
-                        <p className="text-3xl font-black text-red-600 tracking-tighter">{formatCurrency(editingCustomer?.totalDebt || 0)}</p>
+                        <p className="text-3xl font-black text-red-600 tracking-tighter">
+                          <RollingCounter value={formatCurrency(editingCustomer?.totalDebt || 0)} />
+                        </p>
                       </div>
                       <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
                         <p className="text-[9px] font-black uppercase text-slate-400 tracking-[0.2em] mb-1">Última Transação</p>
@@ -1017,7 +1024,9 @@ export default function Customers() {
                       </button>
                       <div className="text-right">
                         <p className="text-[10px] font-black uppercase opacity-60 tracking-widest mb-1">Dívida Acumulada</p>
-                        <p className="text-3xl font-black text-red-600 italic tracking-tighter">{formatCurrency(selectedCustomer.totalDebt)}</p>
+                        <p className="text-3xl font-black text-red-600 italic tracking-tighter">
+                          <RollingCounter value={formatCurrency(selectedCustomer.totalDebt)} />
+                        </p>
                       </div>
                     </div>
                   </div>

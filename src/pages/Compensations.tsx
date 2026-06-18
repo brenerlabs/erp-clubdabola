@@ -3,6 +3,7 @@ import { db } from '../lib/firebase';
 import { collection, query, onSnapshot, orderBy, where } from 'firebase/firestore';
 import { Transaction, Customer } from '../types';
 import { formatCurrency, cn } from '../lib/utils';
+import { RollingCounter } from '../components/RollingCounter';
 import { 
   History, 
   Calendar, 
@@ -155,7 +156,9 @@ export default function Compensations() {
         
         <div className="bg-slate-950 rounded-xl p-3 shadow-lg shadow-slate-900/10 border border-white/5 flex flex-col justify-center">
           <p className="text-[9px] font-black uppercase text-amber-500 mb-0.5 tracking-widest opacity-80">Total Recebido</p>
-          <div className="text-base font-black text-white italic tracking-tighter">{formatCurrency(filtered.reduce((acc, t) => acc + t.amount, 0))}</div>
+          <div className="text-base font-black text-white italic tracking-tighter">
+            <RollingCounter value={formatCurrency(filtered.reduce((acc, t) => acc + t.amount, 0))} />
+          </div>
         </div>
       </div>
 
