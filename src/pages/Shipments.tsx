@@ -1405,29 +1405,113 @@ export default function Shipments() {
   const shippedShipments = shipments.filter(s => s.status !== 'Processando');
   const taxedCount = shippedShipments.filter(s => s.hasTax).length;
   const taxationRate = shippedShipments.length > 0 ? Math.round((taxedCount / shippedShipments.length) * 100) : 0;
+
+  // Helpers to resolve start and end dates for transit times
+  const getTimestampDate = (val: any): Date | null => {
+    if (!val) return null;
+    if (val.seconds) return new Date(val.seconds * 1000);
+    if (val.toDate && typeof val.toDate === 'function') return val.toDate();
+    const d = new Date(val);
+    return isNaN(d.getTime()) ? null : d;
+  };
+
+  const parseCorreiosDate = (dateStr?: string, horaStr?: string): Date | null => {
+    if (!dateStr) return null;
+    try {
+      const parts = dateStr.trim().split('/');
+      if (parts.length === 3) {
+        const day = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10);
+        const year = parseInt(parts[2], 10);
+        let hour = 12;
+        let min = 0;
+        if (horaStr) {
+          const timeParts = horaStr.trim().split(':');
+          if (timeParts.length >= 2) {
+            hour = parseInt(timeParts[0], 10);
+            min = parseInt(timeParts[1], 10);
+          }
+        }
+        const d = new Date(year, month - 1, day, hour, min);
+        if (!isNaN(d.getTime())) return d;
+      }
+    } catch (e) {}
+    return null;
+  };
+
+  const getShipmentStartAndEndDates = (s: Shipment): { start: Date | null, end: Date | null } => {
+    let start: Date | null = null;
+    let end: Date | null = null;
+
+    // 1. Try to find start (postado) from history
+    if (s.history && Array.isArray(s.history)) {
+      const postadoLog = s.history.find(h => h.status === 'Postado' || h.status === 'Em Trânsito');
+      if (postadoLog && postadoLog.updatedAt) {
+        start = getTimestampDate(postadoLog.updatedAt);
+      }
+    }
+
+    // 2. Try to find start from oldest correios history event (last element in array since newest is first)
+    if (!start && s.correiosHistory && s.correiosHistory.length > 0) {
+      const oldestEvt = s.correiosHistory[s.correiosHistory.length - 1];
+      if (oldestEvt && oldestEvt.data) {
+        start = parseCorreiosDate(oldestEvt.data, oldestEvt.hora);
+      }
+    }
+
+    // 3. Try oldest history log
+    if (!start && s.history && s.history.length > 0) {
+      const oldestLog = s.history[0];
+      if (oldestLog && oldestLog.updatedAt) {
+        start = getTimestampDate(oldestLog.updatedAt);
+      }
+    }
+
+    // 4. Default to s.createdAt
+    if (!start && s.createdAt) {
+      start = getTimestampDate(s.createdAt);
+    }
+
+    // Resolve end date
+    // 1. Try history
+    if (s.history && Array.isArray(s.history)) {
+      const entregueLog = s.history.find(h => h.status === 'Entregue' || h.status === 'Recebido');
+      if (entregueLog && entregueLog.updatedAt) {
+        end = getTimestampDate(entregueLog.updatedAt);
+      }
+    }
+
+    // 2. Try correios history
+    if (!end && s.correiosHistory && s.correiosHistory.length > 0) {
+      const deliveryEvt = s.correiosHistory.find((evt: any) => 
+        String(evt.status || evt.descricao || '').toLowerCase().includes('entregue') ||
+        String(evt.status || evt.descricao || '').toLowerCase().includes('recebido')
+      ) || s.correiosHistory[0]; // fallback to index 0 (newest event)
+      if (deliveryEvt && deliveryEvt.data) {
+        end = parseCorreiosDate(deliveryEvt.data, deliveryEvt.hora);
+      }
+    }
+
+    // 3. Try s.updatedAt or current date
+    if (!end && s.updatedAt) {
+      end = getTimestampDate(s.updatedAt);
+    }
+
+    return { start, end };
+  };
   
   // Average transit time from "Postado" -> "Entregue" using real history logs
-  const deliveredShipments = shipments.filter(s => s.status === 'Entregue');
+  const deliveredShipments = shipments.filter(s => s.status === 'Entregue' || s.status === 'Recebido');
   let totalTransitDays = 0;
   let deliveredWithTransitCount = 0;
   deliveredShipments.forEach(s => {
-    if (s.history) {
-      const postadoLog = s.history.find(h => h.status === 'Postado');
-      const entregueLog = s.history.find(h => h.status === 'Entregue');
-      if (postadoLog && entregueLog) {
-        const postadoDate = postadoLog.updatedAt?.seconds 
-          ? new Date(postadoLog.updatedAt.seconds * 1000) 
-          : new Date(postadoLog.updatedAt);
-        const entregueDate = entregueLog.updatedAt?.seconds 
-          ? new Date(entregueLog.updatedAt.seconds * 1000) 
-          : new Date(entregueLog.updatedAt);
-        
-        const diffTime = entregueDate.getTime() - postadoDate.getTime();
-        if (diffTime > 0) {
-          const diffDays = diffTime / (1000 * 60 * 60 * 24);
-          totalTransitDays += diffDays;
-          deliveredWithTransitCount++;
-        }
+    const { start, end } = getShipmentStartAndEndDates(s);
+    if (start && end) {
+      const diffTime = end.getTime() - start.getTime();
+      if (diffTime > 0) {
+        const diffDays = diffTime / (1000 * 60 * 60 * 24);
+        totalTransitDays += diffDays;
+        deliveredWithTransitCount++;
       }
     }
   });
@@ -1495,23 +1579,13 @@ export default function Shipments() {
 
       let supplierTransitTotal = 0;
       let supplierDeliveredCount = 0;
-      list.filter(s => s.status === 'Entregue').forEach(s => {
-        if (s.history) {
-          const postado = s.history.find(h => h.status === 'Postado');
-          const entregue = s.history.find(h => h.status === 'Entregue');
-          if (postado && entregue) {
-            const postadoDate = postado.updatedAt?.seconds 
-              ? new Date(postado.updatedAt.seconds * 1000) 
-              : new Date(postado.updatedAt);
-            const entregueDate = entregue.updatedAt?.seconds 
-              ? new Date(entregue.updatedAt.seconds * 1000) 
-              : new Date(entregue.updatedAt);
-            
-            const diff = entregueDate.getTime() - postadoDate.getTime();
-            if (diff > 0) {
-              supplierTransitTotal += diff / (1000 * 60 * 60 * 24);
-              supplierDeliveredCount++;
-            }
+      list.filter(s => s.status === 'Entregue' || s.status === 'Recebido').forEach(s => {
+        const { start, end } = getShipmentStartAndEndDates(s);
+        if (start && end) {
+          const diff = end.getTime() - start.getTime();
+          if (diff > 0) {
+            supplierTransitTotal += diff / (1000 * 60 * 60 * 24);
+            supplierDeliveredCount++;
           }
         }
       });
@@ -1546,49 +1620,86 @@ export default function Shipments() {
   let phase3Count = 0;
 
   shipments.forEach(s => {
-    if (s.history && Array.isArray(s.history)) {
-      const getLogDate = (statusToFind: string) => {
-        const item = s.history!.find(h => h.status === statusToFind);
-        if (!item || !item.updatedAt) return null;
-        return item.updatedAt.seconds 
-          ? new Date(item.updatedAt.seconds * 1000) 
-          : (item.updatedAt instanceof Date ? item.updatedAt : new Date(item.updatedAt));
-      };
-
-      const postado = getLogDate('Postado') || getLogDate('Em Trânsito');
-      const brasil = getLogDate('Chegou no Brasil');
-      const libTransit = getLogDate('Em trânsito para o destino final') || getLogDate('Fiscalização');
-      const entregue = getLogDate('Entregue') || getLogDate('Recebido');
-
-      // 1. Postado -> Chegou no Brasil (Fase Internacional)
-      if (postado && brasil) {
-        const diff = brasil.getTime() - postado.getTime();
-        if (diff > 0) {
-          phase1Days += diff / (1000 * 60 * 60 * 24);
-          phase1Count++;
+    const getLogDate = (statusToFind: string) => {
+      // 1. Try ERP local history
+      if (s.history && Array.isArray(s.history)) {
+        const item = s.history.find(h => h.status === statusToFind);
+        if (item && item.updatedAt) {
+          const d = getTimestampDate(item.updatedAt);
+          if (d) return d;
         }
       }
 
-      // 2. Chegou no Brasil -> Desembaraço (Fase Aduaneira)
-      if (brasil) {
-        const aduanaFim = libTransit || entregue;
-        if (aduanaFim) {
-          const diff = aduanaFim.getTime() - brasil.getTime();
-          if (diff > 0) {
-            phase2Days += diff / (1000 * 60 * 60 * 24);
-            phase2Count++;
+      // 2. Try correiosHistory
+      if (s.correiosHistory && Array.isArray(s.correiosHistory)) {
+        const matchedEvt = s.correiosHistory.find((evt: any) => {
+          const desc = String(evt.status || evt.descricao || '').toLowerCase();
+          
+          if (statusToFind === 'Postado' || statusToFind === 'Em Trânsito') {
+            return desc.includes('postado') || desc.includes('encaminhado');
           }
+          if (statusToFind === 'Chegou no Brasil') {
+            return desc.includes('recebido pelos correios do brasil') || desc.includes('recebido no centro') || desc.includes('chegou no brasil');
+          }
+          if (statusToFind === 'Fiscalização' || statusToFind === 'Em trânsito para o destino final') {
+            return desc.includes('fiscalização') || desc.includes('retido') || desc.includes('liberado') || desc.includes('unidade de tratamento');
+          }
+          if (statusToFind === 'Entregue' || statusToFind === 'Recebido') {
+            return desc.includes('entregue') || desc.includes('retirada') || desc.includes('recebido');
+          }
+          return false;
+        });
+
+        if (matchedEvt && matchedEvt.data) {
+          const d = parseCorreiosDate(matchedEvt.data, matchedEvt.hora);
+          if (d) return d;
         }
       }
 
-      // 3. Destino Final -> Entregue (Última Milha Nacional)
-      const destinoOrigem = getLogDate('Em trânsito para o destino final') || getLogDate('Fiscalização');
-      if (destinoOrigem && entregue) {
-        const diff = entregue.getTime() - destinoOrigem.getTime();
+      // 3. Fallbacks for specific crucial phases
+      if (statusToFind === 'Postado' || statusToFind === 'Em Trânsito') {
+        if (s.createdAt) return getTimestampDate(s.createdAt);
+      }
+      if (statusToFind === 'Entregue' || statusToFind === 'Recebido') {
+        if (s.status === 'Entregue' && s.updatedAt) return getTimestampDate(s.updatedAt);
+      }
+
+      return null;
+    };
+
+    const postado = getLogDate('Postado') || getLogDate('Em Trânsito');
+    const brasil = getLogDate('Chegou no Brasil');
+    const libTransit = getLogDate('Em trânsito para o destino final') || getLogDate('Fiscalização');
+    const entregue = getLogDate('Entregue') || getLogDate('Recebido');
+
+    // 1. Postado -> Chegou no Brasil (Fase Internacional)
+    if (postado && brasil) {
+      const diff = brasil.getTime() - postado.getTime();
+      if (diff > 0) {
+        phase1Days += diff / (1000 * 60 * 60 * 24);
+        phase1Count++;
+      }
+    }
+
+    // 2. Chegou no Brasil -> Desembaraço (Fase Aduaneira)
+    if (brasil) {
+      const aduanaFim = libTransit || entregue;
+      if (aduanaFim) {
+        const diff = aduanaFim.getTime() - brasil.getTime();
         if (diff > 0) {
-          phase3Days += diff / (1000 * 60 * 60 * 24);
-          phase3Count++;
+          phase2Days += diff / (1000 * 60 * 60 * 24);
+          phase2Count++;
         }
+      }
+    }
+
+    // 3. Destino Final -> Entregue (Última Milha Nacional)
+    const destinoOrigem = getLogDate('Em trânsito para o destino final') || getLogDate('Fiscalização');
+    if (destinoOrigem && entregue) {
+      const diff = entregue.getTime() - destinoOrigem.getTime();
+      if (diff > 0) {
+        phase3Days += diff / (1000 * 60 * 60 * 24);
+        phase3Count++;
       }
     }
   });

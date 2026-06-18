@@ -3,6 +3,7 @@ import { db } from '../lib/firebase';
 import { collection, query, onSnapshot, orderBy, limit, doc, updateDoc, writeBatch, serverTimestamp, getDoc } from 'firebase/firestore';
 import { Transaction, Sale, Product, Customer, Shipment, Expense } from '../types';
 import { formatCurrency, cn } from '../lib/utils';
+import { RollingCounter } from '../components/RollingCounter';
 import { 
   TrendingUp, 
   Users, 
@@ -1133,7 +1134,7 @@ export default function Dashboard() {
             <div className="space-y-1">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Faturamento Bruto</span>
               <h3 className="text-3xl font-black text-slate-900 font-display tracking-tight leading-none uppercase tabular-nums">
-                {formatCurrency(stats.totalRevenue)}
+                <RollingCounter value={formatCurrency(stats.totalRevenue)} />
               </h3>
             </div>
           </div>
@@ -1144,8 +1145,8 @@ export default function Dashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Lucro Líquido Real</span>
-                <span className="text-sm font-black text-emerald-600 font-mono tracking-tight tabular-nums">
-                  {formatCurrency(stats.totalProfit)}
+                <span className="text-sm font-black text-emerald-600 font-mono tracking-tight tabular-nums block mt-0.5">
+                  <RollingCounter value={formatCurrency(stats.totalProfit)} />
                 </span>
               </div>
               {stats.totalRevenue > 0 && (
@@ -1232,7 +1233,7 @@ export default function Dashboard() {
             <div className="space-y-1">
               <span className="text-[10px] font-bold text-rose-600/75 uppercase tracking-wider block">Taxas Pendentes</span>
               <h3 className="text-3xl font-black text-rose-950 font-display tracking-tight leading-none uppercase tabular-nums">
-                {formatCurrency(stats.pendingTaxes)}
+                <RollingCounter value={formatCurrency(stats.pendingTaxes)} />
               </h3>
             </div>
           </div>
@@ -1265,7 +1266,7 @@ export default function Dashboard() {
             <div className="space-y-1">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Contas a Receber (Fiado)</span>
               <h3 className="text-2xl font-black text-slate-900 tracking-tight leading-none uppercase tabular-nums">
-                {formatCurrency(stats.totalDebt)}
+                <RollingCounter value={formatCurrency(stats.totalDebt)} />
               </h3>
             </div>
           </div>
@@ -1300,7 +1301,7 @@ export default function Dashboard() {
             <div className="space-y-1">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Ticket Médio p/ Venda</span>
               <h3 className="text-2xl font-black text-slate-900 tracking-tight leading-none uppercase tabular-nums">
-                {formatCurrency(stats.avgTicket)}
+                <RollingCounter value={formatCurrency(stats.avgTicket)} />
               </h3>
             </div>
           </div>
@@ -1308,11 +1309,15 @@ export default function Dashboard() {
           <div className="mt-4 relative z-10 grid grid-cols-2 gap-2 pt-2 border-t border-slate-50">
             <div>
               <span className="text-[8px] text-slate-400 font-bold uppercase block">Preço p/ Peça</span>
-              <p className="text-xs font-black text-slate-800 font-mono tracking-tight">{formatCurrency(stats.avgItemPrice)}</p>
+              <p className="text-xs font-black text-slate-800 font-mono tracking-tight leading-none mt-0.5">
+                <RollingCounter value={formatCurrency(stats.avgItemPrice)} />
+              </p>
             </div>
             <div>
               <span className="text-[8px] text-slate-400 font-bold uppercase block">Itens p/ Carrinho</span>
-              <p className="text-xs font-black text-slate-800 font-mono tracking-tight">{stats.avgItemsPerSale.toFixed(1)} un</p>
+              <p className="text-xs font-black text-slate-800 font-mono tracking-tight leading-none mt-0.5">
+                <RollingCounter value={stats.avgItemsPerSale.toFixed(1)} /> un
+              </p>
             </div>
           </div>
         </motion.div>
