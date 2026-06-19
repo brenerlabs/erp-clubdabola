@@ -7,7 +7,7 @@ import {
   CheckCircle2, Clock, AlertCircle, MapPin, 
   MessageCircle, DollarSign, X, Receipt,
   ChevronRight, ArrowRight, ShoppingBag, Box, History, CheckSquare, Square, Calculator,
-  Sparkles, TrendingUp, Activity, Plane, Globe, RefreshCw, Copy
+  Sparkles, TrendingUp, Activity, Plane, Globe, RefreshCw, Copy, Trello, List
 } from 'lucide-react';
 import { formatCurrency, cn, cleanVariationName, cleanProductNameWithVariation, formatVariationWithGender, formatProductNameWithGender, smartSearchMatch } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -381,6 +381,8 @@ export default function Shipments() {
   const [editingShipment, setEditingShipment] = useState<Shipment | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
+  const [draggingShipmentId, setDraggingShipmentId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showTimelineId, setShowTimelineId] = useState<string | null>(null);
   const [expandedCardTab, setExpandedCardTab] = useState<'items' | 'history' | 'correios'>('items');
@@ -1429,6 +1431,106 @@ export default function Shipments() {
     }
   };
 
+  const KANBAN_COLUMNS = useMemo(() => [
+    {
+      id: 'pendente',
+      title: 'Pendente ⏳',
+      statuses: ['Processando', 'Postado'] as Shipment['status'][],
+      bgHeader: 'bg-slate-100/85 border-slate-200/60',
+      textHeader: 'text-slate-800'
+    },
+    {
+      id: 'em_transito',
+      title: 'Em Trânsito ✈️',
+      statuses: ['Em Trânsito', 'Chegou no Brasil', 'Fiscalização', 'Em trânsito para o destino final'] as Shipment['status'][],
+      bgHeader: 'bg-amber-50 border-amber-250/50 text-amber-800',
+      textHeader: 'text-amber-850'
+    },
+    {
+      id: 'recebido',
+      title: 'Recebido ✓',
+      statuses: ['Recebido'] as Shipment['status'][],
+      bgHeader: 'bg-emerald-50 border-emerald-250/50 text-emerald-850',
+      textHeader: 'text-emerald-900 font-extrabold'
+    },
+    {
+      id: 'entregue',
+      title: 'Entregue 📦',
+      statuses: ['Entregue'] as Shipment['status'][],
+      bgHeader: 'bg-indigo-50 border-indigo-250/50 text-indigo-850',
+      textHeader: 'text-indigo-900 font-extrabold'
+    }
+  ], []);
+
+  const kanbanFiltered = useMemo(() => {
+    return shipments.filter(s => {
+      const normalizedTerm = search.toLowerCase().trim();
+      return smartSearchMatch([
+        s.trackingCode, 
+        s.supplierName, 
+        ...(s.items || []).map(i => i.customerName), 
+        ...(s.items || []).map(i => i.productName)
+      ], search);
+    });
+  }, [shipments, search]);
+
+  const handleDragStart = (e: React.DragEvent, shipmentId: string) => {
+    e.dataTransfer.setData('text/plain', shipmentId);
+    setDraggingShipmentId(shipmentId);
+  };
+
+  const handleDragEnd = () => {
+    setDraggingShipmentId(null);
+  };
+
+  const handleDrop = async (e: React.DragEvent, columnId: string) => {
+    e.preventDefault();
+    const shipmentId = e.dataTransfer.getData('text/plain') || draggingShipmentId;
+    if (!shipmentId) return;
+
+    const shipment = shipments.find(s => s.id === shipmentId);
+    if (!shipment) return;
+
+    let targetStatus: Shipment['status'] | null = null;
+    if (columnId === 'pendente') {
+      if (shipment.status !== 'Processando' && shipment.status !== 'Postado') {
+        targetStatus = 'Processando';
+      }
+    } else if (columnId === 'em_transito') {
+      if (shipment.status !== 'Em Trânsito' && shipment.status !== 'Chegou no Brasil' && shipment.status !== 'Fiscalização' && shipment.status !== 'Em trânsito para o destino final') {
+        targetStatus = 'Em Trânsito';
+      }
+    } else if (columnId === 'recebido') {
+      if (shipment.status !== 'Recebido') {
+        targetStatus = 'Recebido';
+      }
+    } else if (columnId === 'entregue') {
+      if (shipment.status !== 'Entregue') {
+        targetStatus = 'Entregue';
+      }
+    }
+
+    if (targetStatus) {
+      await updateShipmentStatus(shipment, targetStatus);
+      setPendingWhatsAppNotify({ shipment, newStatus: targetStatus });
+    }
+    setDraggingShipmentId(null);
+  };
+
+  const moveShipmentColumn = async (shipment: Shipment, direction: 'left' | 'right') => {
+    const currentColumnIdx = KANBAN_COLUMNS.findIndex(col => col.statuses.includes(shipment.status));
+    if (currentColumnIdx === -1) return;
+
+    const targetIdx = direction === 'left' ? currentColumnIdx - 1 : currentColumnIdx + 1;
+    if (targetIdx < 0 || targetIdx >= KANBAN_COLUMNS.length) return;
+
+    const targetColumn = KANBAN_COLUMNS[targetIdx];
+    const targetStatus = targetColumn.statuses[0];
+
+    await updateShipmentStatus(shipment, targetStatus);
+    setPendingWhatsAppNotify({ shipment, newStatus: targetStatus });
+  };
+
   const filtered = shipments.filter(s => {
     const normalizedTerm = search.toLowerCase().trim();
     const matchesSearch = normalizedTerm === 'dropshipping'
@@ -2125,6 +2227,57 @@ export default function Shipments() {
                                     exit={{ height: 0, opacity: 0 }}
                                     className="bg-slate-50/30 rounded-xl overflow-hidden ml-3 border-l-2 border-slate-200"
                                   >
+                                    {/* Pro-Rata Financial Demostrative block for local customer */}
+                                    {(() => {
+                                      const clientGrossRevenue = customerItems.reduce((acc, i) => acc + (i.price * i.quantity), 0);
+                                      const clientCostOfGoods = customerItems.reduce((acc, i) => {
+                                        const foundProduct = products.find(p => p.id === i.productId);
+                                        return acc + (i.quantity * (foundProduct?.costPrice || 0));
+                                      }, 0);
+                                      const totalLocalShipmentRevenue = Math.max(1, shipment.items.reduce((sum, item) => sum + (item.price * item.quantity), 0));
+                                      const clientProportionalRatio = clientGrossRevenue / totalLocalShipmentRevenue;
+                                      const clientAllocatedTax = clientProportionalRatio * (shipment.taxAmount || 0);
+                                      const clientRealNetProfit = clientGrossRevenue - clientCostOfGoods - clientAllocatedTax;
+
+                                      return (
+                                        <div className="mx-2.5 my-2 p-2.5 bg-slate-100 rounded-xl border border-slate-200/50 space-y-1 text-[9px] font-sans">
+                                          <p className="text-[8px] font-black uppercase text-slate-400 tracking-wider mb-1 leading-none">Demonstrativo Financeiro do Cliente (Pro-Rata)</p>
+                                          <div className="flex justify-between items-center text-slate-600 font-medium">
+                                            <span>Valor Bruto Cobrado:</span>
+                                            <span className="font-bold text-slate-900 font-display tabular-nums">
+                                              {formatCurrency(clientGrossRevenue)}
+                                            </span>
+                                          </div>
+                                          <div className="flex justify-between items-center text-slate-600 font-medium">
+                                            <span>Custo da Mercadoria:</span>
+                                            <span className="font-bold text-slate-900 font-display tabular-nums">
+                                              {formatCurrency(clientCostOfGoods)}
+                                            </span>
+                                          </div>
+                                          {(shipment.taxAmount || 0) > 0 && (
+                                            <div className="flex justify-between items-center text-slate-600 font-medium">
+                                              <span>Imposto Distribuído ({(clientProportionalRatio * 100).toFixed(1)}%):</span>
+                                              <span className="font-extrabold text-rose-600 font-display tabular-nums">
+                                                -{formatCurrency(clientAllocatedTax)}
+                                              </span>
+                                            </div>
+                                          )}
+                                          <div className="h-[1px] bg-slate-200 my-1" />
+                                          <div className="flex justify-between items-center pt-0.5">
+                                            <span className="font-black text-[7.5px] uppercase text-slate-500">Lucro Líquido Real:</span>
+                                            <span className={cn(
+                                              "font-black text-[9.5px] font-display tabular-nums px-1.5 py-0.5 rounded-lg",
+                                              clientRealNetProfit >= 0 
+                                                ? "text-emerald-700 bg-emerald-50 border border-emerald-100" 
+                                                : "text-rose-700 bg-rose-50 border border-rose-100"
+                                            )}>
+                                              {formatCurrency(clientRealNetProfit)}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      );
+                                    })()}
+
                                     {customerItems.map(item => (
                                       <div key={item.id} className="p-1.5 px-2.5 border-b border-slate-50 last:border-0 flex justify-between items-center text-[9px] hover:bg-slate-50/50 transition-colors">
                                         <div className="flex flex-col min-w-0 flex-1">
@@ -2621,15 +2774,45 @@ export default function Shipments() {
       </AnimatePresence>
 
       <div className="flex flex-col lg:flex-row items-center justify-between gap-4 p-6 bg-white/40 backdrop-blur-md rounded-[32px] border border-white/60 shadow-xl shadow-slate-200/50 mb-4 lg:mb-6 font-sans">
-        <div className="flex-1 w-full max-w-md relative group">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 size-4 group-focus-within:text-red-800 transition-colors" />
-          <input 
-            type="text" 
-            placeholder="Buscar por código de rastreamento ou cliente..." 
-            className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-red-800 transition-all shadow-sm outline-none text-xs font-bold tracking-tight"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-grow w-full lg:max-w-2xl">
+          <div className="flex-1 relative group">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 size-4 group-focus-within:text-red-800 transition-colors" />
+            <input 
+              type="text" 
+              placeholder="Buscar por código de rastreamento ou cliente..." 
+              className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-red-800 transition-all shadow-sm outline-none text-xs font-bold tracking-tight"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+          </div>
+
+          {/* Kanban / List Selection Buttons */}
+          <div className="flex bg-slate-100 p-0.5 rounded-xl border border-slate-200/50 relative gap-0.5 shrink-0 shadow-inner select-none">
+            <button
+              type="button"
+              onClick={() => setViewMode('list')}
+              className={cn(
+                "flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer",
+                viewMode === 'list' 
+                  ? "bg-white text-slate-900 shadow-sm border border-slate-200/10" 
+                  : "text-slate-500 hover:text-slate-800"
+              )}
+            >
+              <List size={12} /> Lista
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('kanban')}
+              className={cn(
+                "flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer",
+                viewMode === 'kanban' 
+                  ? "bg-white text-slate-900 shadow-sm border border-slate-200/10" 
+                  : "text-slate-500 hover:text-slate-800"
+              )}
+            >
+              <Trello size={12} /> Kanban
+            </button>
+          </div>
         </div>
         <div className="flex items-center gap-8 px-6 border-l border-slate-200 hidden lg:flex font-sans">
            <div className="text-right">
@@ -2919,132 +3102,439 @@ export default function Shipments() {
         )}
       </AnimatePresence>
 
-      {/* Filtros de Status */}
-      <div className="flex bg-slate-100/70 p-1 rounded-full border border-slate-200/50 shadow-inner overflow-x-auto no-scrollbar gap-0.5 mb-6 items-center w-full relative select-none z-10">
-        {[
-          { key: 'all', label: 'Todos', count: shipments.length, config: undefined },
-          ...SHIPMENT_STATUSES.map(st => {
-            const count = shipments.filter(s => s.status === st).length;
-            const config = getStatusConfig(st);
-            return {
-              key: st,
-              label: st,
-              count,
-              config,
-            };
-          })
-        ].map(btn => {
-          const isActive = statusFilter === btn.key;
-          const dotColor = (btn.key === 'all') ? 'bg-slate-400' : (btn.config?.dot || 'bg-slate-400');
-          return (
-            <button
-              key={btn.key}
-              onClick={() => setStatusFilter(btn.key as any)}
-              className={cn(
-                "relative px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-wider whitespace-nowrap transition-all border border-transparent flex items-center gap-2 cursor-pointer select-none shrink-0 z-10",
-                isActive 
-                  ? "text-slate-900"
-                  : "text-slate-500 hover:text-slate-800"
-              )}
-            >
-              {isActive && (
-                <motion.span
-                  layoutId="activeShipmentStatusFilterBackground"
-                  className="absolute inset-[2px] bg-white rounded-full shadow-[0_4px_12px_rgba(0,0,0,0.05)] border border-slate-200/40"
-                  style={{ zIndex: -1 }}
-                  transition={{ type: 'spring', stiffness: 480, damping: 35, mass: 1 }}
-                />
-              )}
-              <span className="relative z-10 flex items-center gap-2">
-                {btn.key !== 'all' && (
-                  <span className={cn("size-2 rounded-full transition-colors shrink-0", dotColor)} />
-                )}
-                <span>{btn.label}</span>
-                <span className={cn(
-                  "px-2 py-0.5 rounded-full text-[9px] font-black transition-colors duration-200 shrink-0",
-                  isActive ? "bg-slate-900 text-white" : "bg-slate-200/85 text-slate-600 border border-slate-200/40"
-                )}>
-                  {btn.count}
-                </span>
-              </span>
-            </button>
-          );
-        })}
-      </div>
+      {viewMode === 'list' ? (
+        <>
+          {/* Filtros de Status */}
+          <div className="flex bg-slate-100/70 p-1 rounded-full border border-slate-200/50 shadow-inner overflow-x-auto no-scrollbar gap-0.5 mb-6 items-center w-full relative select-none z-10">
+            {[
+              { key: 'all', label: 'Todos', count: shipments.length, config: undefined },
+              ...SHIPMENT_STATUSES.map(st => {
+                const count = shipments.filter(s => s.status === st).length;
+                const config = getStatusConfig(st);
+                return {
+                  key: st,
+                  label: st,
+                  count,
+                  config,
+                };
+              })
+            ].map(btn => {
+              const isActive = statusFilter === btn.key;
+              const dotColor = (btn.key === 'all') ? 'bg-slate-400' : (btn.config?.dot || 'bg-slate-400');
+              return (
+                <button
+                  key={btn.key}
+                  onClick={() => setStatusFilter(btn.key as any)}
+                  className={cn(
+                    "relative px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-wider whitespace-nowrap transition-all border border-transparent flex items-center gap-2 cursor-pointer select-none shrink-0 z-10",
+                    isActive 
+                      ? "text-slate-900"
+                      : "text-slate-500 hover:text-slate-800"
+                  )}
+                >
+                  {isActive && (
+                    <motion.span
+                      layoutId="activeShipmentStatusFilterBackground"
+                      className="absolute inset-[2px] bg-white rounded-full shadow-[0_4px_12px_rgba(0,0,0,0.05)] border border-slate-200/40"
+                      style={{ zIndex: -1 }}
+                      transition={{ type: 'spring', stiffness: 480, damping: 35, mass: 1 }}
+                    />
+                  )}
+                  <span className="relative z-10 flex items-center gap-2">
+                    {btn.key !== 'all' && (
+                      <span className={cn("size-2 rounded-full transition-colors shrink-0", dotColor)} />
+                    )}
+                    <span>{btn.label}</span>
+                    <span className={cn(
+                      "px-2 py-0.5 rounded-full text-[9px] font-black transition-colors duration-200 shrink-0",
+                      isActive ? "bg-slate-900 text-white" : "bg-slate-200/85 text-slate-600 border border-slate-200/40"
+                    )}>
+                      {btn.count}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
 
-      {statusFilter === 'all' ? (
-        <div className="space-y-6">
-          {/* Main Grid: Only In Transit/Pending */}
-          {inTransitFiltered.length > 0 ? (
-            renderShipmentGroups(inTransitFiltered)
-          ) : (
-            <div className="flex flex-col items-center justify-center p-12 bg-white/40 backdrop-blur-md rounded-3xl border border-white/60 shadow-inner text-center">
-              <CheckCircle2 size={36} className="text-emerald-500 mb-3" />
-              <p className="text-sm font-black text-slate-800 uppercase tracking-wider">Tudo em dia!</p>
-              <p className="text-xs text-slate-500 mt-1 max-w-md">Nenhuma encomenda nova está em processamento ou em trânsito no momento.</p>
+          {statusFilter === 'all' ? (
+            <div className="space-y-6">
+              {/* Main Grid: Only In Transit/Pending */}
+              {inTransitFiltered.length > 0 ? (
+                renderShipmentGroups(inTransitFiltered)
+              ) : (
+                <div className="flex flex-col items-center justify-center p-12 bg-white/40 backdrop-blur-md rounded-3xl border border-white/60 shadow-inner text-center">
+                  <CheckCircle2 size={36} className="text-emerald-500 mb-3" />
+                  <p className="text-sm font-black text-slate-800 uppercase tracking-wider">Tudo em dia!</p>
+                  <p className="text-xs text-slate-500 mt-1 max-w-md">Nenhuma encomenda nova está em processamento ou em trânsito no momento.</p>
+                </div>
+              )}
+
+              {/* Hidden/Collapsed Delivered Section */}
+              {deliveredFiltered.length > 0 && (
+                <div className="mt-8 pt-6 border-t border-dashed border-slate-200">
+                  <button
+                    type="button"
+                    onClick={() => setShowDeliveredSection(!showDeliveredSection)}
+                    className="w-full flex items-center justify-between p-4 bg-white/60 hover:bg-slate-50 border border-slate-200/50 hover:border-slate-300 rounded-2xl shadow-sm transition-all group cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3 text-slate-700">
+                      <CheckCircle2 size={18} className="text-emerald-600 shrink-0" />
+                      <div className="text-left">
+                        <p className="text-[10px] font-black uppercase text-slate-800 tracking-wider">
+                          Encomendas Entregues ({deliveredFiltered.length})
+                        </p>
+                        <p className="text-[9px] text-slate-400 font-medium leading-none mt-0.5">
+                          Arquivadas e ocultas para visualização limpa por padrão
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 group-hover:text-slate-600">
+                        {showDeliveredSection ? "Ocultar" : "Mostrar"}
+                      </span>
+                      <motion.div
+                        animate={{ rotate: showDeliveredSection ? 90 : 0 }}
+                        transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                      >
+                        <ChevronRight size={16} className="text-slate-400 group-hover:text-slate-600" />
+                      </motion.div>
+                    </div>
+                  </button>
+
+                  <AnimatePresence>
+                    {showDeliveredSection && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="pt-4">
+                          {renderShipmentGroups(deliveredFiltered)}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              )}
             </div>
+          ) : (
+            /* Explicit status filter grid */
+            filtered.length > 0 ? (
+              renderShipmentGroups(filtered)
+            ) : (
+              <div className="flex flex-col items-center justify-center p-12 bg-white/40 backdrop-blur-md rounded-3xl border border-white/60 shadow-inner text-center">
+                <AlertCircle size={36} className="text-slate-400 mb-3" />
+                <p className="text-sm font-black text-slate-800 uppercase tracking-wider">Nenhum resultado</p>
+                <p className="text-xs text-slate-500 mt-1">Nenhuma encomenda encontrada com o status selecionado ou filtro de busca atual.</p>
+              </div>
+            )
           )}
+        </>
+      ) : (
+        /* Kanban View Mode Board */
+        <div className="space-y-4">
+          <div className="bg-amber-50 border border-amber-200/60 rounded-2xl p-4 text-[10px] text-amber-805 font-bold flex items-center gap-2.5 shadow-sm leading-relaxed mb-2 font-sans border-dashed">
+            <span className="text-sm">💡</span>
+            <span>
+              <strong>Quadro Kanban Interativo:</strong> Arraste e solte carteiras de lotes lateralmente entre as colunas, ou use os direcionais 
+              (<code className="bg-amber-100/80 px-1 py-0.5 rounded text-[9px] font-mono font-black">←</code> e <code className="bg-amber-100/80 px-1 py-0.5 rounded text-[9px] font-mono font-black">→</code>) 
+              dentro dos cartões para transição rápida. O sistema computa o <strong>lucro líquido real segmentado pro-rata</strong> de cada consignatário deduzindo taxas de importação!
+            </span>
+          </div>
 
-          {/* Hidden/Collapsed Delivered Section */}
-          {deliveredFiltered.length > 0 && (
-            <div className="mt-8 pt-6 border-t border-dashed border-slate-200">
-              <button
-                type="button"
-                onClick={() => setShowDeliveredSection(!showDeliveredSection)}
-                className="w-full flex items-center justify-between p-4 bg-white/60 hover:bg-slate-50 border border-slate-200/50 hover:border-slate-300 rounded-2xl shadow-sm transition-all group cursor-pointer"
-              >
-                <div className="flex items-center gap-3 text-slate-700">
-                  <CheckCircle2 size={18} className="text-emerald-600 shrink-0" />
-                  <div className="text-left">
-                    <p className="text-[10px] font-black uppercase text-slate-800 tracking-wider">
-                      Encomendas Entregues ({deliveredFiltered.length})
-                    </p>
-                    <p className="text-[9px] text-slate-400 font-medium leading-none mt-0.5">
-                      Arquivadas e ocultas para visualização limpa por padrão
-                    </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-start select-none font-sans">
+            {KANBAN_COLUMNS.map(column => {
+              const columnShipments = kanbanFiltered.filter(s => column.statuses.includes(s.status));
+              
+              return (
+                <div 
+                  key={column.id}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => handleDrop(e, column.id)}
+                  className="bg-slate-50 border border-slate-200/50 rounded-[28px] p-4 flex flex-col min-h-[550px] transition-all hover:bg-slate-100/30"
+                >
+                  {/* Column Header */}
+                  <div className={cn(
+                    "flex items-center justify-between p-3 rounded-2xl border mb-4 shadow-sm",
+                    column.bgHeader
+                  )}>
+                    <span className={cn("text-[10px] font-black uppercase tracking-widest leading-none", column.textHeader)}>
+                      {column.title}
+                    </span>
+                    <span className="text-[10px] font-black bg-white px-2.5 py-0.5 rounded-lg border border-slate-205 tabular-nums text-slate-700 shadow-sm">
+                      {columnShipments.length}
+                    </span>
+                  </div>
+
+                  {/* Shipments inside Column */}
+                  <div className="space-y-3 flex-1 overflow-y-auto custom-scrollbar max-h-[600px] pr-1">
+                    {columnShipments.length > 0 ? (
+                      columnShipments.map(shipment => {
+                        const statusConfig = getStatusConfig(shipment.status);
+                        const isExpanded = showTimelineId === shipment.id;
+                        const uniqueCustomersCount = Array.from(new Set((shipment.items || []).map(i => i.customerName))).length;
+                        const totalUnits = (shipment.items || []).reduce((acc, i) => acc + i.quantity, 0);
+
+                        return (
+                          <div
+                            key={shipment.id}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, shipment.id!)}
+                            onDragEnd={handleDragEnd}
+                            className={cn(
+                              "bg-white rounded-2xl border p-4 shadow-sm hover:shadow-md transition-all relative flex flex-col gap-2.5 cursor-grab active:cursor-grabbing group/kbcard",
+                              draggingShipmentId === shipment.id 
+                                ? "opacity-35 border-dashed border-red-800 scale-95" 
+                                : "border-slate-200/70 hover:border-slate-300"
+                            )}
+                          >
+                            <div className="absolute top-1.5 right-2 opacity-0 group-hover/kbcard:opacity-100 transition-opacity flex gap-0.5">
+                              <span className="size-1 bg-slate-300 rounded-full" />
+                              <span className="size-1 bg-slate-300 rounded-full" />
+                              <span className="size-1 bg-slate-300 rounded-full" />
+                            </div>
+
+                            <div className="flex flex-col gap-1">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-mono font-black text-slate-900 text-[11px] tracking-tight truncate select-all">
+                                  {shipment.trackingCode || 'S/ RASTREIO'}
+                                </span>
+                                {shipment.trackingCode && (
+                                  <button 
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      navigator.clipboard.writeText(shipment.trackingCode || '');
+                                      const original = e.currentTarget.innerHTML;
+                                      e.currentTarget.innerHTML = `<span class="text-[8px] font-black text-emerald-600">✓</span>`;
+                                      const el = e.currentTarget;
+                                      setTimeout(() => { el.innerHTML = original; }, 1200);
+                                    }}
+                                    className="text-slate-400 hover:text-slate-700 transition-colors p-0.5 cursor-pointer ml-0.5"
+                                  >
+                                    <Copy size={10} />
+                                  </button>
+                                )}
+                              </div>
+
+                              <div className="flex flex-wrap gap-1 mt-0.5">
+                                <span className={cn(
+                                  "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-lg text-[8px] font-black uppercase tracking-wider border",
+                                  statusConfig.badge
+                                )}>
+                                  <span className={cn("size-1.5 rounded-full", statusConfig.dot)} />
+                                  <span>{shipment.status}</span>
+                                </span>
+
+                                {shipment.supplierName && (
+                                  <span className="text-[8px] font-extrabold text-slate-500 uppercase truncate max-w-[85px] bg-slate-50 border border-slate-200 rounded-lg px-2 py-0.5">
+                                    {shipment.supplierName}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Summary box inside card */}
+                            <div className="bg-slate-50/70 rounded-xl p-2.5 space-y-1 border border-slate-100/50">
+                              <div className="flex justify-between items-center text-[9px] text-slate-500 font-bold">
+                                <span>Volume:</span>
+                                <span className="font-extrabold text-slate-800">{totalUnits} UN</span>
+                              </div>
+                              <div className="flex justify-between items-center text-[9px] text-slate-500 font-bold">
+                                <span>Consignatários:</span>
+                                <span className="font-extrabold text-slate-805 uppercase text-[8px] truncate max-w-[85px]" title={Array.from(new Set(shipment.items.map(i => i.customerName))).join(', ')}>
+                                  {uniqueCustomersCount} Clientes
+                                </span>
+                              </div>
+                              <div className="flex justify-between items-center text-[9px] text-slate-500 font-bold">
+                                <span>Taxação:</span>
+                                {shipment.hasTax ? (
+                                  <span className={cn(
+                                    "px-1.5 py-0.5 rounded-lg text-[8px] font-black select-none leading-none border",
+                                    shipment.taxPaid 
+                                      ? "bg-emerald-50 text-emerald-700 border-emerald-100" 
+                                      : "bg-rose-50 text-rose-700 border-rose-100"
+                                  )}>
+                                    {formatCurrency(shipment.taxAmount)}
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-400">Isento</span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Move and Expand Card Buttons */}
+                            <div className="flex items-center justify-between border-t border-slate-100 pt-1.5 mt-0.5">
+                              <div className="flex items-center gap-1.5">
+                                {column.id !== 'pendente' && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); moveShipmentColumn(shipment, 'left'); }}
+                                    className="p-1.5 bg-white hover:bg-slate-50 text-slate-500 hover:text-slate-900 rounded-lg transition-all border border-slate-200 outline-none active:scale-95 shadow-sm cursor-pointer"
+                                    title="Mover para a esquerda"
+                                  >
+                                    <ArrowRight size={10} className="rotate-180" />
+                                  </button>
+                                )}
+                                {column.id !== 'entregue' && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); moveShipmentColumn(shipment, 'right'); }}
+                                    className="p-1.5 bg-white hover:bg-slate-50 text-slate-500 hover:text-slate-900 rounded-lg transition-all border border-slate-200 outline-none active:scale-95 shadow-sm cursor-pointer"
+                                    title="Mover para a direita"
+                                  >
+                                    <ArrowRight size={10} />
+                                  </button>
+                                )}
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (showTimelineId === shipment.id) {
+                                    setShowTimelineId(null);
+                                  } else {
+                                    setShowTimelineId(shipment.id!);
+                                    setExpandedCardTab('items');
+                                  }
+                                }}
+                                className="px-2.5 py-1 text-[8.5px] font-black uppercase tracking-wider bg-slate-100 hover:bg-slate-900 hover:text-white rounded-lg transition-colors border border-slate-200/50 cursor-pointer text-slate-650"
+                              >
+                                {isExpanded ? 'Recolher' : 'Clientes'}
+                              </button>
+                            </div>
+
+                            {/* Client items listing with custom pro-rata analytics directly inside the kanban column */}
+                            {isExpanded && (
+                              <div className="mt-2 text-[9px] pt-2 border-t border-slate-100/80 space-y-2 animate-in fade-in slide-in-from-top-1 cursor-default" onClick={e => e.stopPropagation()}>
+                                <div className="flex justify-between items-center border-b border-slate-50 pb-1">
+                                  <p className="text-[8px] font-black uppercase text-slate-405 tracking-widest">Segregações Clientes</p>
+                                  <span className="text-[8px] font-black bg-slate-100 px-1.5 text-slate-600 rounded">
+                                    {totalUnits} UN
+                                  </span>
+                                </div>
+                                <div className="space-y-2 max-h-[220px] overflow-y-auto custom-scrollbar pr-1">
+                                  {(Array.from(new Set(shipment.items.map(i => i.customerId))) as string[]).map(customerId => {
+                                    const customerName = shipment.items.find(i => i.customerId === customerId)?.customerName;
+                                    const customerItems = shipment.items.filter(i => i.customerId === customerId);
+                                    const isGroupExpanded = expandedGroups[shipment.id!]?.[customerId];
+                                    
+                                    const firstStatus = customerItems[0]?.status || 'Pendente';
+                                    const allSameStatus = customerItems.every(i => (i.status || 'Pendente') === firstStatus);
+                                    const currentGroupStatus = allSameStatus ? firstStatus : '';
+
+                                    // Proportional visuals
+                                    const totalRevenue = customerItems.reduce((acc, i) => acc + (i.price * i.quantity), 0);
+                                    const totalProductCost = customerItems.reduce((acc, i) => {
+                                      const foundProd = products.find(p => p.id === i.productId);
+                                      return acc + (i.quantity * (foundProd?.costPrice || 0));
+                                    }, 0);
+                                    const totalShipmentValue = Math.max(1, shipment.items.reduce((sum, item) => sum + (item.price * item.quantity), 0));
+                                    const customerProportionalTax = (totalRevenue / totalShipmentValue) * (shipment.taxAmount || 0);
+                                    const netProfit = totalRevenue - totalProductCost - customerProportionalTax;
+
+                                    return (
+                                      <div key={customerId} className="space-y-1 border border-slate-200/40 rounded-xl p-1 bg-slate-50/50">
+                                        <button 
+                                          onClick={() => toggleExpand(shipment.id!, customerId)}
+                                          className="w-full flex items-center justify-between text-[9px] bg-slate-50 p-1.5 rounded-lg border border-slate-100 hover:bg-slate-100/50 transition-colors text-left font-bold"
+                                        >
+                                          <span className="truncate uppercase text-slate-800 text-[8.5px]">{customerName}</span>
+                                          <div className="flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
+                                            <select
+                                              value={currentGroupStatus}
+                                              onChange={(e) => {
+                                                if (e.target.value) {
+                                                  updateCustomerGroupStatus(shipment.id!, customerId, e.target.value as any);
+                                                }
+                                              }}
+                                              className="text-[8px] font-black bg-white hover:bg-slate-100 border border-slate-200 text-slate-750 px-1 py-0.5 rounded cursor-pointer outline-none"
+                                            >
+                                              <option value="" disabled>Mudar...</option>
+                                              <option value="Pendente">⏳ Pendente</option>
+                                              <option value="Recebido">✓ Recebido</option>
+                                              <option value="Entregue">📦 Entregue</option>
+                                            </select>
+                                          </div>
+                                        </button>
+                                        
+                                        {isGroupExpanded && (
+                                          <div className="bg-white rounded-lg p-1.5 mt-1 border border-slate-100 space-y-2">
+                                            {/* Financial Box */}
+                                            <div className="p-1.5 bg-slate-50 rounded-lg space-y-0.5 text-[8.5px] border border-slate-100">
+                                              <div className="flex justify-between items-center text-slate-500">
+                                                <span>Valor Bruto:</span>
+                                                <span className="font-extrabold text-slate-800">{formatCurrency(totalRevenue)}</span>
+                                              </div>
+                                              <div className="flex justify-between items-center text-slate-550">
+                                                <span>Custo Total:</span>
+                                                <span className="font-extrabold text-slate-850">{formatCurrency(totalProductCost)}</span>
+                                              </div>
+                                              {(shipment.taxAmount || 0) > 0 && (
+                                                <div className="flex justify-between items-center text-slate-550">
+                                                  <span>Imposto Pro-Rata:</span>
+                                                  <span className="font-extrabold text-rose-600">-{formatCurrency(customerProportionalTax)}</span>
+                                                </div>
+                                              )}
+                                              <div className="h-[1px] bg-slate-200 my-1" />
+                                              <div className="flex justify-between items-center pt-0.5">
+                                                <span className="font-black text-slate-650 tracking-wide">Lucro Líquido:</span>
+                                                <span className={cn(
+                                                  "font-black text-[9px] font-display px-1.5 py-0.2 rounded",
+                                                  netProfit >= 0 ? "text-emerald-700 bg-emerald-50" : "text-rose-700 bg-rose-50"
+                                                )}>
+                                                  {formatCurrency(netProfit)}
+                                                </span>
+                                              </div>
+                                            </div>
+
+                                            {/* Items */}
+                                            <div className="space-y-1">
+                                              {customerItems.map(item => (
+                                                <div key={item.id} className="p-1 border-b border-slate-50 last:border-0 flex justify-between items-center text-[8px]">
+                                                  <span className="text-slate-600 font-bold uppercase truncate max-w-[100px]" title={item.productName}>
+                                                    {formatProductNameWithGender(item.productName, item.gender || products.find(p => p.id === item.productId)?.gender)}
+                                                  </span>
+                                                  <div className="flex items-center gap-1 ml-1" onClick={e => e.stopPropagation()}>
+                                                    <span className="font-black text-slate-900 pr-1.5">x{item.quantity}</span>
+                                                    <select
+                                                      value={item.status || 'Pendente'}
+                                                      onChange={(e) => updateItemStatus(shipment.id!, item.id, e.target.value as any)}
+                                                      className="text-[8px] font-black px-1.5 py-0.5 rounded border outline-none cursor-pointer"
+                                                    >
+                                                      <option value="Pendente">⏳ PEN</option>
+                                                      <option value="Recebido">✓ REC</option>
+                                                      <option value="Entregue">📦 ENT</option>
+                                                    </select>
+                                                  </div>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div className="flex flex-col items-center justify-center text-center p-8 bg-dashed border border-slate-205 rounded-2xl min-h-[145px] hover:border-slate-300 transition-colors">
+                        <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Fase Vazia</p>
+                      </div>
+                    )}
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 group-hover:text-slate-600">
-                    {showDeliveredSection ? "Ocultar" : "Mostrar"}
-                  </span>
-                  <motion.div
-                    animate={{ rotate: showDeliveredSection ? 90 : 0 }}
-                    transition={{ type: "spring", stiffness: 300, damping: 20 }}
-                  >
-                    <ChevronRight size={16} className="text-slate-400 group-hover:text-slate-600" />
-                  </motion.div>
-                </div>
-              </button>
-
-              <AnimatePresence>
-                {showDeliveredSection && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
-                    className="overflow-hidden"
-                  >
-                    <div className="pt-4">
-                      {renderShipmentGroups(deliveredFiltered)}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          )}
-        </div>
-      ) : (
-        /* Explicit status filter grid */
-        filtered.length > 0 ? (
-          renderShipmentGroups(filtered)
-        ) : (
-          <div className="flex flex-col items-center justify-center p-12 bg-white/40 backdrop-blur-md rounded-3xl border border-white/60 shadow-inner text-center">
-            <AlertCircle size={36} className="text-slate-400 mb-3" />
-            <p className="text-sm font-black text-slate-800 uppercase tracking-wider">Nenhum resultado</p>
-            <p className="text-xs text-slate-500 mt-1">Nenhuma encomenda encontrada com o status selecionado ou filtro de busca atual.</p>
+              );
+            })}
           </div>
-        )
+        </div>
       )}
 
       {/* Shipment Modal */}
