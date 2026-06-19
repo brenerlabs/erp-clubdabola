@@ -2672,12 +2672,44 @@ export default function Shipments() {
                     initial={{ height: 0, opacity: 0, marginTop: 0 }}
                     animate={{ height: "auto", opacity: 1, marginTop: 16 }}
                     exit={{ height: 0, opacity: 0, marginTop: 0 }}
-                    transition={{ duration: 0.22, ease: "easeInOut" }}
+                    transition={{ type: "spring", stiffness: 180, damping: 22, mass: 1 }}
                     className="overflow-hidden"
                   >
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {items.map(shipment => renderShipmentCard(shipment))}
-                    </div>
+                    <motion.div 
+                      variants={{
+                        hidden: { opacity: 0 },
+                        show: {
+                          opacity: 1,
+                          transition: {
+                            staggerChildren: 0.05
+                          }
+                        }
+                      }}
+                      initial="hidden"
+                      animate="show"
+                      className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+                    >
+                      {items.map((shipment, idx) => (
+                        <motion.div
+                          key={shipment.id || idx}
+                          variants={{
+                            hidden: { opacity: 0, y: 12, scale: 0.97 },
+                            show: { 
+                              opacity: 1, 
+                              y: 0, 
+                              scale: 1,
+                              transition: {
+                                type: "spring",
+                                stiffness: 200,
+                                damping: 18
+                              } 
+                            }
+                          }}
+                        >
+                          {renderShipmentCard(shipment)}
+                        </motion.div>
+                      ))}
+                    </motion.div>
                   </motion.div>
                 )}
               </AnimatePresence>

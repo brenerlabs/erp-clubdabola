@@ -332,7 +332,7 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col overflow-hidden relative">
-         <header className="h-16 md:h-20 border-b flex items-center justify-between px-4 md:px-10 shrink-0 z-50 bg-white border-slate-100">
+         <header className="h-16 md:h-20 border-b flex items-center justify-between px-4 md:px-10 shrink-0 z-50 bg-white/80 backdrop-blur-md border-slate-100/85 sticky top-0">
           <div className="flex items-center gap-4">
              {/* Sidebar Toggle - Only on Desktop, no Hamburger Menu trigger on mobile */}
              <button 
@@ -395,10 +395,10 @@ export default function App() {
           <AnimatePresence mode="wait">
             <motion.div
               key={activePage}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2 }}
+              initial={{ opacity: 0, scale: 0.985, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.985, y: -8 }}
+              transition={{ type: "spring", stiffness: 350, damping: 28 }}
               className="h-full"
             >
               {activePage === 'dashboard' && <Dashboard />}
@@ -420,21 +420,32 @@ export default function App() {
             {menuItems.map((item) => {
               const IsActive = activePage === item.id;
               return (
-                <button
+                <motion.button
                   key={item.id}
+                  whileTap={{ scale: 0.93 }}
                   onClick={() => {
                     setActivePage(item.id as Page);
                   }}
                   className={cn(
-                    "flex items-center gap-2 h-10 px-4 rounded-xl transition-all whitespace-nowrap text-[10px] font-bold uppercase tracking-wider shrink-0 duration-200",
+                    "relative flex items-center gap-2 h-10 px-4 rounded-xl transition-all whitespace-nowrap text-[10px] font-black uppercase tracking-wider shrink-0 duration-200 overflow-hidden",
                     IsActive 
-                      ? "bg-gradient-to-r from-red-700 to-rose-600 text-white shadow-md shadow-red-700/10" 
-                      : "text-slate-500 hover:text-slate-950"
+                      ? "text-white" 
+                      : "text-slate-400 hover:text-white"
                   )}
                 >
-                  <item.icon size={14} className={IsActive ? 'text-white' : 'text-slate-500'} />
-                  <span>{item.label.split(' ')[0]}</span>
-                </button>
+                  {IsActive && (
+                    <motion.span
+                      layoutId="activeMobileTabIndicator"
+                      className="absolute inset-0 bg-gradient-to-r from-red-700 to-rose-600 shadow-md shadow-red-700/15"
+                      transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                      style={{ borderRadius: "12px" }}
+                    />
+                  )}
+                  <span className="relative z-10 flex items-center gap-2">
+                    <item.icon size={14} className={IsActive ? 'text-white' : 'text-slate-500'} />
+                    <span>{item.label.split(' ')[0]}</span>
+                  </span>
+                </motion.button>
               );
             })}
           </div>

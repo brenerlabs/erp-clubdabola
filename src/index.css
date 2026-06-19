@@ -94,20 +94,20 @@ th {
 
 /* Forms & Inputs styled for Premium usage */
 input, select, textarea {
-  background-color: #ffffff !important;
-  color: #0f172a !important;
-  border-color: #cbd5e1 !important;
+  background-color: #ffffff;
+  color: #0f172a;
+  border-color: #cbd5e1;
 }
 
 input:focus, select:focus, textarea:focus {
-  outline: none !important;
-  border-color: #be123c !important;
-  box-shadow: 0 0 0 1px #be123c !important;
+  outline: none;
+  border-color: #be123c;
+  box-shadow: 0 0 0 1px #be123c;
 }
 
 select option {
-  background-color: #ffffff !important;
-  color: #0f172a !important;
+  background-color: #ffffff;
+  color: #0f172a;
 }
 
 /* Redirect custom critical alerts/buttons to exquisite crimson/scarlet gradient shades */

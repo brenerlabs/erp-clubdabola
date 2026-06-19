@@ -1975,11 +1975,11 @@ export default function PDV() {
                   }
                 }}
                 className={cn(
-                  "bg-white p-3.5 rounded-xl border flex flex-col justify-between group hover:-translate-y-1 hover:shadow-md transition-all duration-300 ease-out relative overflow-hidden min-h-[170px]",
+                  "bg-white p-4 rounded-[24px] flex flex-col justify-between group hover:-translate-y-1 shadow-[0_4px_22px_rgba(15,23,42,0.015)] hover:shadow-xl hover:shadow-slate-100/80 border border-slate-100/50 transition-all duration-300 ease-out relative overflow-hidden min-h-[170px]",
                   isNoVar ? "cursor-pointer" : "",
                   clickedProductId === product.id 
                     ? "ring-2 ring-emerald-500 border-emerald-500 scale-95 shadow-lg shadow-emerald-500/10" 
-                    : "border-slate-100 hover:border-red-800/30"
+                    : "hover:border-red-800/15"
                 )}
               >
                 <div>
@@ -2166,15 +2166,15 @@ export default function PDV() {
                       <div className="relative group flex-1">
                         <User className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 size-4 group-focus-within:text-amber-500 z-10 pointer-events-none" />
                         <select 
-                          className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-base md:text-xs font-black uppercase outline-none appearance-none hover:bg-white/10 focus:ring-1 focus:ring-amber-500 transition-all text-white/80"
+                          className="w-full bg-slate-900 border border-white/15 rounded-xl pl-10 pr-4 py-2.5 text-base md:text-xs font-extrabold uppercase outline-none appearance-none hover:bg-slate-800 focus:ring-1 focus:ring-amber-500 transition-all text-white"
                           value={selectedCustomer?.id || ''}
                           onChange={e => {
                             const c = customers.find(cust => cust.id === e.target.value);
                             setSelectedCustomer(c || null);
                           }}
                         >
-                          <option value="" className="bg-slate-900 text-white">Consumidor Final</option>
-                          {customers.map(c => <option key={c.id} value={c.id} className="bg-slate-900 text-white">{c.name}</option>)}
+                          <option value="" className="bg-slate-950 text-white">Consumidor Final</option>
+                          {customers.map(c => <option key={c.id} value={c.id} className="bg-slate-950 text-white">{c.name}</option>)}
                         </select>
                       </div>
                       <button
@@ -2184,7 +2184,7 @@ export default function PDV() {
                           setQuickCustContact('');
                           setShowQuickCustomerModal(true);
                         }}
-                        className="p-2.5 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-amber-500/40 text-amber-500 rounded-xl flex items-center justify-center transition-all active:scale-95 cursor-pointer shadow-sm"
+                        className="p-2.5 bg-slate-900 hover:bg-slate-800 border border-white/15 hover:border-amber-500/40 text-amber-500 rounded-xl flex items-center justify-center transition-all active:scale-95 cursor-pointer shadow-sm"
                         title="Cadastrar Cliente Rápido"
                       >
                         <Plus size={16} />
@@ -2195,13 +2195,13 @@ export default function PDV() {
                     <div className="relative group">
                       <Truck className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 size-4 group-focus-within:text-amber-500 z-10 pointer-events-none" />
                       <select 
-                        className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-base md:text-xs font-black uppercase outline-none appearance-none hover:bg-white/10 focus:ring-1 focus:ring-amber-500 transition-all text-white/80"
+                        className="w-full bg-slate-900 border border-white/15 rounded-xl pl-10 pr-4 py-2.5 text-base md:text-xs font-extrabold uppercase outline-none appearance-none hover:bg-slate-800 focus:ring-1 focus:ring-amber-500 transition-all text-white"
                         value={shippingRegion}
                         onChange={e => setShippingRegion(e.target.value as any)}
                       >
-                        <option value="none" className="bg-slate-900 text-white">Sem Frete (Presencial / Retirada)</option>
-                        <option value="paragominas" className="bg-slate-900 text-white">Paragominas (Frete Fixo R$ 8,00)</option>
-                        <option value="saoluis" className="bg-slate-900 text-white">São Luís (Frete Fixo R$ 20,00)</option>
+                        <option value="none" className="bg-slate-950 text-white">Sem Frete (Presencial / Retirada)</option>
+                        <option value="paragominas" className="bg-slate-950 text-white">Paragominas (Frete Fixo R$ 8,00)</option>
+                        <option value="saoluis" className="bg-slate-955 text-white">São Luís (Frete Fixo R$ 20,00)</option>
                       </select>
                     </div>
                     {selectedCustomer && (
@@ -2255,7 +2255,7 @@ export default function PDV() {
                           type="text"
                           inputMode="decimal"
                           placeholder="Valor de Entrada (Opcional)"
-                          className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-base md:text-xs font-bold outline-none hover:bg-white/10 focus:ring-1 focus:ring-emerald-500 transition-all text-white/80"
+                          className="w-full bg-slate-900 border border-white/15 rounded-xl pl-10 pr-4 py-2.5 text-base md:text-xs font-extrabold outline-none hover:bg-slate-800 focus:ring-1 focus:ring-emerald-500 transition-all text-white placeholder-white/40"
                           value={downPayment}
                           onChange={e => setDownPayment(e.target.value.replace(/[^0-9,.]/g, ''))}
                           onFocus={e => e.target.value === '0' ? setDownPayment('') : null}
@@ -2270,7 +2270,7 @@ export default function PDV() {
                         <input 
                           type="text"
                           inputMode="decimal"
-                          className="w-full bg-white/5 border border-white/10 rounded-xl pl-16 pr-4 py-2.5 text-base md:text-xs font-bold outline-none hover:bg-white/10 focus:ring-1 focus:ring-amber-500 transition-all text-white/80"
+                          className="w-full bg-slate-900 border border-white/15 rounded-xl pl-16 pr-4 py-2.5 text-base md:text-xs font-extrabold outline-none hover:bg-slate-800 focus:ring-1 focus:ring-amber-500 transition-all text-white"
                           value={discountPerc}
                           onChange={e => {
                             const val = e.target.value.replace(/[^0-9,.]/g, '');
@@ -2285,7 +2285,7 @@ export default function PDV() {
                         <input 
                           type="text"
                           inputMode="decimal"
-                          className="w-full bg-white/5 border border-white/10 rounded-xl pl-16 pr-4 py-2.5 text-base md:text-xs font-bold outline-none hover:bg-white/10 focus:ring-1 focus:ring-amber-500 transition-all text-white/80"
+                          className="w-full bg-slate-900 border border-white/15 rounded-xl pl-16 pr-4 py-2.5 text-base md:text-xs font-extrabold outline-none hover:bg-slate-800 focus:ring-1 focus:ring-amber-500 transition-all text-white"
                           value={discountVal}
                           onChange={e => {
                             const val = e.target.value.replace(/[^0-9,.]/g, '');
@@ -2294,6 +2294,82 @@ export default function PDV() {
                           onFocus={e => e.target.value === '0' ? setDiscountVal('') : null}
                           onBlur={e => e.target.value === '' ? setDiscountVal('0') : null}
                         />
+                      </div>
+                    </div>
+
+                    {/* Teclado Numérico Micro-Animado para Ajustes Rápidos */}
+                    <div className="space-y-2 pt-1 pb-1">
+                      <div className="text-[7px] font-black tracking-widest text-white/30 uppercase pl-1">Teclado de Desconto & Ajustes</div>
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {[
+                          { label: '🔥 -R$5', value: 5, type: 'val_sub' },
+                          { label: '⚡ -R$10', value: 10, type: 'val_sub' },
+                          { label: '🏆 -R$20', value: 20, type: 'val_sub' },
+                          { label: '➕ +R$10', value: 10, type: 'val_add' },
+                        ].map((btn, idx) => (
+                          <motion.button
+                            key={idx}
+                            type="button"
+                            whileHover={{ scale: 1.03 }}
+                            whileTap={{ scale: 0.93 }}
+                            onClick={() => {
+                              const currVal = parseFloat(discountVal.replace(',', '.')) || 0;
+                              let newVal = currVal;
+                              if (btn.type === 'val_sub') {
+                                newVal += btn.value;
+                              } else {
+                                newVal = Math.max(0, newVal - btn.value);
+                              }
+                              handleDiscountValChange(newVal.toFixed(2).replace('.', ','));
+                            }}
+                            className="relative overflow-hidden py-2 px-1 bg-white/5 border border-white/10 hover:border-amber-500/30 text-white rounded-xl text-[9px] font-black uppercase tracking-tight transition-all duration-300 hover:bg-amber-500/5 cursor-pointer flex items-center justify-center focus:outline-none"
+                          >
+                            <motion.span 
+                              className="absolute inset-0 bg-amber-500/0 hover:bg-amber-500/5 active:bg-amber-500/20 transition-colors duration-150 rounded-xl pointer-events-none"
+                            />
+                            <span className="relative z-10">{btn.label}</span>
+                          </motion.button>
+                        ))}
+                      </div>
+
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {[
+                          { label: '-5%', value: 5, type: 'pct' },
+                          { label: '-10%', value: 10, type: 'pct' },
+                          { label: '-15%', value: 15, type: 'pct' },
+                          { label: 'Zerar 🚫', value: 0, type: 'clear' },
+                        ].map((btn, idx) => (
+                          <motion.button
+                            key={idx}
+                            type="button"
+                            whileHover={{ scale: 1.03 }}
+                            whileTap={{ scale: 0.93 }}
+                            onClick={() => {
+                              if (btn.type === 'clear') {
+                                handleDiscountPercChange('0');
+                                handleDiscountValChange('0');
+                              } else {
+                                const currPct = parseFloat(discountPerc.replace(',', '.')) || 0;
+                                const newPct = currPct + btn.value;
+                                handleDiscountPercChange(newPct.toString());
+                              }
+                            }}
+                            className={cn(
+                              "relative overflow-hidden py-2 px-1 text-white border rounded-xl text-[9px] font-black uppercase tracking-tight transition-all duration-300 cursor-pointer flex items-center justify-center focus:outline-none",
+                              btn.type === 'clear' 
+                                ? "bg-red-950/20 border-red-900/30 hover:border-red-500 hover:bg-red-500/10 text-red-400" 
+                                : "bg-white/5 border-white/10 hover:border-amber-500/30 hover:bg-amber-500/5"
+                            )}
+                          >
+                            <motion.span 
+                              className={cn(
+                                "absolute inset-0 transition-colors duration-150 rounded-xl pointer-events-none",
+                                btn.type === 'clear' ? "bg-red-500/0 active:bg-red-500/20" : "bg-amber-500/0 active:bg-amber-500/20"
+                              )}
+                            />
+                            <span className="relative z-10">{btn.label}</span>
+                          </motion.button>
+                        ))}
                       </div>
                     </div>
 

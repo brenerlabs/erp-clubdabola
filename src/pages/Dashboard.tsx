@@ -2260,15 +2260,32 @@ export default function Dashboard() {
                           initial={{ opacity: 0, height: 0 }}
                           animate={{ opacity: 1, height: 'auto' }}
                           exit={{ opacity: 0, height: 0 }}
-                          transition={{ duration: 0.2 }}
+                          transition={{ type: "spring", stiffness: 180, damping: 22 }}
                           className="overflow-hidden"
                         >
                           <div className="mt-3 pt-3 border-t border-white/5 space-y-2">
                             <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Cod. Rastreio & Status</span>
-                            <div className="space-y-1.5 max-h-[160px] overflow-y-auto pr-1">
+                            <motion.div 
+                              variants={{
+                                hidden: { opacity: 0 },
+                                show: {
+                                  opacity: 1,
+                                  transition: {
+                                    staggerChildren: 0.04
+                                  }
+                                }
+                              }}
+                              initial="hidden"
+                              animate="show"
+                              className="space-y-1.5 max-h-[160px] overflow-y-auto pr-1"
+                            >
                               {rank.shipments.map((ship, idx) => (
-                                <div 
-                                  key={idx} 
+                                <motion.div 
+                                  key={idx}
+                                  variants={{
+                                    hidden: { opacity: 0, y: 6, scale: 0.98 },
+                                    show: { opacity: 1, y: 0, scale: 1, transition: { type: "spring", stiffness: 220, damping: 20 } }
+                                  }}
                                   onClick={() => handleShipmentClick(ship.trackingCode)}
                                   className={cn(
                                     "rounded-xl p-2.5 flex items-center justify-between border transition-all duration-200 select-none group/item",
@@ -2310,12 +2327,12 @@ export default function Dashboard() {
                                       </span>
                                     )
                                   )}
-                                </div>
+                                </motion.div>
                               ))}
                               {rank.shipments.length === 0 && (
                                 <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest text-center py-2">Sem remessas vinculadas</p>
                               )}
-                            </div>
+                            </motion.div>
                           </div>
                         </motion.div>
                       )}
