@@ -398,6 +398,23 @@ export default function Shipments() {
   const [pendingWhatsAppNotify, setPendingWhatsAppNotify] = useState<{ shipment: Shipment, newStatus: string } | null>(null);
   const [notifyModalData, setNotifyModalData] = useState<{ shipment: Shipment, status: string } | null>(null);
   const [notifiedCustomers, setNotifiedCustomers] = useState<string[]>([]);
+  const [toleranceProcessing, setToleranceProcessing] = useState<number>(() => Number(localStorage.getItem('tol_proc') || '4'));
+  const [toleranceTransit, setToleranceTransit] = useState<number>(() => Number(localStorage.getItem('tol_tran') || '12'));
+  const [toleranceBrasil, setToleranceBrasil] = useState<number>(() => Number(localStorage.getItem('tol_bras') || '6'));
+  const [toleranceFiscal, setToleranceFiscal] = useState<number>(() => Number(localStorage.getItem('tol_fisc') || '5'));
+  const [toleranceDestino, setToleranceDestino] = useState<number>(() => Number(localStorage.getItem('tol_dest') || '5'));
+  const [showToleranceConfig, setShowToleranceConfig] = useState<boolean>(false);
+  const [urgentIds, setUrgentIds] = useState<string[]>(() => JSON.parse(localStorage.getItem('urgent_shipments') || '[]'));
+  const [bottleneckTab, setBottleneckTab] = useState<'alerts' | 'config'>('alerts');
+
+  const toggleUrgentShipment = (id: string) => {
+    setUrgentIds(prev => {
+      const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
+      localStorage.setItem('urgent_shipments', JSON.stringify(next));
+      return next;
+    });
+  };
+
   const [collapsedSuppliers, setCollapsedSuppliers] = useState<string[]>([]);
 
   const toggleSupplierCollapsed = (supplier: string) => {
@@ -1881,11 +1898,11 @@ export default function Shipments() {
     const diffTime = new Date().getTime() - lastUpdate.getTime();
     const daysInState = Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)));
 
-    if (s.status === 'Processando' && daysInState > 4) return true;
-    if ((s.status === 'Postado' || s.status === 'Em Trânsito') && daysInState > 12) return true;
-    if (s.status === 'Chegou no Brasil' && daysInState > 6) return true;
-    if (s.status === 'Fiscalização' && daysInState > 5) return true;
-    if (s.status === 'Em trânsito para o destino final' && daysInState > 5) return true;
+    if (s.status === 'Processando' && daysInState > toleranceProcessing) return true;
+    if ((s.status === 'Postado' || s.status === 'Em Trânsito') && daysInState > toleranceTransit) return true;
+    if (s.status === 'Chegou no Brasil' && daysInState > toleranceBrasil) return true;
+    if (s.status === 'Fiscalização' && daysInState > toleranceFiscal) return true;
+    if (s.status === 'Em trânsito para o destino final' && daysInState > toleranceDestino) return true;
 
     return false;
   }).map(s => {
@@ -1983,6 +2000,18 @@ export default function Shipments() {
               <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">Rastreio:</span>
                 <h3 className="font-mono font-black text-slate-900 text-xs tracking-tight truncate select-all">{shipment.trackingCode || 'SEM RASTREIO'}</h3>
+                {urgentIds.includes(shipment.id!) && (
+                  <span 
+                    className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-rose-500 text-white rounded-md text-[7px] font-black uppercase tracking-widest animate-pulse cursor-pointer shadow-sm border border-rose-600 shrink-0 select-none"
+                    title="Urgência logística sinalizada! Clique p/ remover."
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleUrgentShipment(shipment.id!);
+                    }}
+                  >
+                    <span>🔥 COBRAR</span>
+                  </span>
+                )}
                 {shipment.trackingCode && (
                   <button 
                     type="button"
@@ -3052,49 +3081,321 @@ export default function Shipments() {
               {/* Attention Tracker / Stuck Shipments warning panel */}
               <div className="bg-white border border-slate-200/80 p-5 rounded-[24px] shadow-sm flex flex-col justify-between">
                 <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                      <AlertCircle size={16} className="text-amber-500" />
-                      <span className="text-[10px] font-black uppercase text-slate-800 tracking-wider">Atenção Requerida</span>
+                  <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-100">
+                    <div className="flex items-center gap-1.5">
+                      <AlertCircle size={15} className="text-red-700 animate-pulse" />
+                      <span className="text-[10px] font-black uppercase text-slate-800 tracking-wider">Gargalos Logísticos</span>
                     </div>
-                    {stuckShipments.length > 0 && (
-                      <span className="text-[8px] font-black uppercase bg-rose-50 border border-rose-100 text-rose-600 px-2 py-0.5 rounded-full tracking-wider animate-pulse">
-                        {stuckShipments.length} Lento(s)
-                      </span>
-                    )}
+                    
+                    {/* Tab Toggles */}
+                    <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200/40 select-none">
+                      <button
+                        type="button"
+                        onClick={() => setBottleneckTab('alerts')}
+                        className={cn(
+                          "px-2 py-1 rounded text-[8px] font-black uppercase transition-all cursor-pointer",
+                          bottleneckTab === 'alerts' 
+                            ? "bg-white text-rose-800 shadow-sm" 
+                            : "text-slate-500 hover:text-slate-800"
+                        )}
+                      >
+                        Alertas ({stuckShipments.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBottleneckTab('config')}
+                        className={cn(
+                          "px-2 py-1 rounded text-[8px] font-black uppercase transition-all cursor-pointer",
+                          bottleneckTab === 'config' 
+                            ? "bg-white text-slate-800 shadow-sm" 
+                            : "text-slate-500 hover:text-slate-800"
+                        )}
+                        title="Configurar limites de dias de inatividade por fase"
+                      >
+                        Limites 🔧
+                      </button>
+                    </div>
                   </div>
 
-                  {stuckShipments.length > 0 ? (
-                    <div className="space-y-2 max-h-[160px] overflow-y-auto custom-scrollbar pr-1">
-                      {stuckShipments.map(s => (
-                        <div key={s.id} className="p-3 bg-amber-50/40 hover:bg-amber-50 border border-amber-100/50 rounded-2xl transition-all">
-                          <div className="flex items-center justify-between gap-1">
-                            <span className="font-mono text-xs font-bold text-amber-950 tracking-tight">{s.trackingCode}</span>
-                            <span className="text-[8px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-md font-black shrink-0">
-                              {s.daysInState}d s/ atualiz.
-                            </span>
-                          </div>
-                          <p className="text-[8px] text-slate-500 font-semibold mt-1 leading-normal uppercase">
-                            Parado no status <span className="font-extrabold text-slate-700">{s.status}</span>.
-                          </p>
+                  {/* Dynamic Indice de Saúde Logística Banner */}
+                  {(() => {
+                    const activeLoadsCount = shipments.filter(s => s.status !== 'Recebido' && s.status !== 'Entregue').length;
+                    const healthPct = activeLoadsCount === 0 ? 100 : Math.round(((activeLoadsCount - stuckShipments.length) / activeLoadsCount) * 100);
+                    
+                    let healthLabel = "CRÍTICO";
+                    let healthColor = "bg-rose-500 text-rose-600 border-rose-100";
+                    let barColor = "bg-rose-500";
+                    if (healthPct >= 90) {
+                      healthLabel = "EXCELENTE";
+                      healthColor = "bg-emerald-50 text-emerald-700 border-emerald-100";
+                      barColor = "bg-emerald-500";
+                    } else if (healthPct >= 70) {
+                      healthLabel = "SAUDÁVEL";
+                      healthColor = "bg-teal-50 text-teal-700 border-teal-100";
+                      barColor = "bg-teal-500";
+                    } else if (healthPct >= 50) {
+                      healthLabel = "ALERTA MODERADO";
+                      healthColor = "bg-amber-50 text-amber-700 border-amber-100";
+                      barColor = "bg-amber-500";
+                    }
+                    
+                    return (
+                      <div className="mb-4 bg-slate-50/55 p-2.5 rounded-2xl border border-slate-100">
+                        <div className="flex items-center justify-between text-[8px] font-black uppercase mb-1.5">
+                          <span className="text-slate-400">Saúde Logística das Cargas:</span>
+                          <span className={cn("px-1.5 py-0.5 rounded-md border text-[7.5px]", healthColor)}>{healthLabel}</span>
                         </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center text-center py-6 h-full">
-                      <div className="size-10 bg-emerald-50 rounded-full flex items-center justify-center text-emerald-600 mb-3">
-                        <CheckCircle2 size={20} />
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 h-1.5 bg-slate-200/60 rounded-full overflow-hidden">
+                            <div className={cn("h-full transition-all duration-500", barColor)} style={{ width: `${healthPct}%` }} />
+                          </div>
+                          <span className="font-mono text-xs font-black text-slate-800 shrink-0 leading-none">{healthPct}%</span>
+                        </div>
                       </div>
-                      <p className="text-[10px] font-black uppercase text-slate-800 tracking-wider leading-none">Fluxo Saudável</p>
-                      <p className="text-[9px] text-slate-500 font-semibold mt-1.5 max-w-[200px] leading-relaxed">
-                        Nenhum lote está parado além do tempo de tolerância logística para sua fase atual!
-                      </p>
+                    );
+                  })()}
+
+                  {bottleneckTab === 'alerts' ? (
+                    stuckShipments.length > 0 ? (
+                      <div className="space-y-2.5 max-h-[180px] overflow-y-auto custom-scrollbar pr-1">
+                        {stuckShipments.map(s => {
+                          const isUrgent = urgentIds.includes(s.id!);
+                          
+                          // Look up first customer data if any
+                          const originalShipment = shipments.find(sh => sh.id === s.id);
+                          const firstCustomerName = originalShipment?.items?.[0]?.customerName;
+                          const firstCustomerId = originalShipment?.items?.[0]?.customerId;
+                          const customerObj = customers.find(c => c.id === firstCustomerId || c.name === firstCustomerName);
+                          const hasContact = !!customerObj?.contact;
+                          
+                          // Build direct WhatsApp link
+                          let waLink = '';
+                          if (hasContact && customerObj?.contact) {
+                            const cleanPhone = customerObj.contact.replace(/\D/g, '');
+                            const finalPhone = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
+                            const prodName = originalShipment?.items?.[0]?.productName || 'pedido';
+                            const msgText = `Olá, *${customerObj.name}*! Tudo bem? Passando para te avisar que o nosso monitoramento preventivo de importação identificou que o seu pedido (${prodName}) com código de rastreamento *${s.trackingCode}* está parado no status atual (*${s.status}*) há mais tempo que o padrão.\n\nFique tranquilo(a)! Não há nenhuma pendência sua, estamos acompanhando ativamente junto à transportadora para que avance o mais rápido possível! Qualquer alteração avisaremos você. 🤝⚽`;
+                            waLink = `https://api.whatsapp.com/send?phone=${finalPhone}&text=${encodeURIComponent(msgText)}`;
+                          }
+
+                          return (
+                            <div 
+                              key={s.id} 
+                              className={cn(
+                                "p-3 rounded-2xl border transition-all flex flex-col gap-2 relative",
+                                isUrgent 
+                                  ? "bg-rose-50/70 border-rose-100" 
+                                  : "bg-amber-50/45 hover:bg-amber-50/85 border-amber-100/50"
+                              )}
+                            >
+                              <div className="flex items-start justify-between gap-1.5">
+                                <div className="cursor-pointer font-sans min-w-0" onClick={() => {
+                                  setSearch(s.trackingCode);
+                                  const listSect = document.getElementById('shipments-list-section');
+                                  if (listSect) {
+                                    listSect.scrollIntoView({ behavior: 'smooth' });
+                                  }
+                                }} title="Clique para filtrar na lista">
+                                  <div className="flex items-center gap-1">
+                                    <span className="font-mono text-[11px] font-black uppercase text-slate-900 leading-none select-all truncate">{s.trackingCode}</span>
+                                    {isUrgent && <span className="animate-pulse text-xs shrink-0">🔥</span>}
+                                  </div>
+                                  <p className="text-[8.5px] text-slate-500 font-bold uppercase mt-1 leading-tight">
+                                    Parado na fase: <span className="font-extrabold text-slate-800">{s.status}</span>
+                                  </p>
+                                </div>
+                                <div className="text-right shrink-0">
+                                  <span className="text-[8px] bg-amber-100/80 text-amber-900 px-1.5 py-0.5 rounded-md font-black font-mono">
+                                    {s.daysInState}d parado
+                                  </span>
+                                </div>
+                              </div>
+                              
+                              {/* Action Bar */}
+                              <div className="flex items-center gap-1.5 pt-1.5 border-t border-dashed border-slate-200/50 justify-end">
+                                <button 
+                                  type="button"
+                                  onClick={() => toggleUrgentShipment(s.id!)}
+                                  className={cn(
+                                    "p-1.5 px-2 rounded-lg border text-[8px] font-black uppercase flex items-center gap-1 transition-all cursor-pointer",
+                                    isUrgent 
+                                      ? "bg-rose-500 border-rose-600 text-white shadow-sm" 
+                                      : "bg-white border-slate-200 text-slate-600 hover:bg-slate-55"
+                                  )}
+                                  title="Marcar urgência máxima para este lote (exibirá fogo piscando)"
+                                >
+                                  <span>🔥</span>
+                                  <span>{isUrgent ? 'Urgente' : 'Cobrar'}</span>
+                                </button>
+
+                                {waLink ? (
+                                  <a
+                                    href={waLink}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="p-1.5 px-2 rounded-lg bg-emerald-600 border border-emerald-700 text-white text-[8px] font-black uppercase flex items-center gap-1 hover:bg-emerald-700 transition-all shadow-sm"
+                                    title="Chamar cliente no WhatsApp alertando sobre a lentidão"
+                                  >
+                                    <span>💬</span>
+                                    <span>Notificar</span>
+                                  </a>
+                                ) : (
+                                  <button
+                                    disabled
+                                    className="p-1.5 px-2 rounded-lg bg-slate-100 border border-slate-200 text-slate-400 text-[8.5px] font-bold uppercase flex items-center gap-0.5 cursor-not-allowed"
+                                    title="Sem telefone cadastrado para o cliente desse item"
+                                  >
+                                    <span>💬</span>
+                                    <span>Sem Fone</span>
+                                  </button>
+                                )}
+
+                                <button 
+                                  type="button"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(s.trackingCode);
+                                    window.open(`https://rastreamento.correios.com.br/app/index.php?codigo=${s.trackingCode}`, '_blank');
+                                  }}
+                                  className="p-1.5 px-2 rounded-lg bg-white border border-slate-200 text-slate-600 text-[8px] font-black uppercase flex items-center gap-1 hover:bg-slate-50 transition-all cursor-pointer"
+                                  title="Abrir rastreamento direto nos Correios"
+                                >
+                                  <Search size={8} />
+                                  <span>Rastrear</span>
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center text-center py-7 h-full">
+                        <div className="size-10 bg-emerald-50 rounded-full flex items-center justify-center text-emerald-600 mb-3">
+                          <CheckCircle2 size={18} />
+                        </div>
+                        <p className="text-[10px] font-black uppercase text-slate-800 tracking-wider leading-none">Fluxo Saudável</p>
+                        <p className="text-[8.5px] text-slate-500 font-semibold mt-1.5 max-w-[200px] leading-relaxed uppercase">
+                          Nenhum lote está parado além das tolerâncias logísticas definidas!
+                        </p>
+                      </div>
+                    )
+                  ) : (
+                    /* CONFIG TAB PANEL */
+                    <div className="space-y-3 p-1 max-h-[180px] overflow-y-auto custom-scrollbar">
+                      <p className="text-[8px] font-bold text-slate-400/90 uppercase tracking-wider mb-2">Configure os prazos máximos toleráveis (dias sem atualização):</p>
+                      
+                      <div className="space-y-2.5">
+                        <div className="bg-slate-50/50 p-2 rounded-xl border border-slate-100">
+                          <div className="flex justify-between items-center text-[9px] font-black uppercase text-slate-600 mb-1">
+                            <span>1. Processando:</span>
+                            <span className="font-mono text-red-800 font-black">{toleranceProcessing} dias</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <input 
+                              type="range" 
+                              min="2" 
+                              max="20" 
+                              value={toleranceProcessing} 
+                              onChange={(e) => {
+                                const val = Number(e.target.value);
+                                setToleranceProcessing(val);
+                                localStorage.setItem('tol_proc', String(val));
+                              }}
+                              className="w-full h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-red-800"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="bg-slate-50/55 p-2 rounded-xl border border-slate-100">
+                          <div className="flex justify-between items-center text-[9px] font-black uppercase text-slate-600 mb-1">
+                            <span>2. Em Trânsito / Postado:</span>
+                            <span className="font-mono text-red-800 font-black">{toleranceTransit} dias</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <input 
+                              type="range" 
+                              min="5" 
+                              max="30" 
+                              value={toleranceTransit} 
+                              onChange={(e) => {
+                                const val = Number(e.target.value);
+                                setToleranceTransit(val);
+                                localStorage.setItem('tol_tran', String(val));
+                              }}
+                              className="w-full h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-red-800"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="bg-slate-50/55 p-2 rounded-xl border border-slate-100">
+                          <div className="flex justify-between items-center text-[9px] font-black uppercase text-slate-600 mb-1">
+                            <span>3. Chegou no Brasil:</span>
+                            <span className="font-mono text-red-800 font-black">{toleranceBrasil} dias</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <input 
+                              type="range" 
+                              min="2" 
+                              max="20" 
+                              value={toleranceBrasil} 
+                              onChange={(e) => {
+                                const val = Number(e.target.value);
+                                setToleranceBrasil(val);
+                                localStorage.setItem('tol_bras', String(val));
+                              }}
+                              className="w-full h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-red-800"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="bg-slate-50/55 p-2 rounded-xl border border-slate-100">
+                          <div className="flex justify-between items-center text-[9px] font-black uppercase text-slate-600 mb-1">
+                            <span>4. Fiscalização Aduaneira:</span>
+                            <span className="font-mono text-red-800 font-black">{toleranceFiscal} dias</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <input 
+                              type="range" 
+                              min="2" 
+                              max="15" 
+                              value={toleranceFiscal} 
+                              onChange={(e) => {
+                                const val = Number(e.target.value);
+                                setToleranceFiscal(val);
+                                localStorage.setItem('tol_fisc', String(val));
+                              }}
+                              className="w-full h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-red-800"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="bg-slate-50/55 p-2 rounded-xl border border-slate-100">
+                          <div className="flex justify-between items-center text-[9px] font-black uppercase text-slate-600 mb-1">
+                            <span>5. Última Milha / Destino:</span>
+                            <span className="font-mono text-red-800 font-black">{toleranceDestino} dias</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <input 
+                              type="range" 
+                              min="2" 
+                              max="15" 
+                              value={toleranceDestino} 
+                              onChange={(e) => {
+                                const val = Number(e.target.value);
+                                setToleranceDestino(val);
+                                localStorage.setItem('tol_dest', String(val));
+                              }}
+                              className="w-full h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-red-800"
+                            />
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
 
-                <p className="text-[8px] text-slate-400 font-bold uppercase mt-4 pt-3 border-t border-slate-100">
-                  Monitoramento Proativo de Gargalos
+                <p className="text-[8px] text-slate-400 font-black uppercase mt-4 pt-3 border-t border-slate-100/50 flex justify-between items-center">
+                  <span>Monitoramento Proativo de Gargalos</span>
+                  <span className="text-[7px] text-rose-600 animate-pulse font-extrabold">• SISTEMA ATIVO</span>
                 </p>
               </div>
             </div>
@@ -3105,7 +3406,7 @@ export default function Shipments() {
       {viewMode === 'list' ? (
         <>
           {/* Filtros de Status */}
-          <div className="flex flex-wrap bg-slate-100/70 p-1.5 rounded-[22px] md:rounded-full border border-slate-200/50 shadow-inner gap-1 sm:gap-1.5 mb-6 items-center justify-center w-full relative select-none z-10">
+          <div className="grid grid-cols-2 md:flex md:flex-wrap md:items-center md:justify-center bg-slate-100/70 p-2 md:p-1 rounded-[24px] md:rounded-full border border-slate-200/50 shadow-inner gap-1.5 md:gap-0.5 mb-6 w-full relative select-none z-10">
             {[
               { key: 'all', label: 'Todos', count: shipments.length, config: undefined },
               ...SHIPMENT_STATUSES.map(st => {
@@ -3120,33 +3421,37 @@ export default function Shipments() {
               })
             ].map(btn => {
               const isActive = statusFilter === btn.key;
+              const isAll = btn.key === 'all';
               const dotColor = (btn.key === 'all') ? 'bg-slate-400' : (btn.config?.dot || 'bg-slate-400');
               return (
                 <button
                   key={btn.key}
                   onClick={() => setStatusFilter(btn.key as any)}
                   className={cn(
-                    "relative px-3 py-1.5 sm:px-4 sm:py-2 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-wider whitespace-nowrap transition-all border border-transparent flex items-center gap-1.5 sm:gap-2 cursor-pointer select-none shrink-0 z-10",
+                    "relative px-3 py-2 md:px-4 md:py-2 rounded-xl md:rounded-full text-[9px] md:text-[10px] font-black uppercase tracking-wider transition-all border flex items-center justify-between md:justify-start gap-1.5 md:gap-2 cursor-pointer select-none z-10 min-h-[38px] md:min-h-0",
+                    isAll ? "col-span-2 md:col-span-1" : "col-span-1",
                     isActive 
-                      ? "text-slate-900"
-                      : "text-slate-500 hover:text-slate-800"
+                      ? "text-slate-900 bg-white border-slate-200/70 shadow-sm md:bg-transparent md:border-transparent md:shadow-none" 
+                      : "text-slate-500 bg-white/40 border-slate-200/20 hover:bg-white/80 md:bg-transparent md:border-transparent md:hover:bg-transparent hover:text-slate-800"
                   )}
                 >
                   {isActive && (
                     <motion.span
                       layoutId="activeShipmentStatusFilterBackground"
-                      className="absolute inset-[2px] bg-white rounded-full shadow-[0_4px_12px_rgba(0,0,0,0.05)] border border-slate-200/40"
+                      className="absolute inset-[2px] bg-white rounded-full shadow-[0_4px_12px_rgba(0,0,0,0.05)] border border-slate-200/40 hidden md:block"
                       style={{ zIndex: -1 }}
                       transition={{ type: 'spring', stiffness: 480, damping: 35, mass: 1 }}
                     />
                   )}
-                  <span className="relative z-10 flex items-center gap-1.5 sm:gap-2">
-                    {btn.key !== 'all' && (
-                      <span className={cn("size-1.5 sm:size-2 rounded-full transition-colors shrink-0", dotColor)} />
-                    )}
-                    <span>{btn.label}</span>
+                  <span className="relative z-10 flex items-center justify-between md:justify-start gap-1.5 md:gap-2 w-full">
+                    <span className="flex items-center gap-1.5 text-left leading-tight min-w-0">
+                      {btn.key !== 'all' && (
+                        <span className={cn("size-1.5 sm:size-2 rounded-full transition-colors shrink-0", dotColor)} />
+                      )}
+                      <span className="truncate text-[8.5px] sm:text-[9.5px] md:text-[10px] font-black">{btn.label}</span>
+                    </span>
                     <span className={cn(
-                      "px-1.5 py-0.5 rounded-full text-[8px] sm:text-[9px] font-black transition-colors duration-200 shrink-0",
+                      "px-2 py-0.5 rounded-full text-[8px] sm:text-[9px] font-black transition-colors duration-200 shrink-0 ml-1.5",
                       isActive ? "bg-slate-900 text-white" : "bg-slate-200/85 text-slate-600 border border-slate-200/40"
                     )}>
                       {btn.count}
@@ -3301,6 +3606,18 @@ export default function Shipments() {
                                 <span className="font-mono font-black text-slate-900 text-[11px] tracking-tight truncate select-all">
                                   {shipment.trackingCode || 'S/ RASTREIO'}
                                 </span>
+                                {urgentIds.includes(shipment.id!) && (
+                                  <span 
+                                    className="inline-flex items-center gap-0.5 px-1 py-0.5 bg-rose-500 text-white rounded text-[6.5px] font-black uppercase tracking-widest animate-pulse cursor-pointer shadow-sm border border-rose-600 shrink-0 select-none"
+                                    title="Urgência logística sinalizada! Clique p/ remover."
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleUrgentShipment(shipment.id!);
+                                    }}
+                                  >
+                                    <span>🔥 COBRAR</span>
+                                  </span>
+                                )}
                                 {shipment.trackingCode && (
                                   <button 
                                     type="button"
