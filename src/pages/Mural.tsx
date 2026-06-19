@@ -489,25 +489,34 @@ export default function Mural() {
           <h1 className="text-2xl font-black text-slate-900 font-sans tracking-tight">Mural de Fotos & Ajustes de Logo</h1>
           <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Sua vitrine afetiva e personalização da identidade do ERP</p>
         </div>
-        <div className="flex rounded-xl bg-slate-100 p-1 self-start md:self-center">
-          <button 
-            onClick={() => setActiveSubTab('photos')}
-            className={cn(
-              "px-5 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-2",
-              activeSubTab === 'photos' ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-900"
-            )}
-          >
-            <Camera size={14} /> Mural de Clientes
-          </button>
-          <button 
-            onClick={() => setActiveSubTab('logo')}
-            className={cn(
-              "px-5 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-2",
-              activeSubTab === 'logo' ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-900"
-            )}
-          >
-            <Settings size={14} /> Logo e Capa (Favicon)
-          </button>
+        <div className="flex bg-slate-100/80 p-0.5 rounded-full border border-slate-200/50 shadow-inner select-none relative gap-0.5 justify-start self-start md:self-center">
+          {[
+            { key: 'photos', label: 'Mural de Clientes', icon: <Camera size={14} /> },
+            { key: 'logo', label: 'Logo e Capa (Favicon)', icon: <Settings size={14} /> }
+          ].map(tab => {
+            const isActive = activeSubTab === tab.key;
+            return (
+              <button
+                key={tab.key}
+                onClick={() => setActiveSubTab(tab.key as any)}
+                className={cn(
+                  "relative px-5 py-2 text-[10px] rounded-full font-extrabold uppercase tracking-widest transition-colors cursor-pointer select-none z-10 flex items-center justify-center gap-2",
+                  isActive ? "text-slate-900 font-black" : "text-slate-500 hover:text-slate-800"
+                )}
+              >
+                {isActive && (
+                  <motion.span
+                    layoutId="activeMuralSubTabBackground"
+                    className="absolute inset-[1px] bg-white rounded-full shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-slate-200/40"
+                    style={{ zIndex: -1 }}
+                    transition={{ type: 'spring', stiffness: 480, damping: 35, mass: 1 }}
+                  />
+                )}
+                {tab.icon}
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 

@@ -2079,30 +2079,38 @@ export default function PDV() {
           </div>
 
           {/* Segment Toggle */}
-          <div className="grid grid-cols-2 p-1 bg-black/50 border border-white/5 rounded-2xl mb-3 shrink-0 font-sans">
-            <button 
-              onClick={() => setActiveTab('checkout')}
-              className={cn(
-                "py-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all",
-                activeTab === 'checkout' ? "bg-red-800 text-white shadow-lg" : "text-white/40 hover:text-white"
-              )}
-            >
-              Novo Carrinho
-            </button>
-            <button 
-              onClick={() => setActiveTab('prevendas')}
-              className={cn(
-                "py-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all relative",
-                activeTab === 'prevendas' ? "bg-red-800 text-white shadow-lg" : "text-white/40 hover:text-white"
-              )}
-            >
-              Orçamentos / Pré-Vendas
-              {sales.filter(s => s.status === 'Pré-venda').length > 0 && (
-                <span className="absolute -top-1 -right-1 bg-amber-500 text-black text-[8px] font-black px-1.5 py-0.5 rounded-full animate-bounce">
-                  {sales.filter(s => s.status === 'Pré-venda').length}
-                </span>
-              )}
-            </button>
+          <div className="grid grid-cols-2 p-0.5 bg-black/50 backdrop-blur-sm border border-white/5 rounded-full mb-3 shrink-0 font-sans relative select-none">
+            {[
+              { key: 'checkout', label: 'Novo Carrinho' },
+              { key: 'prevendas', label: 'Orçamentos / Pré-Vendas', badgeCount: sales.filter(s => s.status === 'Pré-venda').length }
+            ].map(tab => {
+              const isActive = activeTab === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  onClick={() => setActiveTab(tab.key as any)}
+                  className={cn(
+                    "relative py-2.5 rounded-full text-[10px] font-extrabold uppercase tracking-widest transition-colors cursor-pointer select-none z-10 flex items-center justify-center gap-1.5",
+                    isActive ? "text-white font-black" : "text-white/40 hover:text-white/80"
+                  )}
+                >
+                  {isActive && (
+                    <motion.span
+                      layoutId="activePdvTabIndicator"
+                      className="absolute inset-[1px] bg-red-800 rounded-full shadow-[0_4px_12px_rgba(220,38,38,0.2)] border border-red-700/30"
+                      style={{ zIndex: -1 }}
+                      transition={{ type: 'spring', stiffness: 480, damping: 35, mass: 1 }}
+                    />
+                  )}
+                  <span>{tab.label}</span>
+                  {tab.badgeCount ? (
+                    <span className="bg-amber-500 text-black text-[8px] font-black px-1.5 py-0.5 rounded-full animate-pulse">
+                      {tab.badgeCount}
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
           </div>
 
           <div className="flex-1 flex flex-col min-h-0 relative md:overflow-hidden">

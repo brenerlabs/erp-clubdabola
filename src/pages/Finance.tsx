@@ -1260,46 +1260,52 @@ export default function Finance() {
         <div className="xl:col-span-2 bg-white rounded-[24px] md:rounded-[32px] border border-slate-200 shadow-sm overflow-hidden flex flex-col h-[750px]">
           <div className="p-4 md:p-8 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50/30 pb-4">
              {/* Master Tab switcher */}
-            <div className="flex bg-slate-100 p-1 rounded-2xl border border-slate-200/50 shadow-inner flex-wrap gap-1 flex-1 md:flex-initial">
-              <button
-                onClick={() => setAuditTab('sales')}
-                className={cn(
-                  "px-3.5 py-1.5 md:px-5 md:py-2 text-[10px] font-black rounded-xl uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5 flex-1 md:flex-initial",
-                  auditTab === 'sales'
-                    ? "bg-slate-900 text-white shadow-md font-extrabold"
-                    : "text-slate-500 hover:text-slate-800"
-                )}
-              >
-                <TableIcon size={11} />
-                Vendas
-              </button>
-              <button
-                onClick={() => setAuditTab('transactions')}
-                className={cn(
-                  "px-3.5 py-1.5 md:px-5 md:py-2 text-[10px] font-black rounded-xl uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5 flex-1 md:flex-initial",
-                  auditTab === 'transactions'
-                    ? "bg-slate-900 text-white shadow-md font-extrabold"
-                    : "text-slate-500 hover:text-slate-800"
-                )}
-              >
-                <Receipt size={11} />
-                Lançamentos
-              </button>
-              <button
-                onClick={() => setAuditTab('auditor')}
-                className={cn(
-                  "px-3.5 py-1.5 md:px-5 md:py-2 text-[10px] font-black rounded-xl uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5 flex-1 md:flex-initial",
-                  auditTab === 'auditor'
-                    ? "bg-red-800 text-white shadow-md font-extrabold animate-pulse"
-                    : "text-slate-500 hover:text-slate-1000 flex items-center gap-1 text-red-800 bg-red-50 hover:bg-red-100/60"
-                )}
-              >
-                <AlertCircle size={11} />
-                Conferência
-                {!auditResults.isHealthy && (
-                  <span className="size-2 rounded-full bg-amber-500 animate-ping" />
-                )}
-              </button>
+            <div className="flex bg-slate-100/80 p-1 rounded-full border border-slate-200/50 shadow-inner flex-wrap gap-1 flex-1 md:flex-initial relative">
+              {[
+                { key: 'sales', label: 'Vendas', icon: <TableIcon size={11} /> },
+                { key: 'transactions', label: 'Lançamentos', icon: <Receipt size={11} /> },
+                { key: 'auditor', label: 'Conferência', icon: <AlertCircle size={11} />, badge: !auditResults.isHealthy }
+              ].map(tab => {
+                const isActive = auditTab === tab.key;
+                let activeBgColor = "bg-slate-900 shadow-md shadow-slate-900/10";
+                let activeTextColor = "text-white";
+                let inactiveTextColor = "text-slate-500 hover:text-slate-800";
+                
+                if (tab.key === 'auditor') {
+                  activeBgColor = "bg-red-800 shadow-md shadow-red-900/10";
+                  if (!isActive) {
+                    inactiveTextColor = "text-red-800 hover:text-red-950 bg-red-50 hover:bg-red-100/60";
+                  }
+                }
+
+                return (
+                  <button
+                    key={tab.key}
+                    onClick={() => setAuditTab(tab.key as any)}
+                    className={cn(
+                      "relative px-3.5 py-1.5 md:px-5 md:py-2 text-[10px] font-black rounded-full uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5 flex-1 md:flex-initial z-10 select-none",
+                      isActive ? activeTextColor : inactiveTextColor
+                    )}
+                  >
+                    {isActive && (
+                      <motion.span
+                        layoutId="activeFinanceTabBackground"
+                        className={cn("absolute inset-[1px] rounded-full", activeBgColor)}
+                        style={{ zIndex: -1 }}
+                        transition={{ type: 'spring', stiffness: 480, damping: 35, mass: 1 }}
+                      />
+                    )}
+                    {tab.icon}
+                    <span>{tab.label}</span>
+                    {tab.key === 'auditor' && tab.badge && (
+                      <span className={cn(
+                        "size-2 rounded-full", 
+                        isActive ? "bg-white" : "bg-amber-500 animate-pulse"
+                      )} />
+                    )}
+                  </button>
+                );
+              })}
             </div>
 
             {/* General client & ticket search filter */}

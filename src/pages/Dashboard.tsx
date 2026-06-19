@@ -2364,32 +2364,41 @@ export default function Dashboard() {
               className="overflow-hidden"
             >
               {/* Filtros de Insights */}
-              <div className="flex flex-wrap gap-1.5 mb-5 border-b border-slate-100 pb-4">
+              <div className="flex bg-slate-100/70 p-1 rounded-full border border-slate-200/50 shadow-inner flex-wrap md:flex-nowrap gap-1 mb-5 relative justify-start items-center">
                 {[
                   { key: 'all', label: 'Todos os Insights', count: businessInsights.length },
                   { key: 'warning', label: 'Alertas Críticos', count: businessInsights.filter(i => i.type === 'warning').length },
                   { key: 'success', label: 'Conquistas / Sucessos', count: businessInsights.filter(i => i.type === 'success').length },
                   { key: 'info', label: 'Oportunidades', count: businessInsights.filter(i => i.type === 'info').length },
-                ].map(btn => (
-                  <button
-                    key={btn.key}
-                    onClick={() => setInsightsFilter(btn.key as any)}
-                    className={cn(
-                      "px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer border border-slate-200/60",
-                      insightsFilter === btn.key 
-                        ? "bg-slate-900 text-white border-slate-900 shadow-md shadow-slate-900/10 scale-[1.02]" 
-                        : "bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-800"
-                    )}
-                  >
-                    {btn.label}
-                    <span className={cn(
-                      "ml-0.5 px-1.5 py-0.5 rounded-full text-[8.5px] font-black",
-                      insightsFilter === btn.key ? "bg-white/20 text-white" : "bg-slate-200 text-slate-600"
-                    )}>
-                      {btn.count}
-                    </span>
-                  </button>
-                ))}
+                ].map(btn => {
+                  const isActive = insightsFilter === btn.key;
+                  return (
+                    <button
+                      key={btn.key}
+                      onClick={() => setInsightsFilter(btn.key as any)}
+                      className={cn(
+                        "relative px-4 py-2 text-[9.5px] font-extrabold uppercase tracking-widest transition-colors flex items-center justify-center gap-2 rounded-full cursor-pointer z-10 select-none flex-1 md:flex-initial",
+                        isActive ? "text-slate-900" : "text-slate-500 hover:text-slate-800"
+                      )}
+                    >
+                      {isActive && (
+                        <motion.span
+                          layoutId="activeInsightFilterBackground"
+                          className="absolute inset-[2px] bg-white rounded-full shadow-[0_4px_12px_rgba(0,0,0,0.05)] border border-slate-200/40"
+                          style={{ zIndex: -1 }}
+                          transition={{ type: 'spring', stiffness: 480, damping: 35, mass: 1 }}
+                        />
+                      )}
+                      <span>{btn.label}</span>
+                      <span className={cn(
+                        "px-2 py-0.5 rounded-full text-[8.5px] font-black transition-colors duration-200",
+                        isActive ? "bg-slate-900 text-white" : "bg-slate-200/80 text-slate-600"
+                      )}>
+                        {btn.count}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2479,34 +2488,34 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <div className="flex bg-slate-100 p-1 rounded-xl select-none justify-between sm:justify-start">
-              <button
-                onClick={() => { setSalesTableFilter('all'); setSalesLimit(10); }}
-                className={cn(
-                  "px-3 py-1.5 text-[9px] rounded-lg font-black uppercase tracking-wider transition-all",
-                  salesTableFilter === 'all' ? "bg-white text-slate-900 shadow-sm animate-fade-in" : "text-slate-500 hover:text-slate-900"
-                )}
-              >
-                Todas
-              </button>
-              <button
-                onClick={() => { setSalesTableFilter('pending-fiado'); setSalesLimit(10); }}
-                className={cn(
-                  "px-3 py-1.5 text-[9px] rounded-lg font-black uppercase tracking-wider transition-all",
-                  salesTableFilter === 'pending-fiado' ? "bg-white text-slate-900 shadow-sm animate-fade-in" : "text-slate-500 hover:text-slate-900"
-                )}
-              >
-                Fiado em aberto
-              </button>
-              <button
-                onClick={() => { setSalesTableFilter('completed'); setSalesLimit(10); }}
-                className={cn(
-                  "px-3 py-1.5 text-[9px] rounded-lg font-black uppercase tracking-wider transition-all",
-                  salesTableFilter === 'completed' ? "bg-white text-slate-900 shadow-sm animate-fade-in" : "text-slate-500 hover:text-slate-900"
-                )}
-              >
-                Completas / Pagas
-              </button>
+            <div className="flex bg-slate-100/80 p-0.5 rounded-full border border-slate-200/50 shadow-inner select-none gap-0.5 justify-between sm:justify-start relative">
+              {[
+                { key: 'all', label: 'Todas' },
+                { key: 'pending-fiado', label: 'Fiado em aberto' },
+                { key: 'completed', label: 'Completas / Pagas' }
+              ].map(tab => {
+                const isActive = salesTableFilter === tab.key;
+                return (
+                  <button
+                    key={tab.key}
+                    onClick={() => { setSalesTableFilter(tab.key as any); setSalesLimit(10); }}
+                    className={cn(
+                      "relative px-4 py-1.5 text-[9px] rounded-full font-extrabold uppercase tracking-widest transition-colors cursor-pointer select-none z-10 flex-1 sm:flex-initial",
+                      isActive ? "text-slate-900" : "text-slate-500 hover:text-slate-800"
+                    )}
+                  >
+                    {isActive && (
+                      <motion.span
+                        layoutId="activeSalesTableFilterBackground"
+                        className="absolute inset-[1px] bg-white rounded-full shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-slate-200/40"
+                        style={{ zIndex: -1 }}
+                        transition={{ type: 'spring', stiffness: 480, damping: 35, mass: 1 }}
+                      />
+                    )}
+                    {tab.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>

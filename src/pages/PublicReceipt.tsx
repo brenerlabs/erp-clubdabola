@@ -8,7 +8,7 @@ import {
   MapPin, Truck, ExternalLink, MessageSquare, ShieldCheck, 
   Clock, Package, RefreshCw, ChevronRight, HelpCircle, ArrowRight
 } from 'lucide-react';
-import { formatCurrency } from '../lib/utils';
+import { formatCurrency, cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 
 // Live CSS for Keyframes Confetti and animations
@@ -299,29 +299,34 @@ export default function PublicReceipt({ receiptId }: PublicReceiptProps) {
 
             {/* TAB SELECTOR: Canvas visual vs Rastreamento */}
             {hasCustomized && (
-              <div className="grid grid-cols-2 bg-gradient-to-r from-slate-950 to-slate-900 p-1.5 rounded-2xl border border-white/5 mb-5 shadow-inner">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('jersey')}
-                  className={`py-2 px-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${
-                    activeTab === 'jersey' 
-                      ? 'bg-gradient-to-r from-red-800 to-red-955 text-white shadow-md shadow-red-950/40' 
-                      : 'text-slate-500 hover:text-white'
-                  }`}
-                >
-                  👕 Visual do Manto
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('tracking')}
-                  className={`py-2 px-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${
-                    activeTab === 'tracking' 
-                      ? 'bg-gradient-to-r from-red-800 to-red-955 text-white shadow-md shadow-red-950/40' 
-                      : 'text-slate-500 hover:text-white'
-                  }`}
-                >
-                  📦 Acompanhar Destino
-                </button>
+              <div className="grid grid-cols-2 bg-slate-950 p-1 rounded-full border border-white/5 mb-5 relative select-none">
+                {[
+                  { key: 'jersey', label: '👕 Visual do Manto' },
+                  { key: 'tracking', label: '📦 Acompanhar Destino' }
+                ].map(tab => {
+                  const isActive = activeTab === tab.key;
+                  return (
+                    <button
+                      key={tab.key}
+                      type="button"
+                      onClick={() => setActiveTab(tab.key as any)}
+                      className={cn(
+                        "relative py-2.5 px-3 rounded-full text-[9px] font-extrabold uppercase tracking-widest transition-colors cursor-pointer select-none z-10 flex items-center justify-center gap-1.5",
+                        isActive ? "text-white font-black" : "text-slate-500 hover:text-white/80"
+                      )}
+                    >
+                      {isActive && (
+                        <motion.span
+                          layoutId="activePublicReceiptTabBackground"
+                          className="absolute inset-[1px] bg-gradient-to-r from-red-800 to-red-650 rounded-full shadow-[0_4px_12px_rgba(220,38,38,0.2)] border border-red-700/30"
+                          style={{ zIndex: -1 }}
+                          transition={{ type: 'spring', stiffness: 480, damping: 35, mass: 1 }}
+                        />
+                      )}
+                      <span>{tab.label}</span>
+                    </button>
+                  );
+                })}
               </div>
             )}
 

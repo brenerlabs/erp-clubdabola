@@ -2006,43 +2006,35 @@ export default function Shipments() {
                 className="space-y-3 pt-1"
               >
                 {/* Visual tabs switcher */}
-                <div className="flex bg-slate-100 p-0.5 rounded-xl border border-slate-200/50 select-none">
-                  <button
-                    type="button"
-                    onClick={() => setExpandedCardTab('items')}
-                    className={cn(
-                      "flex-1 py-1.5 text-[8.5px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer",
-                      expandedCardTab === 'items' 
-                        ? "bg-white text-slate-800 shadow-sm" 
-                        : "text-slate-500 hover:text-slate-800"
-                    )}
-                  >
-                    👥 Clientes
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setExpandedCardTab('correios')}
-                    className={cn(
-                      "flex-1 py-1.5 text-[8.5px] font-black uppercase tracking-wider rounded-lg transition-all flex items-center justify-center gap-1 cursor-pointer",
-                      expandedCardTab === 'correios' 
-                        ? "bg-yellow-400 text-blue-900 shadow-sm" 
-                        : "text-slate-500 hover:text-slate-800"
-                    )}
-                  >
-                    💛 Correios
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setExpandedCardTab('history')}
-                    className={cn(
-                      "flex-1 py-1.5 text-[8.5px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer",
-                      expandedCardTab === 'history' 
-                        ? "bg-white text-slate-800 shadow-sm" 
-                        : "text-slate-500 hover:text-slate-800"
-                    )}
-                  >
-                    📝 Logs ERP
-                  </button>
+                <div className="flex bg-slate-100/85 p-0.5 rounded-full border border-slate-200/50 select-none relative gap-0.5 justify-stretch">
+                  {[
+                    { key: 'items', label: '👥 Clientes', activeBgClass: 'bg-white text-slate-800 shadow-sm border border-slate-200/40' },
+                    { key: 'correios', label: '💛 Correios', activeBgClass: 'bg-yellow-400 text-blue-900 shadow-sm border border-yellow-500/20' },
+                    { key: 'history', label: '📝 Logs ERP', activeBgClass: 'bg-white text-slate-800 shadow-sm border border-slate-200/40' }
+                  ].map(tab => {
+                    const isActive = expandedCardTab === tab.key;
+                    return (
+                      <button
+                        key={tab.key}
+                        type="button"
+                        onClick={() => setExpandedCardTab(tab.key as any)}
+                        className={cn(
+                          "relative flex-1 py-1.5 text-[8.5px] font-extrabold uppercase tracking-widest rounded-full transition-colors cursor-pointer select-none z-10 text-center flex items-center justify-center gap-1",
+                          isActive ? "font-black text-slate-900" : "text-slate-500 hover:text-slate-800"
+                        )}
+                      >
+                        {isActive && (
+                          <motion.span
+                            layoutId="activeShipmentCardTabBackground"
+                            className={cn("absolute inset-[1px] rounded-full", tab.activeBgClass)}
+                            style={{ zIndex: -1 }}
+                            transition={{ type: 'spring', stiffness: 480, damping: 35, mass: 1 }}
+                          />
+                        )}
+                        {tab.label}
+                      </button>
+                    );
+                  })}
                 </div>
 
                 <AnimatePresence mode="wait">
