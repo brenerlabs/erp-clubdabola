@@ -396,6 +396,15 @@ export default function Shipments() {
   const [pendingWhatsAppNotify, setPendingWhatsAppNotify] = useState<{ shipment: Shipment, newStatus: string } | null>(null);
   const [notifyModalData, setNotifyModalData] = useState<{ shipment: Shipment, status: string } | null>(null);
   const [notifiedCustomers, setNotifiedCustomers] = useState<string[]>([]);
+  const [collapsedSuppliers, setCollapsedSuppliers] = useState<string[]>([]);
+
+  const toggleSupplierCollapsed = (supplier: string) => {
+    setCollapsedSuppliers(prev => 
+      prev.includes(supplier) 
+        ? prev.filter(s => s !== supplier) 
+        : [...prev, supplier]
+    );
+  };
 
   // Form State
   const [trackingCode, setTrackingCode] = useState('');
@@ -1141,8 +1150,22 @@ export default function Shipments() {
         });
       }
 
+      // Auto-update individual item statuses inside the shipment based on general status
+      let nextItemStatus: 'Pendente' | 'Recebido' | 'Entregue' = 'Pendente';
+      if (newStatus === 'Entregue') {
+        nextItemStatus = 'Entregue';
+      } else if (newStatus === 'Recebido') {
+        nextItemStatus = 'Recebido';
+      }
+
+      const updatedItems = (shipment.items || []).map(item => ({
+        ...item,
+        status: nextItemStatus
+      }));
+
       await updateDoc(doc(db, 'shipments', shipment.id!), {
         status: newStatus,
+        items: updatedItems,
         updatedAt: serverTimestamp(),
         history,
         stockProcessed: autoStockProcessed
@@ -1232,6 +1255,16 @@ export default function Shipments() {
 
         updatePayload.history = history;
         updatePayload.stockProcessed = autoStockProcessed;
+      } else if (!allEntregue && shipment.status === 'Entregue') {
+        // Downgrade shipment status from Entregue to Recebido when an item status changes
+        updatePayload.status = 'Recebido';
+        const history = [...(shipment.history || [])];
+        history.push({
+          status: 'Recebido',
+          updatedAt: new Date(),
+          notes: 'Encomenda rebaixada de status (algum item foi marcado para status pendente ou recebido).'
+        });
+        updatePayload.history = history;
       }
 
       // Update the shipment status first! This guarantees swiftness and that the status change is saved immediately to Firestore
@@ -1342,6 +1375,16 @@ export default function Shipments() {
 
         updatePayload.history = history;
         updatePayload.stockProcessed = autoStockProcessed;
+      } else if (!allEntregue && shipment.status === 'Entregue') {
+        // Downgrade shipment status from Entregue to Recebido when an item status changes
+        updatePayload.status = 'Recebido';
+        const history = [...(shipment.history || [])];
+        history.push({
+          status: 'Recebido',
+          updatedAt: new Date(),
+          notes: 'Encomenda rebaixada de status (algum item de cliente foi marcado para status pendente ou recebido).'
+        });
+        updatePayload.history = history;
       }
 
       // Update the shipment status first to make the front-end react immediately
@@ -2380,6 +2423,89 @@ export default function Shipments() {
     );
   };
 
+  const renderShipmentGroups = (shipmentList: Shipment[]) => {
+    // Group shipments by supplier
+    const groups: { [supplier: string]: Shipment[] } = {};
+    shipmentList.forEach(s => {
+      const key = (s.supplierName || '').trim().toUpperCase() || 'SEM FORNECEDOR';
+      if (!groups[key]) {
+        groups[key] = [];
+      }
+      groups[key].push(s);
+    });
+
+    // Sort supplier names: standard suppliers alphabetically, but "SEM FORNECEDOR" at the end
+    const sortedSuppliers = Object.keys(groups).sort((a, b) => {
+      if (a === 'SEM FORNECEDOR') return 1;
+      if (b === 'SEM FORNECEDOR') return -1;
+      return a.localeCompare(b);
+    });
+
+    return (
+      <div className="space-y-8">
+        {sortedSuppliers.map(supplier => {
+          const items = groups[supplier];
+          const isCollapsed = collapsedSuppliers.includes(supplier);
+
+          return (
+            <div key={supplier} className="flex flex-col">
+              {/* Supplier Header Line - Clickable Toggle */}
+              <button
+                type="button"
+                onClick={() => toggleSupplierCollapsed(supplier)}
+                className="w-full flex items-center justify-between pb-2 border-b border-slate-200/50 hover:opacity-85 transition-all text-left cursor-pointer select-none group"
+              >
+                <div className="flex items-center gap-2">
+                  <span className={cn(
+                    "size-2 rounded-full transition-all duration-350 shrink-0",
+                    isCollapsed ? "bg-slate-400" : "bg-red-800 scale-110"
+                  )} />
+                  <hgroup className="flex items-center gap-2">
+                    <h3 className="text-xs font-black uppercase tracking-widest text-slate-700 group-hover:text-slate-900 transition-colors">
+                      {supplier === 'SEM FORNECEDOR' ? 'Sem Fornecedor' : supplier}
+                    </h3>
+                    <span className="px-2 py-0.5 rounded-lg text-[9px] font-black uppercase bg-slate-100 text-slate-500 border border-slate-200/40">
+                      {items.length} {items.length === 1 ? 'Lote' : 'Lotes'}
+                    </span>
+                  </hgroup>
+                </div>
+                <div className="flex items-center gap-1.5 text-slate-400 group-hover:text-slate-600 transition-colors">
+                  <span className="text-[9px] font-black uppercase tracking-widest text-slate-400/80">
+                    {isCollapsed ? 'Expandir' : 'Recolher'}
+                  </span>
+                  <ChevronRight 
+                    size={12} 
+                    className={cn(
+                      "transition-transform duration-200", 
+                      !isCollapsed ? "rotate-90 text-slate-600" : "text-slate-400"
+                    )} 
+                  />
+                </div>
+              </button>
+              
+              {/* Expandable grid of shipment cards */}
+              <AnimatePresence initial={false}>
+                {!isCollapsed && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0, marginTop: 0 }}
+                    animate={{ height: "auto", opacity: 1, marginTop: 16 }}
+                    exit={{ height: 0, opacity: 0, marginTop: 0 }}
+                    transition={{ duration: 0.22, ease: "easeInOut" }}
+                    className="overflow-hidden"
+                  >
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {items.map(shipment => renderShipmentCard(shipment))}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   return (
     <motion.div 
       initial={{ opacity: 0 }}
@@ -2850,9 +2976,7 @@ export default function Shipments() {
         <div className="space-y-6">
           {/* Main Grid: Only In Transit/Pending */}
           {inTransitFiltered.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {inTransitFiltered.map(shipment => renderShipmentCard(shipment))}
-            </div>
+            renderShipmentGroups(inTransitFiltered)
           ) : (
             <div className="flex flex-col items-center justify-center p-12 bg-white/40 backdrop-blur-md rounded-3xl border border-white/60 shadow-inner text-center">
               <CheckCircle2 size={36} className="text-emerald-500 mb-3" />
@@ -2901,8 +3025,8 @@ export default function Shipments() {
                     exit={{ opacity: 0, height: 0 }}
                     className="overflow-hidden"
                   >
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-4">
-                      {deliveredFiltered.map(shipment => renderShipmentCard(shipment))}
+                    <div className="pt-4">
+                      {renderShipmentGroups(deliveredFiltered)}
                     </div>
                   </motion.div>
                 )}
@@ -2913,9 +3037,7 @@ export default function Shipments() {
       ) : (
         /* Explicit status filter grid */
         filtered.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filtered.map(shipment => renderShipmentCard(shipment))}
-          </div>
+          renderShipmentGroups(filtered)
         ) : (
           <div className="flex flex-col items-center justify-center p-12 bg-white/40 backdrop-blur-md rounded-3xl border border-white/60 shadow-inner text-center">
             <AlertCircle size={36} className="text-slate-400 mb-3" />
