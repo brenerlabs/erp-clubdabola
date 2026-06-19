@@ -3105,7 +3105,7 @@ export default function Shipments() {
       {viewMode === 'list' ? (
         <>
           {/* Filtros de Status */}
-          <div className="flex bg-slate-100/70 p-1 rounded-full border border-slate-200/50 shadow-inner overflow-x-auto no-scrollbar gap-0.5 mb-6 items-center w-full relative select-none z-10">
+          <div className="flex flex-wrap bg-slate-100/70 p-1.5 rounded-[22px] md:rounded-full border border-slate-200/50 shadow-inner gap-1 sm:gap-1.5 mb-6 items-center justify-center w-full relative select-none z-10">
             {[
               { key: 'all', label: 'Todos', count: shipments.length, config: undefined },
               ...SHIPMENT_STATUSES.map(st => {
@@ -3126,7 +3126,7 @@ export default function Shipments() {
                   key={btn.key}
                   onClick={() => setStatusFilter(btn.key as any)}
                   className={cn(
-                    "relative px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-wider whitespace-nowrap transition-all border border-transparent flex items-center gap-2 cursor-pointer select-none shrink-0 z-10",
+                    "relative px-3 py-1.5 sm:px-4 sm:py-2 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-wider whitespace-nowrap transition-all border border-transparent flex items-center gap-1.5 sm:gap-2 cursor-pointer select-none shrink-0 z-10",
                     isActive 
                       ? "text-slate-900"
                       : "text-slate-500 hover:text-slate-800"
@@ -3140,13 +3140,13 @@ export default function Shipments() {
                       transition={{ type: 'spring', stiffness: 480, damping: 35, mass: 1 }}
                     />
                   )}
-                  <span className="relative z-10 flex items-center gap-2">
+                  <span className="relative z-10 flex items-center gap-1.5 sm:gap-2">
                     {btn.key !== 'all' && (
-                      <span className={cn("size-2 rounded-full transition-colors shrink-0", dotColor)} />
+                      <span className={cn("size-1.5 sm:size-2 rounded-full transition-colors shrink-0", dotColor)} />
                     )}
                     <span>{btn.label}</span>
                     <span className={cn(
-                      "px-2 py-0.5 rounded-full text-[9px] font-black transition-colors duration-200 shrink-0",
+                      "px-1.5 py-0.5 rounded-full text-[8px] sm:text-[9px] font-black transition-colors duration-200 shrink-0",
                       isActive ? "bg-slate-900 text-white" : "bg-slate-200/85 text-slate-600 border border-slate-200/40"
                     )}>
                       {btn.count}
