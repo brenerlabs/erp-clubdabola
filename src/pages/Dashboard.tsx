@@ -2364,7 +2364,7 @@ export default function Dashboard() {
               className="overflow-hidden"
             >
               {/* Filtros de Insights */}
-              <div className="flex bg-slate-100/70 p-1 rounded-full border border-slate-200/50 shadow-inner flex-wrap md:flex-nowrap gap-1 mb-5 relative justify-start items-center">
+              <div className="grid grid-cols-2 md:grid-cols-4 p-1 bg-slate-100/70 rounded-[22px] md:rounded-full border border-slate-200/50 shadow-inner gap-1 mb-5 relative select-none w-full items-center">
                 {[
                   { key: 'all', label: 'Todos os Insights', count: businessInsights.length },
                   { key: 'warning', label: 'Alertas Críticos', count: businessInsights.filter(i => i.type === 'warning').length },
@@ -2377,7 +2377,7 @@ export default function Dashboard() {
                       key={btn.key}
                       onClick={() => setInsightsFilter(btn.key as any)}
                       className={cn(
-                        "relative px-4 py-2 text-[9.5px] font-extrabold uppercase tracking-widest transition-colors flex items-center justify-center gap-2 rounded-full cursor-pointer z-10 select-none flex-1 md:flex-initial",
+                        "relative px-3 py-2 text-[9.5px] font-black uppercase tracking-widest transition-colors flex items-center justify-center gap-2 rounded-full cursor-pointer z-10 select-none w-full",
                         isActive ? "text-slate-900" : "text-slate-500 hover:text-slate-800"
                       )}
                     >
@@ -2391,7 +2391,7 @@ export default function Dashboard() {
                       )}
                       <span>{btn.label}</span>
                       <span className={cn(
-                        "px-2 py-0.5 rounded-full text-[8.5px] font-black transition-colors duration-200",
+                        "px-2 py-0.5 rounded-full text-[8.5px] font-black transition-colors duration-200 shrink-0",
                         isActive ? "bg-slate-900 text-white" : "bg-slate-200/80 text-slate-600"
                       )}>
                         {btn.count}

@@ -7,7 +7,7 @@ import {
   CheckCircle2, Clock, AlertCircle, MapPin, 
   MessageCircle, DollarSign, X, Receipt,
   ChevronRight, ArrowRight, ShoppingBag, Box, History, CheckSquare, Square, Calculator,
-  Sparkles, TrendingUp, Activity, Plane, Globe, RefreshCw
+  Sparkles, TrendingUp, Activity, Plane, Globe, RefreshCw, Copy
 } from 'lucide-react';
 import { formatCurrency, cn, cleanVariationName, cleanProductNameWithVariation, formatVariationWithGender, formatProductNameWithGender, smartSearchMatch } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -1824,17 +1824,42 @@ export default function Shipments() {
           {isSelected ? <CheckSquare size={12} className="stroke-[3]" /> : <Square size={12} />}
         </button>
 
-        <div className="flex items-start justify-between gap-2 mb-4">
-          <div className="flex items-center gap-3 min-w-0">
+        {/* Compact Header Row (Always Visible) */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 mb-4">
+          <div className="flex items-center gap-3 min-w-0 flex-1 flex-wrap sm:flex-nowrap">
             <div className={cn(
-              "size-10 rounded-2xl flex items-center justify-center shrink-0 transition-transform duration-300 group-hover:scale-105 shadow-sm border border-transparent",
+              "size-9 rounded-2xl flex items-center justify-center shrink-0 transition-transform duration-300 group-hover:scale-105 shadow-sm border border-transparent",
               statusConfig.iconBg
             )}>
-              {getStatusIcon(shipment.status, 20)}
+              {getStatusIcon(shipment.status, 18)}
             </div>
-            <div className="min-w-0 flex-1">
-              <h3 className="font-mono font-bold text-slate-900 text-xs tracking-tight truncate select-all">{shipment.trackingCode || 'SEM RASTREIO'}</h3>
-              <div className="flex flex-wrap items-center gap-1.5 mt-1 relative">
+            
+            <div className="min-w-0 flex-1 flex flex-col gap-1">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">Rastreio:</span>
+                <h3 className="font-mono font-black text-slate-900 text-xs tracking-tight truncate select-all">{shipment.trackingCode || 'SEM RASTREIO'}</h3>
+                {shipment.trackingCode && (
+                  <button 
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigator.clipboard.writeText(shipment.trackingCode || '');
+                      const originalBtnContent = e.currentTarget.innerHTML;
+                      e.currentTarget.innerHTML = `<span class="text-[8px] font-black text-emerald-600">✓</span>`;
+                      const el = e.currentTarget;
+                      setTimeout(() => {
+                        el.innerHTML = originalBtnContent;
+                      }, 1200);
+                    }}
+                    className="text-slate-405 hover:text-slate-700 transition-colors cursor-pointer p-0.5 flex items-center justify-center"
+                    title="Copiar Código"
+                  >
+                    <Copy size={11} />
+                  </button>
+                )}
+              </div>
+              
+              <div className="flex flex-wrap items-center gap-1.5 mt-0.5 relative">
                 {/* Custom Interactive Dropdown Button */}
                 <div className="relative">
                   <button 
@@ -1850,7 +1875,7 @@ export default function Shipments() {
                   >
                     <span className={cn("size-1.5 rounded-full", statusConfig.dot)} />
                     <span>{shipment.status}</span>
-                    <ChevronRight size={10} className={cn("transition-transform duration-200 shrink-0 text-slate-400", activeStatusMenuId === shipment.id ? "rotate-90 text-slate-700" : "")} />
+                    <ChevronRight size={10} className={cn("transition-transform duration-200 shrink-0 text-slate-450", activeStatusMenuId === shipment.id ? "rotate-90 text-slate-700" : "")} />
                   </button>
 
                   <AnimatePresence>
@@ -1912,90 +1937,43 @@ export default function Shipments() {
                 </div>
 
                 {shipment.supplierName && (
-                  <span className="text-[9px] font-semibold text-slate-400 uppercase truncate max-w-[90px] bg-slate-50 border border-slate-100 rounded px-1.5 py-0.5">
+                  <span className="text-[9px] font-extrabold text-slate-500 uppercase truncate max-w-[120px] bg-slate-50 border border-slate-205 rounded-lg px-2 py-0.5 tracking-wider select-none shrink-0" title={shipment.supplierName}>
                     {shipment.supplierName}
                   </span>
                 )}
 
-                <span className="text-[9px] font-bold text-slate-400 uppercase bg-slate-50 border border-slate-100 rounded px-1.5 py-0.5 select-none font-mono">
+                <span className="text-[9px] font-extrabold text-slate-500 uppercase bg-slate-50 border border-slate-205 rounded-lg px-2 py-0.5 select-none font-mono tracking-wider shrink-0">
                   {getShipmentDuration(shipment).formatted}
                 </span>
               </div>
             </div>
           </div>
-          <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity shrink-0">
-            <button 
+
+          <div className="flex items-center justify-end gap-2 shrink-0 self-end sm:self-center">
+            <button
+              type="button"
               onClick={() => {
                 if (showTimelineId === shipment.id) {
                   setShowTimelineId(null);
                 } else {
                   setShowTimelineId(shipment.id!);
-                  setExpandedCardTab('correios');
+                  setExpandedCardTab('items'); // Default to items
                 }
-              }} 
-              title="Histórico"
+              }}
               className={cn(
-                "p-1.5 hover:bg-slate-100 rounded-lg transition-colors",
-                showTimelineId === shipment.id ? "text-yellow-500 bg-yellow-50 hover:bg-yellow-100" : "text-slate-400 hover:text-slate-800"
+                "px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 transition-all select-none border cursor-pointer shadow-sm active:scale-95",
+                showTimelineId === shipment.id 
+                  ? "bg-slate-900 border-slate-900 text-white hover:bg-slate-800" 
+                  : "bg-slate-50 border-slate-200/55 text-slate-550 hover:bg-slate-100 hover:text-slate-800"
               )}
             >
-              <History size={14} />
-            </button>
-            <button 
-              onClick={() => openModal(shipment)} 
-              title="Editar"
-              className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-800 transition-colors"
-            >
-              <Edit2 size={14} />
-            </button>
-            <button 
-              onClick={() => {
-                if (confirm('Tem certeza que deseja excluir esta encomenda?')) {
-                  deleteDoc(doc(db, 'shipments', shipment.id!));
-                }
-              }} 
-              title="Excluir"
-              className="p-1.5 hover:bg-rose-50 rounded-lg text-slate-400 hover:text-rose-600 transition-colors"
-            >
-              <Trash2 size={14} />
+              <span>{showTimelineId === shipment.id ? 'Recolher' : 'Ver Detalhes'}</span>
+              <ChevronRight size={10} className={cn("transition-transform duration-300", showTimelineId === shipment.id ? "rotate-90" : "")} />
             </button>
           </div>
         </div>
 
         <div className="space-y-2 flex-1">
-          {shipment.status === 'Recebido' && (
-            <div className="p-2 bg-emerald-50 border border-emerald-100/50 rounded-xl flex items-center gap-1.5 text-emerald-800 text-[10px] font-bold uppercase select-none">
-              <span className="relative flex h-1.5 w-1.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
-              </span>
-              <span>Disponível para Retirada</span>
-            </div>
-          )}
-
-          {shipment.status === 'Entregue' && (() => {
-            const historyEntry = shipment.history?.find(h => h.status === 'Entregue');
-            let deliveryDateStr = '';
-            if (historyEntry && historyEntry.updatedAt) {
-              const d = historyEntry.updatedAt.seconds 
-                ? new Date(historyEntry.updatedAt.seconds * 1000) 
-                : (historyEntry.updatedAt instanceof Date ? historyEntry.updatedAt : new Date());
-              deliveryDateStr = d.toLocaleDateString('pt-BR');
-            } else {
-              const dateObj = shipment.updatedAt?.seconds 
-                ? new Date(shipment.updatedAt.seconds * 1000) 
-                : (shipment.updatedAt ? new Date(shipment.updatedAt) : new Date());
-              deliveryDateStr = dateObj.toLocaleDateString('pt-BR');
-            }
-            return (
-              <div className="p-2 bg-indigo-50/50 border border-indigo-100/40 rounded-xl flex items-center justify-between px-2.5 text-indigo-800 text-[10px] font-bold uppercase select-none">
-                <span>Entregue em:</span>
-                <span className="font-extrabold">{deliveryDateStr}</span>
-              </div>
-            );
-          })()}
-
-
           <AnimatePresence mode="wait">
             {showTimelineId === shipment.id ? (
               <motion.div 
@@ -2287,230 +2265,117 @@ export default function Shipments() {
                 <button 
                   type="button"
                   onClick={() => setShowTimelineId(null)} 
-                  className="w-full py-1.5 text-[8.5px] font-black uppercase text-slate-400 hover:text-slate-600 bg-slate-50 hover:bg-slate-100 rounded-xl transition-all border border-slate-100/60 cursor-pointer select-none"
+                  className="w-full mt-3 py-2 text-[9px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-800 bg-slate-100 hover:bg-slate-200/85 rounded-xl transition-all border border-slate-200/50 cursor-pointer flex items-center justify-center gap-1.5 shadow-sm active:scale-[0.98]"
                 >
-                  Voltar para Encomenda
+                  <ChevronRight size={11} className="rotate-90 text-slate-500 shrink-0" />
+                  <span>Recolher Detalhes</span>
                 </button>
               </motion.div>
-            ) : (
-              <motion.div 
-                key="items"
-                initial={{ opacity: 0, x: 5 }} 
-                animate={{ opacity: 1, x: 0 }} 
-                exit={{ opacity: 0, x: -5 }}
-                className="space-y-2"
-              >
-                <div className="flex justify-between items-center border-b border-slate-100/60 pb-1">
-                  <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Consignatários</p>
-                  <span className="text-[9px] font-black text-slate-900 bg-slate-100 px-2 py-0.5 rounded-md font-display tabular-nums">
-                    ∑ {shipment.items.reduce((acc, i) => acc + i.quantity, 0)} UN
-                  </span>
-                </div>
-                <div className="space-y-1.5 max-h-[132px] overflow-y-auto custom-scrollbar pr-1">
-                  {(Array.from(new Set(shipment.items.map(i => i.customerId))) as string[]).map(customerId => {
-                    const customerName = shipment.items.find(i => i.customerId === customerId)?.customerName;
-                    const customerItems = shipment.items.filter(i => i.customerId === customerId);
-                    const isExpanded = expandedGroups[shipment.id!]?.[customerId];
-
-                    const firstStatus = customerItems[0]?.status || 'Pendente';
-                    const allSameStatus = customerItems.every(i => (i.status || 'Pendente') === firstStatus);
-                    const currentGroupStatus = allSameStatus ? firstStatus : '';
-
-                    return (
-                      <div key={customerId} className="space-y-1">
-                        <button 
-                          onClick={() => toggleExpand(shipment.id!, customerId)}
-                          className="w-full flex items-center justify-between text-[10px] bg-slate-50/50 p-2 rounded-xl border border-slate-100 hover:bg-slate-100/50 transition-colors"
-                        >
-                          <div className="flex items-center gap-2 min-w-0 flex-1">
-                            <div className="size-4 bg-white rounded flex items-center justify-center text-slate-400 border border-slate-100 shadow-sm shrink-0">
-                              {isExpanded ? <X size={8} /> : <Plus size={8} />}
-                            </div>
-                            <span className="font-bold text-slate-800 truncate uppercase tracking-tight">{customerName}</span>
-                          </div>
-                          <div className="flex items-center gap-1.5 ml-2 shrink-0 select-none" onClick={e => e.stopPropagation()}>
-                            <span className="text-[8px] font-black text-slate-500 mr-1 uppercase">Lote:</span>
-                            <select
-                              value={currentGroupStatus}
-                              onChange={(e) => {
-                                if (e.target.value) {
-                                  updateCustomerGroupStatus(shipment.id!, customerId, e.target.value as any);
-                                }
-                              }}
-                              className="text-[8.5px] font-black bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 px-1.5 py-0.5 rounded-lg cursor-pointer outline-none"
-                            >
-                              <option value="" disabled>Alterar...</option>
-                              <option value="Pendente">⏳ Pendente</option>
-                              <option value="Recebido">✓ Recebido</option>
-                              <option value="Entregue">📦 Entregue</option>
-                            </select>
-                            <span className="text-[8px] font-black text-red-800 bg-red-100/80 px-1.5 py-0.5 rounded-lg ml-1">
-                              {customerItems.length} {customerItems.length === 1 ? 'Item' : 'Itens'}
-                            </span>
-                          </div>
-                        </button>
-                        
-                        <AnimatePresence>
-                          {isExpanded && (
-                            <motion.div 
-                              initial={{ height: 0, opacity: 0 }}
-                              animate={{ height: 'auto', opacity: 1 }}
-                              exit={{ height: 0, opacity: 0 }}
-                              className="bg-slate-50/30 rounded-xl overflow-hidden ml-3 border-l-2 border-slate-200"
-                            >
-                              {customerItems.map(item => (
-                                <div key={item.id} className="p-1.5 px-2.5 border-b border-slate-50 last:border-0 flex justify-between items-center text-[9px] hover:bg-slate-50/50 transition-colors">
-                                  <div className="flex flex-col min-w-0 flex-1">
-                                    <div className="flex items-center gap-1.5 min-w-0">
-                                      <span className="text-slate-600 font-bold uppercase truncate tracking-tight">{formatProductNameWithGender(item.productName, item.gender || products.find(p => p.id === item.productId)?.gender)}</span>
-                                      {item.isDropshipping && (
-                                        <span className="text-[6px] font-black bg-amber-500 text-white px-1 rounded italic leading-none">DS</span>
-                                      )}
-                                      {customerId === 'estoque' && (
-                                        <span className={cn(
-                                          "text-[7px] font-black px-1.5 py-0.5 rounded leading-none shrink-0 uppercase tracking-wider border",
-                                          shipment.stockProcessed 
-                                            ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
-                                            : "bg-amber-50 text-amber-700 border-amber-200"
-                                        )}>
-                                          {shipment.stockProcessed ? '✓ No Estoque' : '⏳ Aguardando'}
-                                        </span>
-                                      )}
-                                    </div>
-                                    {item.isCustomized && item.customName && (
-                                      <div className="text-[7.5px] font-extrabold uppercase text-amber-600 tracking-wider flex items-center gap-1 mt-0.5 leading-none">
-                                        ✨ {item.customName} • Nº {item.customNumber || 'S/N'}
-                                      </div>
-                                    )}
-                                  </div>
-                                  <div className="flex items-center gap-2 ml-2 shrink-0" onClick={e => e.stopPropagation()}>
-                                    <span className="font-extrabold text-slate-900 border-r border-slate-200/60 pr-2 font-mono">x{item.quantity}</span>
-                                    <select
-                                      value={item.status || 'Pendente'}
-                                      onChange={(e) => updateItemStatus(shipment.id!, item.id, e.target.value as any)}
-                                      className={cn(
-                                        "text-[9px] font-black px-1.5 py-0.5 rounded-lg border outline-none cursor-pointer transition-all pr-4 relative appearance-none bg-no-repeat bg-[right_4px_center] bg-[length:6px] select-none",
-                                        (item.status || 'Pendente') === 'Pendente' && "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100",
-                                        (item.status || 'Pendente') === 'Recebido' && "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100",
-                                        (item.status || 'Pendente') === 'Entregue' && "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
-                                      )}
-                                      style={{
-                                        backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23334155' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'></polyline></svg>")`,
-                                      }}
-                                    >
-                                      <option value="Pendente">⏳ PEN</option>
-                                      <option value="Recebido">✓ REC</option>
-                                      <option value="Entregue">📦 ENT</option>
-                                    </select>
-                                  </div>
-                                </div>
-                              ))}
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </div>
-                    );
-                  })}
-                </div>
-              </motion.div>
-            )}
+            ) : null}
           </AnimatePresence>
         </div>
 
-        <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            {shipment.hasTax ? (
-              <div className="flex items-center gap-1.5">
-                <div className="group/tax relative">
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const amountStr = prompt('Valor da taxa:', shipment.taxAmount.toString().replace('.', ','));
-                      if (amountStr !== null && amountStr.trim() !== '') {
-                        const normalized = amountStr.replace(',', '.').replace(/[^\d.]/g, '');
-                        const parsed = parseFloat(normalized);
-                        if (!isNaN(parsed) && parsed >= 0) {
-                          updateShipmentTax(shipment.id!, parsed, shipment.taxPaid);
+        {showTimelineId === shipment.id && (
+          <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {shipment.hasTax ? (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <div className="group/tax relative">
+                    <button 
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const amountStr = prompt('Valor da taxa:', shipment.taxAmount.toString().replace('.', ','));
+                        if (amountStr !== null && amountStr.trim() !== '') {
+                          const normalized = amountStr.replace(',', '.').replace(/[^\d.]/g, '');
+                          const parsed = parseFloat(normalized);
+                          if (!isNaN(parsed) && parsed >= 0) {
+                            updateShipmentTax(shipment.id!, parsed, shipment.taxPaid);
+                          }
                         }
-                      }
-                    }}
-                    className="flex items-center gap-1 cursor-pointer hover:opacity-80 group text-left"
-                  >
-                    <Receipt size={12} className={shipment.taxPaid ? "text-emerald-500" : "text-rose-500"} />
-                    <span className={cn("text-[10px] font-black uppercase font-display tabular-nums leading-none tracking-tight", shipment.taxPaid ? "text-emerald-600" : "text-rose-600")}>
-                      {formatCurrency(shipment.taxAmount)}
-                    </span>
-                    <Calculator size={10} className="text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </button>
-                  
-                  <div className="absolute bottom-full left-0 mb-2 w-56 bg-slate-950 text-white rounded-2xl p-3.5 shadow-2xl opacity-0 group-hover/tax:opacity-100 pointer-events-none transition-all z-20 border border-white/10">
-                    <p className="text-[8px] font-black uppercase tracking-[0.2em] text-slate-400 mb-2 border-b border-white/5 pb-1.5">Divisão Pro-Rata de Taxas</p>
-                    <div className="space-y-1.5">
-                      {calculateTaxBreakdown(shipment).map(item => (
-                        <div key={item.id} className="flex justify-between items-center text-[9px] gap-2">
-                          <span className="font-bold truncate max-w-[110px] uppercase opacity-70 tracking-tight">{item.name}</span>
-                          <span className="font-black text-emerald-400 font-display tabular-nums">{formatCurrency(item.tax)}</span>
-                        </div>
-                      ))}
+                      }}
+                      className="flex items-center gap-1 cursor-pointer hover:opacity-80 group text-left"
+                    >
+                      <Receipt size={12} className={shipment.taxPaid ? "text-emerald-500" : "text-rose-500"} />
+                      <span className={cn("text-[10px] font-black uppercase font-display tabular-nums leading-none tracking-tight", shipment.taxPaid ? "text-emerald-600" : "text-rose-600")}>
+                        {formatCurrency(shipment.taxAmount)}
+                      </span>
+                      <Calculator size={10} className="text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </button>
+                    
+                    <div className="absolute bottom-full left-0 mb-2 w-56 bg-slate-950 text-white rounded-2xl p-3.5 shadow-2xl opacity-0 group-hover/tax:opacity-100 pointer-events-none transition-all z-20 border border-white/10">
+                      <p className="text-[8px] font-black uppercase tracking-[0.2em] text-slate-400 mb-2 border-b border-white/5 pb-1.5">Divisão Pro-Rata de Taxas</p>
+                      <div className="space-y-1.5">
+                        {calculateTaxBreakdown(shipment).map(item => (
+                          <div key={item.id} className="flex justify-between items-center text-[9px] gap-2">
+                            <span className="font-bold truncate max-w-[110px] uppercase opacity-70 tracking-tight">{item.name}</span>
+                            <span className="font-black text-emerald-400 font-display tabular-nums">{formatCurrency(item.tax)}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
-                </div>
-                <button 
-                  onClick={() => updateShipmentTax(shipment.id!, shipment.taxAmount, !shipment.taxPaid)}
-                  className={cn(
-                    "px-2 py-0.5 rounded-lg text-[8px] font-black uppercase tracking-wider transition-all",
-                    shipment.taxPaid ? "bg-emerald-500 text-white hover:bg-emerald-600" : "bg-rose-500 text-white hover:bg-rose-600"
-                  )}
-                >
-                  {shipment.taxPaid ? 'PAGO' : 'PAGAR'}
-                </button>
-              </div>
-            ) : (
-              editingTaxId === shipment.id ? (
-                <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-xl p-0.5" onClick={e => e.stopPropagation()}>
-                  <input 
-                    autoFocus
-                    type="text"
-                    placeholder="0,00"
-                    value={quickTaxAmount}
-                    onChange={e => setQuickTaxAmount(e.target.value.replace(/[^0-9,]/g, ''))}
-                    className="w-12 px-1 py-0.5 text-[10px] font-bold outline-none font-display"
-                  />
                   <button 
-                    onClick={() => {
-                      const val = parseFloat(quickTaxAmount.replace(',', '.'));
-                      if (!isNaN(val)) {
-                        updateShipmentTax(shipment.id!, val, false);
-                        setEditingTaxId(null);
-                      }
-                    }}
-                    className="bg-indigo-600 text-white px-2 py-0.5 rounded-lg text-[8px] font-black uppercase hover:bg-indigo-700 transition-colors"
+                    type="button"
+                    onClick={() => updateShipmentTax(shipment.id!, shipment.taxAmount, !shipment.taxPaid)}
+                    className={cn(
+                      "px-2 py-0.5 rounded-lg text-[8px] font-black uppercase tracking-wider transition-all",
+                      shipment.taxPaid ? "bg-emerald-500 text-white hover:bg-emerald-600" : "bg-rose-500 text-white hover:bg-rose-600"
+                    )}
                   >
-                    OK
+                    {shipment.taxPaid ? 'PAGO' : 'PAGAR'}
                   </button>
-                  <button onClick={() => setEditingTaxId(null)} className="text-slate-400 hover:text-slate-600"><X size={10} /></button>
                 </div>
               ) : (
-                <button 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setEditingTaxId(shipment.id!);
-                    setQuickTaxAmount('');
-                  }}
-                  className="flex items-center gap-1 text-[9px] font-black uppercase text-slate-400 hover:text-indigo-600 transition-colors border border-slate-200/60 hover:border-slate-300 px-2 py-1 rounded-xl bg-slate-50 hover:bg-slate-100"
-                >
-                  <Plus size={10} /> ADD TAXA
-                </button>
-              )
-            )}
+                editingTaxId === shipment.id ? (
+                  <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-xl p-0.5" onClick={e => e.stopPropagation()}>
+                    <input 
+                      autoFocus
+                      type="text"
+                      placeholder="0,00"
+                      value={quickTaxAmount}
+                      onChange={e => setQuickTaxAmount(e.target.value.replace(/[^0-9,]/g, ''))}
+                      className="w-12 px-1 py-0.5 text-[10px] font-bold outline-none font-display focus:border-indigo-500"
+                    />
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        const val = parseFloat(quickTaxAmount.replace(',', '.'));
+                        if (!isNaN(val)) {
+                          updateShipmentTax(shipment.id!, val, false);
+                          setEditingTaxId(null);
+                        }
+                      }}
+                      className="bg-indigo-600 text-white px-2 py-0.5 rounded-lg text-[8px] font-black uppercase hover:bg-indigo-700 transition-colors"
+                    >
+                      OK
+                    </button>
+                    <button type="button" onClick={() => setEditingTaxId(null)} className="text-slate-400 hover:text-slate-600"><X size={10} /></button>
+                  </div>
+                ) : (
+                  <button 
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditingTaxId(shipment.id!);
+                      setQuickTaxAmount('');
+                    }}
+                    className="flex items-center gap-1 text-[9px] font-black uppercase text-slate-400 hover:text-indigo-600 transition-colors border border-slate-200/60 hover:border-slate-300 px-2 py-1 rounded-xl bg-slate-50 hover:bg-slate-100"
+                  >
+                    <Plus size={10} /> ADD TAXA
+                  </button>
+                )
+              )}
+            </div>
+            <button 
+              type="button"
+              onClick={() => sendNotification(shipment, shipment.status)}
+              className="flex items-center gap-1 px-3 py-1.5 bg-slate-900 border border-slate-950 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-emerald-600 hover:border-emerald-700 hover:scale-[1.03] active:scale-95 transition-all shadow-sm"
+            >
+              <MessageCircle size={10} /> NOTIFICAR
+            </button>
           </div>
-          <button 
-            onClick={() => sendNotification(shipment, shipment.status)}
-            className="flex items-center gap-1 px-3 py-1.5 bg-slate-900 border border-slate-950 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-emerald-600 hover:border-emerald-700 hover:scale-[1.03] active:scale-95 transition-all shadow-sm"
-          >
-            <MessageCircle size={10} /> NOTIFICAR
-          </button>
-        </div>
+        )}
       </motion.div>
     );
   };
@@ -2929,46 +2794,52 @@ export default function Shipments() {
       </AnimatePresence>
 
       {/* Filtros de Status */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-2 -mb-2 custom-scrollbar">
-        <button
-          onClick={() => setStatusFilter('all')}
-          className={cn(
-            "px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider whitespace-nowrap transition-all border flex items-center gap-2 cursor-pointer",
-            statusFilter === 'all' 
-              ? getSelectedTabStyle('all')
-              : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-slate-900"
-          )}
-        >
-          <span>Todos</span>
-          <span className={cn(
-            "px-1.5 py-0.5 rounded-md text-[9px] font-black",
-            statusFilter === 'all' ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500"
-          )}>
-            {shipments.length}
-          </span>
-        </button>
-        {SHIPMENT_STATUSES.map(st => {
-          const count = shipments.filter(s => s.status === st).length;
-          const isSelected = statusFilter === st;
-          const config = getStatusConfig(st);
+      <div className="flex bg-slate-100/70 p-1 rounded-full border border-slate-200/50 shadow-inner overflow-x-auto no-scrollbar gap-0.5 mb-6 items-center w-full relative select-none z-10">
+        {[
+          { key: 'all', label: 'Todos', count: shipments.length, config: undefined },
+          ...SHIPMENT_STATUSES.map(st => {
+            const count = shipments.filter(s => s.status === st).length;
+            const config = getStatusConfig(st);
+            return {
+              key: st,
+              label: st,
+              count,
+              config,
+            };
+          })
+        ].map(btn => {
+          const isActive = statusFilter === btn.key;
+          const dotColor = (btn.key === 'all') ? 'bg-slate-400' : (btn.config?.dot || 'bg-slate-400');
           return (
             <button
-              key={st}
-              onClick={() => setStatusFilter(st)}
+              key={btn.key}
+              onClick={() => setStatusFilter(btn.key as any)}
               className={cn(
-                "px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider whitespace-nowrap transition-all border flex items-center gap-2 cursor-pointer",
-                isSelected 
-                  ? getSelectedTabStyle(st)
-                  : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50 text-slate-700"
+                "relative px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-wider whitespace-nowrap transition-all border border-transparent flex items-center gap-2 cursor-pointer select-none shrink-0 z-10",
+                isActive 
+                  ? "text-slate-900"
+                  : "text-slate-500 hover:text-slate-800"
               )}
             >
-              <span className={cn("size-1.5 rounded-full", isSelected ? "bg-white" : config.dot)} />
-              <span>{st}</span>
-              <span className={cn(
-                "px-1.5 py-0.5 rounded-md text-[9px] font-black",
-                isSelected ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500"
-              )}>
-                {count}
+              {isActive && (
+                <motion.span
+                  layoutId="activeShipmentStatusFilterBackground"
+                  className="absolute inset-[2px] bg-white rounded-full shadow-[0_4px_12px_rgba(0,0,0,0.05)] border border-slate-200/40"
+                  style={{ zIndex: -1 }}
+                  transition={{ type: 'spring', stiffness: 480, damping: 35, mass: 1 }}
+                />
+              )}
+              <span className="relative z-10 flex items-center gap-2">
+                {btn.key !== 'all' && (
+                  <span className={cn("size-2 rounded-full transition-colors shrink-0", dotColor)} />
+                )}
+                <span>{btn.label}</span>
+                <span className={cn(
+                  "px-2 py-0.5 rounded-full text-[9px] font-black transition-colors duration-200 shrink-0",
+                  isActive ? "bg-slate-900 text-white" : "bg-slate-200/85 text-slate-600 border border-slate-200/40"
+                )}>
+                  {btn.count}
+                </span>
               </span>
             </button>
           );
