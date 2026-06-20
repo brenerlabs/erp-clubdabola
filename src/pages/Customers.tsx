@@ -14,7 +14,14 @@ export default function Customers() {
   const { setIsSidebarOpen } = useContext(SidebarContext);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(() => {
+    const saved = localStorage.getItem('customers-search');
+    if (saved) {
+      localStorage.removeItem('customers-search');
+      return saved;
+    }
+    return '';
+  });
   const [filterPending, setFilterPending] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);

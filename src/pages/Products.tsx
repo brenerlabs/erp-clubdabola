@@ -14,7 +14,14 @@ export default function Products() {
   const [products, setProducts] = useState<Product[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [shipments, setShipments] = useState<any[]>([]);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(() => {
+    const saved = localStorage.getItem('products-search');
+    if (saved) {
+      localStorage.removeItem('products-search');
+      return saved;
+    }
+    return '';
+  });
   const [filterCategory, setFilterCategory] = useState('Todas');
   const [filterGender, setFilterGender] = useState('Todos');
   const [isModalOpen, setIsModalOpen] = useState(false);

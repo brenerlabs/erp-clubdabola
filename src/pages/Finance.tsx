@@ -180,7 +180,7 @@ export default function Finance() {
   const cashFlow = totalReceived - totalPaidTaxes - totalExpenses;
 
   const totalCostOfGoods = sales.filter(s => s.status !== 'Pré-venda' && s.status !== 'Cancelada' && !s.isAdjustment && !(s.items || []).some(item => item && item.productId === 'sistema_ajuste_auditoria')).reduce((acc, s) => {
-    return acc + s.items.reduce((itemAcc, item) => {
+    return acc + s.items.filter(item => !item.isCancelled).reduce((itemAcc, item) => {
       const product = products.find(p => p.id === item.productId);
       return itemAcc + ((product?.costPrice || 0) * item.quantity);
     }, 0);
@@ -393,7 +393,7 @@ export default function Finance() {
     // 3. New Insight: Gross Margin & Profit Check (Category D)
     sales.forEach(sale => {
       if (sale.status === 'Cancelada' || sale.status === 'Pré-venda') return;
-      const saleCost = sale.items.reduce((acc, item) => {
+      const saleCost = sale.items.filter(item => !item.isCancelled).reduce((acc, item) => {
         const product = products.find(p => p.id === item.productId);
         return acc + ((product?.costPrice || 0) * item.quantity);
       }, 0);
@@ -635,6 +635,214 @@ export default function Finance() {
     } finally {
       setIsSavingExpense(false);
     }
+  };
+
+  const handleCancelSaleItem = (sale: Sale, itemIndex: number) => {
+    if (!sale.id) return;
+    if (sale.status === 'Cancelada') {
+      showAlert("Aviso", "Esta venda já está cancelada!", "warning");
+      return;
+    }
+
+    const itemToCancel = sale.items[itemIndex];
+    if (!itemToCancel) return;
+
+    showConfirm({
+      title: `⚠️ CANCELAR ITEM ⚠️`,
+      description: `Tem certeza de que deseja cancelar o item "${cleanProductNameWithVariation(itemToCancel.productName || itemToCancel.name)}" (x${itemToCancel.quantity}) desta venda? Esta ação atualizará o estoque do produto e todos os fluxos financeiros da venda #${sale.id.slice(-5).toUpperCase()}.`,
+      confirmText: "Sim, Cancelar Item",
+      cancelText: "Voltar",
+      onConfirm: async () => {
+        try {
+          setIsCancellingSale(sale.id!);
+          const batch = writeBatch(db);
+
+          // 1. Devolver estoque se a venda estiver concluída ou pendente (não pré-venda)
+          if (sale.status !== 'Pré-venda') {
+            if (!itemToCancel.isDropshipping && itemToCancel.productId && itemToCancel.variationId) {
+              const prodRef = doc(db, 'products', itemToCancel.productId);
+              const prodSnap = await getDoc(prodRef);
+              if (prodSnap.exists()) {
+                const productData = { id: prodSnap.id, ...prodSnap.data() } as Product;
+                const updatedVariations = productData.variations.map(v => {
+                  if (v.id === itemToCancel.variationId) {
+                    return { ...v, stock: v.stock + itemToCancel.quantity };
+                  }
+                  return v;
+                });
+                const updatedTotalStock = updatedVariations.reduce((acc, v) => acc + v.stock, 0);
+
+                batch.update(prodRef, {
+                  variations: updatedVariations,
+                  totalStock: updatedTotalStock,
+                  updatedAt: serverTimestamp()
+                });
+              }
+            }
+          }
+
+          // 2. Montar lista atualizada de itens com o item marcado como cancelado
+          const updatedItems = sale.items.map((it, idx) => {
+            if (idx === itemIndex) {
+              return { ...it, isCancelled: true };
+            }
+            return it;
+          });
+
+          const activeItems = updatedItems.filter(it => !it.isCancelled);
+
+          if (activeItems.length === 0) {
+            // Todos os itens foram cancelados! Cancelar a venda inteira de maneira segura.
+            
+            // Reverter saldo devedor do cliente se for Fiado
+            if (sale.customerId && sale.paymentMethod === 'Fiado' && sale.status !== 'Pré-venda') {
+              const custRef = doc(db, 'customers', sale.customerId);
+              const custSnap = await getDoc(custRef);
+              if (custSnap.exists()) {
+                const customerData = custSnap.data() as Customer;
+                const rollbackDebt = sale.debtAmount || 0;
+                const nextDebt = Math.max(0, (customerData.totalDebt || 0) - rollbackDebt);
+                
+                batch.update(custRef, {
+                  totalDebt: nextDebt,
+                  updatedAt: serverTimestamp()
+                });
+              }
+            }
+
+            // Excluir envios relacionados
+            const relatedShipments = shipments.filter(ship => ship.items?.some(i => i.saleId === sale.id));
+            relatedShipments.forEach(ship => {
+              if (ship.id) {
+                batch.delete(doc(db, 'shipments', ship.id));
+              }
+            });
+
+            // Excluir transações financeiras relacionadas
+            const transactionsRef = collection(db, 'transactions');
+            const qTrans = query(transactionsRef, where('saleId', '==', sale.id));
+            const transSnap = await getDocs(qTrans);
+            transSnap.forEach(tDoc => {
+              batch.delete(doc(db, 'transactions', tDoc.id));
+            });
+
+            // Atualizar o status da venda para 'Cancelada'
+            const saleRef = doc(db, 'sales', sale.id!);
+            batch.update(saleRef, {
+              items: updatedItems,
+              subtotal: 0,
+              total: 0,
+              debtAmount: 0,
+              status: 'Cancelada',
+              history: [
+                ...(sale.history || []),
+                {
+                  status: 'Cancelada',
+                  updatedAt: new Date(),
+                  notes: `Último item cancelado (${cleanProductNameWithVariation(itemToCancel.productName || itemToCancel.name)}). Venda cancelada na totalidade.`
+                }
+              ]
+            });
+
+          } else {
+            // Ainda restam itens ativos na venda
+            const newSubtotal = activeItems.reduce((acc, it) => acc + (it.price * it.quantity), 0);
+            const newTotal = Math.max(0, newSubtotal - (sale.discount || 0));
+            const newDebtAmount = sale.paymentMethod === 'Fiado' ? Math.max(0, newTotal - (sale.downPayment || 0)) : 0;
+            const finalDownPaymentValue = newTotal < (sale.downPayment || 0) ? newTotal : (sale.downPayment || 0);
+
+            // Reverter a diferença do débito do cliente se for Fiado
+            if (sale.customerId && sale.paymentMethod === 'Fiado' && sale.status !== 'Pré-venda') {
+              const custRef = doc(db, 'customers', sale.customerId);
+              const custSnap = await getDoc(custRef);
+              if (custSnap.exists()) {
+                const customerData = custSnap.data() as Customer;
+                const prevDebt = sale.debtAmount !== undefined ? sale.debtAmount : sale.total;
+                const debtReduction = Math.max(0, prevDebt - newDebtAmount);
+                const nextDebt = Math.max(0, (customerData.totalDebt || 0) - debtReduction);
+
+                batch.update(custRef, {
+                  totalDebt: nextDebt,
+                  updatedAt: serverTimestamp()
+                });
+              }
+            }
+
+            // Remover item cancelado de envios correspondentes
+            const relatedShipments = shipments.filter(ship => ship.items?.some(i => i.saleId === sale.id && i.productId === itemToCancel.productId && i.variationId === itemToCancel.variationId));
+            relatedShipments.forEach(ship => {
+              if (ship.id) {
+                const updatedShipmentItems = ship.items.filter(i => !(i.saleId === sale.id && i.productId === itemToCancel.productId && i.variationId === itemToCancel.variationId));
+                if (updatedShipmentItems.length === 0) {
+                  batch.delete(doc(db, 'shipments', ship.id));
+                } else {
+                  batch.update(doc(db, 'shipments', ship.id), {
+                    items: updatedShipmentItems,
+                    updatedAt: serverTimestamp()
+                  });
+                }
+              }
+            });
+
+            // Ajustar valores das transações financeiras no Firestore
+            const transactionsRef = collection(db, 'transactions');
+            const qTrans = query(transactionsRef, where('saleId', '==', sale.id));
+            const transSnap = await getDocs(qTrans);
+            transSnap.forEach(tDoc => {
+              const transData = tDoc.data();
+              if (sale.paymentMethod === 'Fiado') {
+                if (transData.type === 'debt') {
+                  batch.update(doc(db, 'transactions', tDoc.id), {
+                    amount: newDebtAmount,
+                    updatedAt: serverTimestamp()
+                  });
+                } else if (transData.type === 'payment' && transData.paymentMethod !== 'Fiado') {
+                  if (newTotal < (transData.amount || 0)) {
+                    batch.update(doc(db, 'transactions', tDoc.id), {
+                      amount: newTotal,
+                      updatedAt: serverTimestamp()
+                    });
+                  }
+                }
+              } else {
+                if (transData.type === 'payment') {
+                  batch.update(doc(db, 'transactions', tDoc.id), {
+                    amount: newTotal,
+                    updatedAt: serverTimestamp()
+                  });
+                }
+              }
+            });
+
+            // Atualizar o registro da venda no Firestore
+            const saleRef = doc(db, 'sales', sale.id!);
+            batch.update(saleRef, {
+              items: updatedItems,
+              subtotal: newSubtotal,
+              total: newTotal,
+              debtAmount: newDebtAmount,
+              downPayment: finalDownPaymentValue,
+              history: [
+                ...(sale.history || []),
+                {
+                  status: sale.status,
+                  updatedAt: new Date(),
+                  notes: `Cancelado: ${cleanProductNameWithVariation(itemToCancel.productName || itemToCancel.name)} (x${itemToCancel.quantity}). Subtotal atualizado para ${formatCurrency(newSubtotal)}.`
+                }
+              ]
+            });
+          }
+
+          await batch.commit();
+          showAlert("✅ Cancelamento Concluído!", `O item "${cleanProductNameWithVariation(itemToCancel.productName || itemToCancel.name)}" foi cancelado e estornado com sucesso.`, "success");
+        } catch (err) {
+          console.error("Erro ao cancelar item no Firestore:", err);
+          showAlert("Erro", "Não foi possível cancelar o item. Tente novamente.", "error");
+        } finally {
+          setIsCancellingSale(null);
+        }
+      }
+    });
   };
 
   const handleCancelSale = (sale: Sale) => {
@@ -984,7 +1192,7 @@ export default function Finance() {
     
     // Cost of goods for monthly sales
     const monthlyCostOfGoods = monthlySales.reduce((acc, s) => {
-      return acc + s.items.reduce((itemAcc, item) => {
+      return acc + s.items.filter(item => !item.isCancelled).reduce((itemAcc, item) => {
         const product = products.find(p => p.id === item.productId);
         return itemAcc + ((product?.costPrice || 0) * item.quantity);
       }, 0);
@@ -1582,9 +1790,9 @@ export default function Finance() {
                                   const itemGender = item.gender || products.find(p => p.id === item.productId || p.name === item.name)?.gender || 'Ambos';
                                   const formattedVar = formatVariationWithGender(item.variationName, itemGender) || 'Única';
                                   return (
-                                    <div key={idx} className="p-3.5 flex items-center justify-between text-xs hover:bg-slate-50/40 transition-colors">
+                                    <div key={idx} className={cn("p-3.5 flex flex-wrap sm:flex-nowrap items-center justify-between gap-4 text-xs hover:bg-slate-50/40 transition-colors", item.isCancelled && "bg-rose-50/20 opacity-60")}>
                                       <div>
-                                        <p className="font-bold text-slate-800 uppercase tracking-tight">{cleanProductNameWithVariation(item.productName || item.name)}</p>
+                                        <p className={cn("font-bold text-slate-800 uppercase tracking-tight", item.isCancelled && "line-through text-slate-400 decoration-rose-500")}>{cleanProductNameWithVariation(item.productName || item.name)}</p>
                                         <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Grade: <span className="text-slate-700 font-sans">{formattedVar}</span> {item.isDropshipping && '• Dropshipping'}</p>
                                         {item.isCustomized && item.customName && (
                                           <div className="mt-1 flex items-center gap-1.5 bg-amber-50 border border-amber-200/50 rounded-lg px-2 py-0.5 text-[9px] font-black uppercase text-amber-800 tracking-wider w-fit">
@@ -1593,19 +1801,43 @@ export default function Finance() {
                                           </div>
                                         )}
                                       </div>
-                                    <div className="flex items-center gap-6 font-semibold">
+                                    <div className="flex flex-wrap sm:flex-nowrap items-center gap-4 sm:gap-6 font-semibold">
                                       <div className="text-right">
                                         <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Qtd</p>
-                                        <p className="text-[11px] text-slate-850 font-bold tabular-nums">x{item.quantity}</p>
+                                        <p className={cn("text-[11px] text-slate-850 font-bold tabular-nums", item.isCancelled && "line-through text-slate-400")}>x{item.quantity}</p>
                                       </div>
                                       <div className="text-right">
                                         <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Unidade</p>
-                                        <p className="text-[11px] text-slate-850 font-bold tabular-nums">{formatCurrency(item.price)}</p>
+                                        <p className={cn("text-[11px] text-slate-850 font-bold tabular-nums", item.isCancelled && "line-through text-slate-400")}>{formatCurrency(item.price)}</p>
                                       </div>
                                       <div className="text-right">
                                         <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Subtotal</p>
-                                        <p className="text-[11px] text-slate-950 font-black tabular-nums">{formatCurrency(item.price * item.quantity)}</p>
+                                        <p className={cn("text-[11px] text-slate-950 font-black tabular-nums", item.isCancelled && "line-through text-slate-350")}>{formatCurrency(item.price * item.quantity)}</p>
                                       </div>
+
+                                      {/* Botão de Cancelar Item Isolado */}
+                                      {!isCancelled && (
+                                        <div className="pl-1 sm:pl-3">
+                                          {item.isCancelled ? (
+                                            <span className="px-2 py-0.5 bg-rose-50 text-rose-700 text-[8px] font-extrabold uppercase rounded tracking-wider border border-rose-100 select-none shrink-0">
+                                              Cancelado
+                                            </span>
+                                          ) : (
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleCancelSaleItem(sale, idx);
+                                              }}
+                                              disabled={isCancellingSale === sale.id}
+                                              title="Cancelar apenas este item"
+                                              className="px-2 py-1 bg-rose-50 hover:bg-rose-600 text-rose-700 hover:text-white border border-rose-150 rounded text-[8px] font-black uppercase tracking-wider cursor-pointer active:scale-95 transition-all select-none disabled:opacity-50 flex items-center gap-1 shrink-0"
+                                            >
+                                              <Trash2 size={10} />
+                                              <span>Cancelar</span>
+                                            </button>
+                                          )}
+                                        </div>
+                                      )}
                                     </div>
                                   </div>
                                   );

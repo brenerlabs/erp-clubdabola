@@ -33,6 +33,7 @@ export interface SaleItem {
   productId: string;
   variationId: string;
   name: string;
+  productName?: string;
   variationName: string;
   quantity: number;
   price: number;
@@ -41,6 +42,7 @@ export interface SaleItem {
   isCustomized?: boolean;
   customName?: string;
   customNumber?: string;
+  isCancelled?: boolean;
 }
 
 export interface Sale {

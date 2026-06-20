@@ -39,6 +39,8 @@ type Page = 'dashboard' | 'pdv' | 'products' | 'customers' | 'finance' | 'compen
 interface SidebarContextType {
   isSidebarOpen: boolean;
   setIsSidebarOpen: (open: boolean) => void;
+  activePage?: Page;
+  setActivePage?: (page: Page) => void;
 }
 
 export const SidebarContext = React.createContext<SidebarContextType>({
@@ -235,7 +237,7 @@ export default function App() {
   ];
 
   return (
-    <SidebarContext.Provider value={{ isSidebarOpen, setIsSidebarOpen }}>
+    <SidebarContext.Provider value={{ isSidebarOpen, setIsSidebarOpen, activePage, setActivePage }}>
       <div className="flex h-screen font-sans overflow-hidden relative bg-gradient-to-tr from-[#f8fafc] via-[#f1f5f9] to-[#e2e8f0] text-slate-900">
         
         {/* Subtle Elegant Ambient Background Gradient Glows */}

@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { db } from '../lib/firebase';
 import { collection, query, onSnapshot, orderBy, limit, doc, updateDoc, writeBatch, serverTimestamp, getDoc } from 'firebase/firestore';
 import { Transaction, Sale, Product, Customer, Shipment, Expense } from '../types';
 import { formatCurrency, cn, smartSearchMatch } from '../lib/utils';
 import { RollingCounter } from '../components/RollingCounter';
+import { SidebarContext } from '../App';
 import { 
   TrendingUp, 
   Users, 
@@ -50,9 +51,52 @@ import {
 } from 'recharts';
 
 export default function Dashboard() {
+  const { setActivePage } = useContext(SidebarContext);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [sales, setSales] = useState<Sale[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [shipments, setShipments] = useState<Shipment[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+
+  const [globalSearch, setGlobalSearch] = useState('');
+  const [showGlobalSuggestions, setShowGlobalSuggestions] = useState(false);
+
+  const menuNavigationShortcuts = React.useMemo(() => [
+    { id: 'pdv', label: 'Vender (PDV Caixa)', keywords: 'venda pdv caixa caixa de vendas registrar pedido dindin pix cartao fiado faturamento' },
+    { id: 'products', label: 'Estoque de Produtos', keywords: 'produto estoque mercadoria grade grade de tamanhos cadastrar produto camisas' },
+    { id: 'customers', label: 'Clientes & Devedores', keywords: 'cliente fiado devedores carteira de clientes devedor saldo limite' },
+    { id: 'shipments', label: 'Encomendas & Rastreios', keywords: 'encomenda frete correios entrega rastreamento rastrear jadlog pac sedex' },
+    { id: 'compensations', label: 'Compensar Fiado', keywords: 'receber pagar amortizacao divida compensacao abatimento' },
+    { id: 'reports', label: 'Relatórios & Métricas', keywords: 'relatorio faturamento lucro dashboard graficos estatisticas performance bi' },
+    { id: 'finance', label: 'Financeiro & Caixa', keywords: 'financeiro caixa entradas despesas auditoria movimentacao' },
+    { id: 'mural', label: 'Mural de Avisos & Logo', keywords: 'mural aviso comunicados logotipo escala configurar' },
+  ], []);
+
+  const globalSearchResults = React.useMemo(() => {
+    if (!globalSearch.trim()) return { products: [], customers: [], shortcuts: [] };
+    const queryTerm = globalSearch.toLowerCase().trim();
+
+    const matchedProducts = products.filter(p =>
+      smartSearchMatch([p.name || '', p.category || '', p.gender || '', p.id || ''], queryTerm)
+    ).slice(0, 5);
+
+    const matchedCustomers = customers.filter(c =>
+      smartSearchMatch([c.name || '', c.contact || '', c.id || '', c.instagram || ''], queryTerm)
+    ).slice(0, 5);
+
+    const matchedShortcuts = menuNavigationShortcuts.filter(shortcut =>
+      shortcut.label.toLowerCase().includes(queryTerm) || shortcut.keywords.includes(queryTerm)
+    );
+
+    return {
+      products: matchedProducts,
+      customers: matchedCustomers,
+      shortcuts: matchedShortcuts
+    };
+  }, [globalSearch, products, customers, menuNavigationShortcuts]);
+
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [compAmount, setCompAmount] = useState('');
   const [compMethod, setCompMethod] = useState<'Dinheiro' | 'Cartão' | 'Pix'>('Pix');
@@ -65,10 +109,6 @@ export default function Dashboard() {
     clientRemainingDebt: number;
     paymentMethod: string;
   } | null>(null);
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [shipments, setShipments] = useState<Shipment[]>([]);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
   
   // Filters
   const [customerFilter, setCustomerFilter] = useState('all');
@@ -198,22 +238,19 @@ export default function Dashboard() {
       if (isAdjustment) return false;
       
       const matchesCustomer = customerFilter === 'all' || sale.customerId === customerFilter;
-      const matchesProduct = productFilter === 'all' || (sale.items || []).some(item => item && item.productId === productFilter);
+      const matchesProduct = productFilter === 'all' || (sale.items || []).filter(item => item && !item.isCancelled).some(item => item.productId === productFilter);
       
-      const matchesGender = genderFilter === 'all' || (sale.items || []).some(item => {
-        if (!item) return false;
+      const matchesGender = genderFilter === 'all' || (sale.items || []).filter(item => item && !item.isCancelled).some(item => {
         const p = products.find(prod => prod.id === item.productId);
         return p && (p.gender === genderFilter || p.gender === 'Ambos');
       });
       
-      const matchesCategory = categoryFilter === 'all' || (sale.items || []).some(item => {
-        if (!item) return false;
+      const matchesCategory = categoryFilter === 'all' || (sale.items || []).filter(item => item && !item.isCancelled).some(item => {
         const p = products.find(prod => prod.id === item.productId);
         return p && p.category === categoryFilter;
       });
       
-      const matchesProductSearch = productSearch.trim() === '' || (sale.items || []).some(item => {
-        if (!item) return false;
+      const matchesProductSearch = productSearch.trim() === '' || (sale.items || []).filter(item => item && !item.isCancelled).some(item => {
         const p = products.find(prod => prod.id === item.productId);
         return smartSearchMatch([p?.name, item.productName, item.name, item.productId], productSearch);
       });
@@ -230,7 +267,7 @@ export default function Dashboard() {
     filteredSales.forEach(sale => {
       revenue += sale.total || 0;
       (sale.items || []).forEach(item => {
-        if (!item) return;
+        if (!item || item.isCancelled) return;
         const product = products.find(p => p.id === item.productId);
         if (product) {
           profit += ((item.price || 0) - (product.costPrice || 0)) * (item.quantity || 0);
@@ -263,7 +300,7 @@ export default function Dashboard() {
       avgItemPrice: totalItemsQuantity > 0 ? revenue / totalItemsQuantity : 0,
       avgItemsPerSale: filteredSales.length > 0 ? totalItemsQuantity / filteredSales.length : 0,
       lowStockItems: products.filter(p => !p.isDropshipping && p.totalStock <= p.minStock).length,
-      dropshippingOrders: filteredSales.filter(s => s.items.some(i => i.isDropshipping)).length,
+      dropshippingOrders: filteredSales.filter(s => s.items.filter(i => !i.isCancelled).some(i => i.isDropshipping)).length,
       totalDebt: debt,
       totalOrders: filteredSales.length,
       paidTaxes,
@@ -498,7 +535,7 @@ export default function Dashboard() {
       return {
         date,
         total: daySales.reduce((acc, s) => acc + s.total, 0),
-        quantity: daySales.reduce((acc, s) => acc + s.items.reduce((sum, i) => sum + i.quantity, 0), 0)
+        quantity: daySales.reduce((acc, s) => acc + s.items.filter(i => !i.isCancelled).reduce((sum, i) => sum + i.quantity, 0), 0)
       };
     });
   }, [filteredSales]);
@@ -589,7 +626,7 @@ export default function Dashboard() {
     const counts: Record<string, { id: string; name: string; category: string; quantity: number; revenue: number }> = {};
     filteredSales.forEach(sale => {
       (sale.items || []).forEach(item => {
-        if (!item) return;
+        if (!item || item.isCancelled) return;
         const prod = products.find(p => p.id === item.productId);
         if (prod) {
           const key = item.productId;
@@ -844,7 +881,7 @@ export default function Dashboard() {
       const productSales: Record<string, { name: string; total: number }> = {};
       sales.filter(s => s.status !== 'Pré-venda' && s.status !== 'Cancelada' && !s.isAdjustment && !(s.items || []).some(item => item && item.productId === 'sistema_ajuste_auditoria')).forEach(sale => {
         (sale.items || []).forEach(item => {
-          if (!item || !item.productId) return;
+          if (!item || item.isCancelled || !item.productId) return;
           if (!productSales[item.productId]) {
             productSales[item.productId] = { name: item.name || item.productName || 'Sem nome', total: 0 };
           }
@@ -901,7 +938,7 @@ export default function Dashboard() {
     // NEW INSIGHT 14: Cross-selling (Quantidade Média de Itens por Carrinho)
     const completedSales = sales.filter(s => s.status !== 'Pré-venda' && s.status !== 'Cancelada' && !s.isAdjustment && !(s.items || []).some(item => item && item.productId === 'sistema_ajuste_auditoria'));
     if (completedSales.length > 0) {
-      const totalItemsCount = completedSales.reduce((acc, s) => acc + s.items.reduce((sum, i) => sum + i.quantity, 0), 0);
+      const totalItemsCount = completedSales.reduce((acc, s) => acc + s.items.filter(i => !i.isCancelled).reduce((sum, i) => sum + i.quantity, 0), 0);
       const avgItemsPerSale = totalItemsCount / completedSales.length;
 
       if (avgItemsPerSale < 1.6) {
@@ -1011,7 +1048,7 @@ export default function Dashboard() {
 
       completedSales.forEach(s => {
         (s.items || []).forEach(item => {
-          if (!item) return;
+          if (!item || item.isCancelled) return;
           totalItemsCount += item.quantity || 0;
           if (item.isCustomized || item.customName || item.customNumber) {
             customItemsCount += item.quantity || 0;
@@ -1047,7 +1084,7 @@ export default function Dashboard() {
 
       completedSales.forEach(s => {
         (s.items || []).forEach(item => {
-          if (!item) return;
+          if (!item || item.isCancelled) return;
           const prodObj = products.find(p => p.id === item.productId);
           const genderStr = item.gender || prodObj?.gender || 'Ambos';
           const itemRev = (item.price || 0) * (item.quantity || 0);
@@ -1099,7 +1136,7 @@ export default function Dashboard() {
       const soldProductIds = new Set<string>();
       completedSales.forEach(s => {
         (s.items || []).forEach(item => {
-          if (item && item.productId) {
+          if (item && !item.isCancelled && item.productId) {
             soldProductIds.add(item.productId);
           }
         });
@@ -1276,6 +1313,219 @@ export default function Dashboard() {
           </div>
           <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest pl-2 border-l border-slate-200">Analistas Ativos</p>
         </div>
+      </div>
+
+      {/* Barra de Busca Rápida Global */}
+      <div className="relative z-50">
+        <div className="relative max-w-2xl">
+          <div className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center pointer-events-none text-slate-400">
+            <Search size={18} className="animate-pulse text-red-800" />
+          </div>
+          <input
+            type="text"
+            className="w-full pl-11 pr-10 py-3.5 bg-white border border-slate-200/80 rounded-[20px] text-sm text-slate-800 placeholder-slate-400/80 outline-none focus:ring-1 focus:ring-red-800/25 focus:border-red-800 shadow-[0_4px_22px_rgba(15,23,42,0.015)] transition-all font-semibold"
+            placeholder="Pesquisa rápida... digite produtos, categorias, clientes ou atalhos (ex: 'pdv', 'estoque')"
+            value={globalSearch}
+            onChange={(e) => {
+              setGlobalSearch(e.target.value);
+              setShowGlobalSuggestions(true);
+            }}
+            onFocus={() => setShowGlobalSuggestions(true)}
+          />
+          {globalSearch && (
+            <button
+              onClick={() => {
+                setGlobalSearch('');
+                setShowGlobalSuggestions(false);
+              }}
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-50 transition-all cursor-pointer"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+
+        <AnimatePresence>
+          {showGlobalSuggestions && (
+            <>
+              {/* Overlay invisível para fechar o popup ao clicar fora */}
+              <div 
+                className="fixed inset-0 z-40" 
+                onClick={() => setShowGlobalSuggestions(false)} 
+              />
+              
+              <motion.div
+                initial={{ opacity: 0, y: 10, scale: 0.99 }}
+                animate={{ opacity: 1, y: 4, scale: 1 }}
+                exit={{ opacity: 0, y: 10, scale: 0.99 }}
+                transition={{ type: "spring", stiffness: 350, damping: 28 }}
+                className="absolute left-0 mt-2 w-full max-w-2xl bg-white/95 backdrop-blur-xl border border-slate-200/60 rounded-3xl shadow-[0_20px_50px_rgba(15,23,42,0.08)] overflow-hidden z-50 max-h-[485px] overflow-y-auto custom-scrollbar"
+              >
+                <div className="p-4 space-y-4">
+                  {globalSearch.trim().length === 0 ? (
+                    /* Dicas de Busca & Atalhos Rápidos Iniciais quando vazio */
+                    <div className="space-y-4">
+                      <div className="space-y-1.5">
+                        <div className="text-[9px] font-black tracking-wider text-red-800 uppercase pl-2 flex items-center gap-1.5">
+                          <Sparkles size={11} className="text-red-700 animate-pulse" />
+                          Sugestões de Navegação Rápida
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {menuNavigationShortcuts.slice(0, 4).map((shortcut) => (
+                            <button
+                              key={shortcut.id}
+                              onClick={() => {
+                                if (setActivePage) setActivePage(shortcut.id as any);
+                                setShowGlobalSuggestions(false);
+                              }}
+                              className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 hover:border-slate-200/80 border border-slate-100 transition-all text-left text-xs font-semibold text-slate-700 hover:text-red-950 group cursor-pointer"
+                            >
+                              <span className="flex items-center gap-2.5">
+                                <span className="size-2 rounded-full bg-red-700 group-hover:scale-125 transition-transform shrink-0" />
+                                <span className="truncate">{shortcut.label}</span>
+                              </span>
+                              <span className="text-[9px] text-slate-400 font-bold group-hover:translate-x-0.5 transition-transform">Ir ➜</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="p-3.5 bg-red-50/40 rounded-2xl border border-red-100/50 flex items-start gap-2.5">
+                        <Lightbulb size={16} className="text-red-800 mt-0.5 shrink-0 animate-bounce" />
+                        <div>
+                          <p className="text-[10px] font-extrabold uppercase tracking-wider text-red-900 leading-tight">Dicas de Pesquisa Inteligente</p>
+                          <p className="text-[10px] font-medium text-slate-500 mt-1 leading-relaxed">
+                            Você pode buscar em tempo real por nomes de clientes, contatos, categorias de produto (como <span className="font-extrabold text-red-800 cursor-pointer underline hover:text-red-950" onClick={() => setGlobalSearch('camisa')}>camisa</span>), condições financeiras ou devedores!
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    /* Resultados Ativos quando há termos de pesquisa */
+                    <>
+                      {/* Atalhos de Menu */}
+                      {globalSearchResults.shortcuts.length > 0 && (
+                        <div className="space-y-1.5">
+                          <div className="text-[9px] font-black tracking-wider text-red-800 uppercase pl-2 flex items-center gap-1.5">
+                            <Sparkles size={11} className="text-red-700" />
+                            Atalhos do Painel & Links rápidos
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                            {globalSearchResults.shortcuts.map((shortcut) => (
+                              <button
+                                key={shortcut.id}
+                                onClick={() => {
+                                  if (setActivePage) setActivePage(shortcut.id as any);
+                                  setShowGlobalSuggestions(false);
+                                }}
+                                className="flex items-center gap-2.5 p-2.5 rounded-xl hover:bg-red-500/5 hover:border-red-800/20 border border-slate-100 transition-all text-left text-xs font-semibold text-slate-700 hover:text-red-900 group cursor-pointer"
+                              >
+                                <span className="size-2 rounded-full bg-red-700 group-hover:scale-125 transition-transform shrink-0" />
+                                <span className="truncate">{shortcut.label}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Produtos */}
+                      {globalSearchResults.products.length > 0 && (
+                        <div className="space-y-1.5 border-t border-slate-100/60 pt-3">
+                          <div className="text-[9px] font-black tracking-wider text-slate-400 uppercase pl-2 flex items-center gap-1.5">
+                            <Package size={11} />
+                            Produtos Encontrados
+                          </div>
+                          <div className="space-y-1">
+                            {globalSearchResults.products.map((p) => (
+                              <button
+                                key={p.id}
+                                onClick={() => {
+                                  localStorage.setItem('products-search', p.name);
+                                  if (setActivePage) setActivePage('products');
+                                  setShowGlobalSuggestions(false);
+                                }}
+                                className="w-full flex justify-between items-center p-2.5 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-100 transition-all text-left text-xs text-slate-700 group cursor-pointer"
+                              >
+                                <div className="flex flex-col min-w-0 pr-4">
+                                  <span className="font-bold text-slate-800 truncate group-hover:text-red-800 capitalize transition-colors">
+                                    {p.name?.toLowerCase()}
+                                  </span>
+                                  <span className="text-[9px] text-slate-400 mt-0.5 uppercase tracking-wider font-semibold">
+                                    {p.category} • {p.gender}
+                                  </span>
+                                </div>
+                                <div className="shrink-0 flex flex-col items-end text-right font-sans">
+                                  <span className="text-[11px] font-black text-slate-900">{formatCurrency(p.price)}</span>
+                                  <span className="text-[8px] text-slate-400 font-bold">Estoque: {p.totalStock} unid</span>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Clientes */}
+                      {globalSearchResults.customers.length > 0 && (
+                        <div className="space-y-1.5 border-t border-slate-100/60 pt-3">
+                          <div className="text-[9px] font-black tracking-wider text-slate-400 uppercase pl-2 flex items-center gap-1.5">
+                            <Users size={11} />
+                            Clientes Encontrados
+                          </div>
+                          <div className="space-y-1">
+                            {globalSearchResults.customers.map((c) => {
+                              const totalPending = (c.outstandingBalance || 0);
+                              return (
+                                <button
+                                  key={c.id}
+                                  onClick={() => {
+                                    localStorage.setItem('customers-search', c.name);
+                                    if (setActivePage) setActivePage('customers');
+                                    setShowGlobalSuggestions(false);
+                                  }}
+                                  className="w-full flex justify-between items-center p-2.5 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-100 transition-all text-left text-xs text-slate-700 group cursor-pointer"
+                                >
+                                  <div className="flex flex-col min-w-0 pr-4">
+                                    <span className="font-bold text-slate-800 truncate group-hover:text-red-800 transition-colors uppercase">
+                                      {c.name}
+                                    </span>
+                                    <span className="text-[9px] text-slate-400 mt-0.5">
+                                      {c.contact || 'Sem contato'} {c.instagram ? `• @${c.instagram}` : ''}
+                                    </span>
+                                  </div>
+                                  <div className="shrink-0 flex flex-col items-end">
+                                    {totalPending > 0 ? (
+                                      <span className="text-[10px] font-extrabold text-[#be123c] bg-red-50 px-2.5 py-0.5 rounded-full">
+                                        Pendente: {formatCurrency(totalPending)}
+                                      </span>
+                                    ) : (
+                                      <span className="text-[10px] font-extrabold text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-full">
+                                        Regularizado
+                                      </span>
+                                    )}
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Vazio */}
+                      {globalSearchResults.products.length === 0 && 
+                      globalSearchResults.customers.length === 0 && 
+                      globalSearchResults.shortcuts.length === 0 && (
+                        <div className="py-8 text-center text-slate-400 space-y-2">
+                          <p className="text-xs font-semibold">Nenhum produto, cliente ou tela foi encontrado para "{globalSearch}"</p>
+                          <p className="text-[10px] uppercase font-black tracking-widest text-slate-350">Tente buscar por termos mais genéricos</p>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Bento Grid para Dashboards (Painéis Organizados) */}

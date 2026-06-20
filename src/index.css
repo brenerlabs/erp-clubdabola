@@ -93,21 +93,50 @@ th {
 }
 
 /* Forms & Inputs styled for Premium usage */
-input, select, textarea {
+input:not([class*="bg-"]), select:not([class*="bg-"]), textarea:not([class*="bg-"]) {
   background-color: #ffffff;
+}
+
+input:not([class*="text-"]), select:not([class*="text-"]), textarea:not([class*="text-"]) {
   color: #0f172a;
+}
+
+input:not([class*="border-"]), select:not([class*="border-"]), textarea:not([class*="border-"]) {
   border-color: #cbd5e1;
 }
 
 input:focus, select:focus, textarea:focus {
   outline: none;
+}
+
+input:not([class*="focus:border-"]):focus, select:not([class*="focus:border-"]):focus, textarea:not([class*="focus:border-"]):focus {
   border-color: #be123c;
   box-shadow: 0 0 0 1px #be123c;
 }
 
-select option {
+select option:not([class*="bg-"]) {
   background-color: #ffffff;
+}
+select option:not([class*="text-"]) {
   color: #0f172a;
+}
+
+/* Hard Overrides for Dark Containers (PDV / Caixa de Vendas) to guarantee legibility */
+[class*="bg-slate-900"] input, [class*="bg-slate-950"] input,
+[class*="bg-slate-900"] select, [class*="bg-slate-950"] select,
+[class*="bg-slate-900"] textarea, [class*="bg-slate-950"] textarea {
+  background-color: #0f172a !important; /* Deep elegant slate */
+  color: #ffffff !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+[class*="bg-slate-900"] select option, [class*="bg-slate-950"] select option {
+  background-color: #0f172a !important;
+  color: #ffffff !important;
+}
+
+[class*="bg-slate-900"] input::placeholder, [class*="bg-slate-950"] input::placeholder {
+  color: rgba(255, 255, 255, 0.4) !important;
 }
 
 /* Redirect custom critical alerts/buttons to exquisite crimson/scarlet gradient shades */
