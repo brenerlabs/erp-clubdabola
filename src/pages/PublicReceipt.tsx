@@ -151,11 +151,8 @@ export default function PublicReceipt({ receiptId }: PublicReceiptProps) {
     : new Date().toLocaleDateString('pt-BR');
 
   // Extract customized items for drawing
-  const customizedItem = sale.items?.find((it) => it.isCustomized);
-  const hasCustomized = !!customizedItem;
-  const previewName = customizedItem?.customName || 'SEU NOME';
-  const previewNum = customizedItem?.customNumber || '10';
-  const previewProductName = customizedItem?.name || '';
+  const customizedItems = sale.items?.filter((it) => it.isCustomized) || [];
+  const hasCustomized = customizedItems.length > 0;
 
   // Confetti generator helper
   const renderConfetti = () => {
@@ -332,14 +329,22 @@ export default function PublicReceipt({ receiptId }: PublicReceiptProps) {
 
             {/* TAB CONTENT: Visual Jersey Live Canvas */}
             {hasCustomized && activeTab === 'jersey' && (
-              <div className="space-y-4 animate-fadeIn">
+              <div className="space-y-6 animate-fadeIn">
                 
-                {/* Visual Jersey Preview Component */}
-                <JerseyPreview 
-                  name={previewName} 
-                  number={previewNum} 
-                  productName={previewProductName}
-                />
+                {customizedItems.map((item, index) => (
+                  <div key={index} className="space-y-2">
+                    {customizedItems.length > 1 && (
+                      <h3 className="text-[10px] font-black uppercase text-amber-500 tracking-[0.2em] pl-1 text-left">
+                        👕 Manto {index + 1}: {item.name}
+                      </h3>
+                    )}
+                    <JerseyPreview 
+                      name={item.customName || 'SEU NOME'} 
+                      number={item.customNumber || '10'} 
+                      productName={item.name || ''}
+                    />
+                  </div>
+                ))}
 
                 {/* Information Badge */}
                 <div className="flex gap-2.5 bg-gradient-to-r from-white/5 via-indigo-950/10 to-white/5 rounded-xl p-3 border border-indigo-500/10 text-left">

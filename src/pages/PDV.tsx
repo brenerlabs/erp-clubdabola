@@ -889,14 +889,14 @@ export default function PDV() {
       `• Beneficiário: *Brener Gomes*\n` +
       `• Chave Pix Celular: \`91993249580\`\n` +
       `• Valor: *${formatCurrency(pixAmount)}*\n` +
-      `• Pix Copia e Cola (Toque para Copiar):\n\`${pixPayload}\`\n` +
       `-------------------------------------------\n`
     ) : '';
 
     const baseRoute = (import.meta as any).env?.BASE_URL || '/';
     const cleanBase = baseRoute.endsWith('/') ? baseRoute : baseRoute + '/';
     const receiptLink = `${window.location.origin}${cleanBase}?receipt=${sale.id || ''}`;
-    const receiptSection = sale.id ? (
+    const hasCustomization = (sale.items || []).some((it: any) => it.isCustomized);
+    const receiptSection = (sale.id && hasCustomization) ? (
       `🔗 *MANTO INTERATIVO ONLINE (Novidade):*\n` +
       (isPre 
         ? `Acompanhe a arte do seu manto personalizado e visualize os detalhes do seu orçamento em tempo real:\n`
@@ -953,7 +953,6 @@ export default function PDV() {
       `💳 *DADOS PARA PAGAMENTO VIA PIX:*\n` +
       `• Beneficiário: *Brener Gomes*\n` +
       `• Chave Celular: \`91993249580\`\n` +
-      `• Pix Copia e Cola (Toque para Copiar):\n\`${budgetPixPayload}\`\n` +
       `-------------------------------------------\n` +
       `📞 *Contato Club da Bola:*\n` +
       `• WhatsApp: (91) 99324-9580\n\n` +
