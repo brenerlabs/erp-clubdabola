@@ -220,11 +220,13 @@ export default function PDV() {
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
+  const [shipments, setShipments] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'checkout' | 'prevendas'>('checkout');
   const [loadedPreSaleId, setLoadedPreSaleId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [cart, setCart] = useState<SaleItem[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [useCustomerBalance, setUseCustomerBalance] = useState<boolean>(false);
   const [shippingRegion, setShippingRegion] = useState<'none' | 'paragominas' | 'saoluis'>('none');
   const [paymentMethod, setPaymentMethod] = useState<'Dinheiro' | 'Cartão' | 'Pix' | 'Fiado'>('Dinheiro');
   const [downPayment, setDownPayment] = useState<string>('');
@@ -268,8 +270,65 @@ export default function PDV() {
     const unsubSales = onSnapshot(qSales, (snapshot) => {
       setSales(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Sale)));
     });
-    return () => { unsubProd(); unsubCust(); unsubSales(); };
+    const qShipments = query(collection(db, 'shipments'));
+    const unsubShipments = onSnapshot(qShipments, (snapshot) => {
+      setShipments(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'shipments');
+    });
+    return () => { unsubProd(); unsubCust(); unsubSales(); unsubShipments(); };
   }, []);
+
+  // Helper to calculate the realistic average cost price for a product based on real import batches/shipments (pro-rata)
+  const getRealAverageCost = (productId: string, fallbackCost: number): number => {
+    // Filter shipments that contain this product
+    const productShipments = shipments.filter(s => 
+      s.items && s.items.some((item: any) => item.productId === productId || item.productName === products.find(p => p.id === productId)?.name)
+    );
+
+    if (productShipments.length === 0) {
+      return fallbackCost;
+    }
+
+    let totalCalculatedCost = 0;
+    let totalItemsCount = 0;
+
+    productShipments.forEach(s => {
+      // Find the specific item in this shipment
+      const shipItem = s.items.find((item: any) => item.productId === productId || item.productName === products.find(p => p.id === productId)?.name);
+      if (shipItem) {
+        const itemQty = shipItem.quantity || 1;
+        // Correctly detect supplier cost rather than customer purchase price
+        let itemSupplierPrice = shipItem.supplierCost !== undefined ? shipItem.supplierCost : null;
+        if (itemSupplierPrice === null) {
+          const matchingProd = products.find(p => p.id === productId);
+          if (matchingProd && matchingProd.costPrice > 0) {
+            itemSupplierPrice = matchingProd.costPrice;
+          } else {
+            // Avoid using selling price for cost if it's way higher than costPrice
+            itemSupplierPrice = shipItem.price || 0;
+          }
+        }
+
+        // Calculate prorated tax for this shipment if hasTax is true
+        let unitTax = 0;
+        if (s.hasTax && s.taxAmount > 0) {
+          const totalPiecesInShipment = s.items.reduce((sum: number, item: any) => sum + (item.quantity || 1), 0);
+          if (totalPiecesInShipment > 0) {
+            unitTax = s.taxAmount / totalPiecesInShipment;
+          }
+        }
+
+        // Total cost of this batch item is the purchase price + prorated tax
+        const itemUnitCost = itemSupplierPrice + unitTax;
+        
+        totalCalculatedCost += itemUnitCost * itemQty;
+        totalItemsCount += itemQty;
+      }
+    });
+
+    return totalItemsCount > 0 ? (totalCalculatedCost / totalItemsCount) : fallbackCost;
+  };
 
   const addToCart = (product: Product, variation: Variation) => {
     if (!product.isDropshipping && variation.stock <= 0) return alert('Estoque esgotado!');
@@ -449,6 +508,11 @@ export default function PDV() {
   }, 0);
   const total = Math.max(0, subtotal - safeFloat(discountVal));
 
+  const freshCustomerForUI = selectedCustomer ? (customers.find(c => c.id === selectedCustomer.id) || selectedCustomer) : null;
+  const customerBalanceForUI = freshCustomerForUI ? (freshCustomerForUI.balance !== undefined ? freshCustomerForUI.balance : -(freshCustomerForUI.totalDebt || 0)) : 0;
+  const appliedBalanceForUI = (useCustomerBalance && customerBalanceForUI > 0) ? Math.min(customerBalanceForUI, total) : 0;
+  const saleTotalForUI = Math.max(0, total - appliedBalanceForUI);
+
   const handleDiscountPercChange = (valStr: string) => {
     const val = valStr.replace(',', '.');
     setDiscountPerc(valStr);
@@ -469,6 +533,7 @@ export default function PDV() {
     
     const customer = customers.find(c => c.id === preSale.customerId);
     setSelectedCustomer(customer || null);
+    setUseCustomerBalance(false);
     
     // Set discount values
     if (preSale.discount > 0) {
@@ -652,7 +717,14 @@ export default function PDV() {
       const finalDiscount = safeFloat(discountVal);
       const finalDownPayment = isPreSale ? 0 : safeFloat(downPayment);
       const saleTotal = Math.max(0, subtotal - finalDiscount);
-      const debtAmount = !isPreSale && paymentMethod === 'Fiado' ? Math.max(0, saleTotal - finalDownPayment) : 0;
+
+      // Balance & Credit calculations
+      const freshCustomer = selectedCustomer ? (customers.find(c => c.id === selectedCustomer.id) || selectedCustomer) : null;
+      const customerBalance = freshCustomer ? (freshCustomer.balance !== undefined ? freshCustomer.balance : -(freshCustomer.totalDebt || 0)) : 0;
+      const appliedBalance = (!isPreSale && useCustomerBalance && customerBalance > 0) ? Math.min(customerBalance, saleTotal) : 0;
+      const finalSaleTotal = Math.max(0, saleTotal - appliedBalance);
+
+      const debtAmount = !isPreSale && paymentMethod === 'Fiado' ? Math.max(0, finalSaleTotal - finalDownPayment) : 0;
 
       // Ensure stable date
       let finalDate: Date = new Date();
@@ -696,6 +768,7 @@ export default function PDV() {
         subtotal,
         discount: finalDiscount,
         total: saleTotal,
+        appliedBalance: appliedBalance || 0,
         downPayment: finalDownPayment,
         debtAmount,
         paymentMethod: isPreSale ? 'Dinheiro' : paymentMethod,
@@ -741,6 +814,31 @@ export default function PDV() {
         // 3. Update Customer Debt and Transactions
         if (selectedCustomer) {
           const freshCustomer = customers.find(c => c.id === selectedCustomer.id) || selectedCustomer;
+          const currentBalance = freshCustomer.balance !== undefined ? freshCustomer.balance : -(freshCustomer.totalDebt || 0);
+          
+          // Deduct applied balance and/or add debt
+          const nextBalance = currentBalance - appliedBalance - debtAmount;
+          const nextDebt = nextBalance < 0 ? Math.abs(nextBalance) : 0;
+          
+          batch.update(doc(db, 'customers', freshCustomer.id), cleanObject({
+            balance: nextBalance,
+            totalDebt: nextDebt,
+            updatedAt: serverTimestamp()
+          }));
+
+          // Record individual transactions
+          if (appliedBalance > 0) {
+            const balanceTransRef = doc(collection(db, 'transactions'));
+            batch.set(balanceTransRef, cleanObject({
+              customerId: freshCustomer.id || null,
+              amount: appliedBalance,
+              type: 'payment',
+              paymentMethod: 'Saldo',
+              saleId: saleRef.id,
+              createdAt: finalDate
+            }));
+          }
+
           if (paymentMethod === 'Fiado') {
             if (finalDownPayment > 0) {
               const entryTransRef = doc(collection(db, 'transactions'));
@@ -755,11 +853,6 @@ export default function PDV() {
             }
 
             if (debtAmount > 0) {
-              batch.update(doc(db, 'customers', freshCustomer.id), cleanObject({
-                totalDebt: (freshCustomer.totalDebt || 0) + debtAmount,
-                updatedAt: serverTimestamp()
-              }));
-
               const debtTransRef = doc(collection(db, 'transactions'));
               batch.set(debtTransRef, cleanObject({
                 customerId: freshCustomer.id || null,
@@ -771,26 +864,32 @@ export default function PDV() {
               }));
             }
           } else {
+            // For other payment methods (Pix, Dinheiro, Cartão, etc.)
+            // The user pays finalSaleTotal
+            if (finalSaleTotal > 0) {
+              const paymentTransRef = doc(collection(db, 'transactions'));
+              batch.set(paymentTransRef, cleanObject({
+                customerId: freshCustomer.id || null,
+                amount: finalSaleTotal,
+                type: 'payment',
+                paymentMethod,
+                saleId: saleRef.id,
+                createdAt: finalDate
+              }));
+            }
+          }
+        } else {
+          if (finalSaleTotal > 0) {
             const paymentTransRef = doc(collection(db, 'transactions'));
             batch.set(paymentTransRef, cleanObject({
-              customerId: freshCustomer.id || null,
-              amount: saleTotal,
+              customerId: 'Consumidor Final',
+              amount: finalSaleTotal,
               type: 'payment',
               paymentMethod,
               saleId: saleRef.id,
               createdAt: finalDate
             }));
           }
-        } else {
-          const paymentTransRef = doc(collection(db, 'transactions'));
-          batch.set(paymentTransRef, cleanObject({
-            customerId: 'Consumidor Final',
-            amount: saleTotal,
-            type: 'payment',
-            paymentMethod,
-            saleId: saleRef.id,
-            createdAt: finalDate
-          }));
         }
       }
 
@@ -802,6 +901,7 @@ export default function PDV() {
         customerContact: selectedCustomer?.contact || null,
         items: [...cart],
         total: saleTotal,
+        appliedBalance: appliedBalance,
         downPayment: finalDownPayment,
         debtAmount: debtAmount,
         paymentMethod: isPreSale ? 'Dinheiro' : paymentMethod,
@@ -875,7 +975,8 @@ export default function PDV() {
       `-------------------------------------------\n` +
       (hasDiscount ? `💵 *Subtotal:* ${formatCurrency(sale.subtotal || (sale.total + sale.discount))}\n` : '') +
       (hasDiscount ? `💸 *Desconto:* -${formatCurrency(sale.discount)}\n` : '') +
-      `💰 *TOTAL: ${formatCurrency(sale.total)}*\n` +
+      (sale.appliedBalance && sale.appliedBalance > 0 ? `🟩 *Saldo Utilizado:* -${formatCurrency(sale.appliedBalance)}\n` : '') +
+      `💰 *A PAGAR: ${formatCurrency(sale.total - (sale.appliedBalance || 0))}*\n` +
       `-------------------------------------------\n` +
       `${footer}`;
 
@@ -2203,21 +2304,53 @@ export default function PDV() {
                         <option value="saoluis" className="bg-slate-955 text-white">São Luís (Frete Fixo R$ 20,00)</option>
                       </select>
                     </div>
-                    {selectedCustomer && (
-                      <motion.div 
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: 'auto' }}
-                        className="px-4 py-2 bg-red-800/10 border border-red-800/20 rounded-xl flex items-center justify-between"
-                      >
-                        <div className="flex items-center gap-2">
-                          <User size={12} className="text-red-400" />
-                          <span className="text-[10px] font-black uppercase text-red-200">{selectedCustomer.name}</span>
-                        </div>
-                        <button onClick={() => setSelectedCustomer(null)} className="text-red-400 hover:text-white transition-colors">
-                          <Trash2 size={12} />
-                        </button>
-                      </motion.div>
-                    )}
+                    {selectedCustomer && (() => {
+                      const freshCustomer = customers.find(c => c.id === selectedCustomer.id) || selectedCustomer;
+                      const currentBalance = freshCustomer.balance !== undefined ? freshCustomer.balance : -(freshCustomer.totalDebt || 0);
+                      return (
+                        <motion.div 
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          className="space-y-2 mb-2"
+                        >
+                          <div className="px-4 py-2 bg-slate-900 border border-slate-800 rounded-xl flex items-center justify-between">
+                            <div className="flex flex-col">
+                              <div className="flex items-center gap-2">
+                                <User size={12} className="text-red-400" />
+                                <span className="text-[10px] font-black uppercase text-red-200">{freshCustomer.name}</span>
+                              </div>
+                              <span className={cn(
+                                "text-[9px] font-black uppercase mt-0.5 tracking-tight",
+                                currentBalance > 0 ? "text-emerald-400" : currentBalance < 0 ? "text-red-400" : "text-slate-400"
+                              )}>
+                                Saldo: {currentBalance > 0 ? '+' : ''}{formatCurrency(currentBalance)}
+                              </span>
+                            </div>
+                            <button onClick={() => { setSelectedCustomer(null); setUseCustomerBalance(false); }} className="text-red-400 hover:text-white transition-colors p-1">
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+
+                          {currentBalance > 0 && (
+                            <div className="flex items-center justify-between px-4 py-2.5 bg-emerald-950/40 border border-emerald-800/30 rounded-xl">
+                              <div className="flex flex-col">
+                                <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest">Usar Saldo Positivo</span>
+                                <span className="text-[10px] font-bold text-white/70">Disponível: {formatCurrency(currentBalance)}</span>
+                              </div>
+                              <label className="relative inline-flex items-center cursor-pointer select-none">
+                                <input 
+                                  type="checkbox" 
+                                  checked={useCustomerBalance} 
+                                  onChange={e => setUseCustomerBalance(e.target.checked)}
+                                  className="sr-only peer"
+                                />
+                                <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
+                              </label>
+                            </div>
+                          )}
+                        </motion.div>
+                      );
+                    })()}
 
                     {/* Payment Methods */}
                     <div className="grid grid-cols-4 gap-2">
@@ -2403,7 +2536,8 @@ export default function PDV() {
                       let totalCost = 0;
                       cart.forEach(item => {
                         const p = products.find(prod => prod.id === item.productId);
-                        totalCost += (p?.costPrice || 0) * item.quantity;
+                        const realAvgCost = getRealAverageCost(item.productId, p?.costPrice || 0);
+                        totalCost += realAvgCost * item.quantity;
                       });
                       
                       const cartSubtotal = cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
@@ -2411,7 +2545,7 @@ export default function PDV() {
                       const profit = cartTotal - totalCost;
                       const avgMargin = cartTotal > 0 ? (profit / cartTotal) * 100 : 0;
                       const avgMarkup = totalCost > 0 ? (profit / totalCost) * 105 : 0; // Wait, let's calculate exact markup: (Profit / Cost) * 100
-                      const exactMarkup = totalCost > 0 ? (profit / totalCost) * 100 : 0;
+                      const exactMarkup = totalCost > 0 ? (profit / totalCost) * 105 : 0;
 
                       let badgeColor = "bg-slate-900/40 border-slate-800 text-slate-400";
                       let statusText = "Margem Neutra";
@@ -2434,7 +2568,7 @@ export default function PDV() {
                           className={cn("p-4 border rounded-2xl flex flex-col gap-2 mb-4 transition-all duration-300", badgeColor)}
                         >
                           <div className="flex items-center justify-between">
-                            <span className="text-[9px] font-black uppercase tracking-widest text-white/50">Saúde da Venda (Real-time)</span>
+                            <span className="text-[9px] font-black uppercase tracking-widest text-white/50">Saúde da Venda (Custo Médio Real)</span>
                             <span className="text-[10px] font-bold uppercase tracking-wider">{statusText}</span>
                           </div>
                           <div className="grid grid-cols-2 gap-2 mt-1">
@@ -2448,9 +2582,12 @@ export default function PDV() {
                             </div>
                           </div>
                           <div className="flex justify-between text-[9px] font-black uppercase text-white/40 tracking-wider pt-1 border-t border-white/5">
-                            <span>Pontos de Custo: {formatCurrency(totalCost)}</span>
+                            <span>Custo Real Ponderado: {formatCurrency(totalCost)}</span>
                             <span>Lucro Estimado: {formatCurrency(profit)}</span>
                           </div>
+                          <p className="text-[7.5px] font-semibold text-white/20 uppercase tracking-wide leading-tight text-center">
+                            * Baseado nas encomendas reais + taxas pro-rata de lotes fiscalizados
+                          </p>
                         </motion.div>
                       );
                     })()}
@@ -2590,9 +2727,15 @@ export default function PDV() {
                               const isCamisa = (productObj?.category || '').toLowerCase().includes('camisa') || 
                                                (item.name || '').toLowerCase().includes('camisa');
                               const hasCustom = item.isCustomized && isCamisa;
+                              const realAvgCost = getRealAverageCost(item.productId, productObj?.costPrice || 0);
                               return (
-                                <div className="text-[9px] font-black text-white/30 uppercase tracking-widest block">
-                                  Un: {formatCurrency(item.price)}{hasCustom && ` + ${formatCurrency(30)}`}
+                                <div className="flex flex-col gap-0.5">
+                                  <div className="text-[9px] font-black text-white/30 uppercase tracking-widest block">
+                                    Un: {formatCurrency(item.price)}{hasCustom && ` + ${formatCurrency(30)}`}
+                                  </div>
+                                  <div className="text-[8px] font-bold text-amber-500/80 uppercase tracking-widest block">
+                                    Custo Médio: {formatCurrency(realAvgCost)}
+                                  </div>
                                 </div>
                               );
                             })()}
@@ -2693,9 +2836,21 @@ export default function PDV() {
                       <span className="text-[9px] font-black uppercase tracking-widest text-white">Subtotal</span>
                       <span className="text-xs font-black text-white tabular-nums tracking-tight">{formatCurrency(subtotal)}</span>
                     </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-[10px] font-black text-amber-500 uppercase tracking-widest">Total Líquido</span>
-                      <span className="text-xl md:text-2xl font-bold tracking-tight text-white tabular-nums">{formatCurrency(total)}</span>
+                    {discountVal !== '0' && (
+                      <div className="flex justify-between items-center opacity-70">
+                        <span className="text-[9px] font-black uppercase tracking-widest text-white">Desconto</span>
+                        <span className="text-xs font-black text-rose-400 tabular-nums tracking-tight">-{formatCurrency(safeFloat(discountVal))}</span>
+                      </div>
+                    )}
+                    {appliedBalanceForUI > 0 && (
+                      <div className="flex justify-between items-center opacity-90 text-emerald-400">
+                        <span className="text-[9px] font-black uppercase tracking-widest">Saldo Utilizado</span>
+                        <span className="text-xs font-black tabular-nums tracking-tight">-{formatCurrency(appliedBalanceForUI)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between items-center mt-1 border-t border-white/5 pt-1">
+                      <span className="text-[10px] font-black text-amber-500 uppercase tracking-widest animate-pulse">A Pagar</span>
+                      <span className="text-xl md:text-2xl font-bold tracking-tight text-white tabular-nums">{formatCurrency(saleTotalForUI)}</span>
                     </div>
                   </div>
 

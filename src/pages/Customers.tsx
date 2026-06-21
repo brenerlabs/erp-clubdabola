@@ -31,8 +31,10 @@ export default function Customers() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-  const [filterDebt, setFilterDebt] = useState<'all' | 'has-debt' | 'no-debt'>('all');
+  const [filterDebt, setFilterDebt] = useState<'all' | 'has-debt' | 'no-debt' | 'has-credit'>('all');
   const [paymentAmount, setPaymentAmount] = useState<string>('');
+  const [creditAmount, setCreditAmount] = useState<string>('');
+  const [creditMethod, setCreditMethod] = useState<'Dinheiro' | 'Cartão' | 'Pix'>('Dinheiro');
   const [historyTypeFilter, setHistoryTypeFilter] = useState<'all' | 'payment' | 'debt'>('all');
   const [historyStartDate, setHistoryStartDate] = useState('');
   const [historyEndDate, setHistoryEndDate] = useState('');
@@ -40,6 +42,7 @@ export default function Customers() {
   // Form State
   const [name, setName] = useState('');
   const [contact, setContact] = useState('');
+  const [balance, setBalance] = useState<string>('0');
   const [isImporting, setIsImporting] = useState(false);
   const [activeTab, setActiveTab] = useState<'perfil' | 'history'>('perfil');
   const [historyTab, setHistoryTab] = useState<'transacoes' | 'pedidos' | 'favoritos'>('transacoes');
@@ -75,11 +78,14 @@ export default function Customers() {
       setContact(customer.contact);
       setEditingCustomer(isDuplicate ? null : customer);
       setActiveTab('perfil');
+      const currentBalance = customer.balance !== undefined ? customer.balance : -(customer.totalDebt || 0);
+      setBalance(currentBalance.toString());
     } else {
       setName('');
       setContact('');
       setEditingCustomer(null);
       setActiveTab('perfil');
+      setBalance('0');
     }
     setIsModalOpen(true);
   };
@@ -248,10 +254,13 @@ export default function Customers() {
         });
       }
 
-      // Update Customer Debt
-      const remainingDebt = Math.max(0, (selectedCustomer.totalDebt || 0) - amount);
+      // Update Customer Debt and Balance
+      const currentBalance = selectedCustomer.balance !== undefined ? selectedCustomer.balance : -(selectedCustomer.totalDebt || 0);
+      const newBalance = currentBalance + amount;
+      const remainingDebt = newBalance < 0 ? Math.abs(newBalance) : 0;
       const custRef = doc(db, 'customers', selectedCustomer.id!);
       batch.update(custRef, {
+        balance: newBalance,
         totalDebt: remainingDebt,
         updatedAt: serverTimestamp()
       });
@@ -288,6 +297,67 @@ export default function Customers() {
     } catch (err: any) {
       console.error(err);
       alert('Erro ao processar pagamento: ' + err.message);
+    }
+  };
+
+  const handleAddCredit = async () => {
+    const amount = parseFloat(creditAmount.replace(',', '.'));
+    if (!selectedCustomer || isNaN(amount) || amount <= 0) return;
+
+    try {
+      const batch = writeBatch(db);
+      
+      const transRef = doc(collection(db, 'transactions'));
+      batch.set(transRef, {
+        customerId: selectedCustomer.id,
+        amount: amount,
+        type: 'payment',
+        paymentMethod: creditMethod,
+        saleId: null,
+        createdAt: new Date()
+      });
+
+      const currentBalance = selectedCustomer.balance !== undefined ? selectedCustomer.balance : -(selectedCustomer.totalDebt || 0);
+      const newBalance = currentBalance + amount;
+      const remainingDebt = newBalance < 0 ? Math.abs(newBalance) : 0;
+
+      const custRef = doc(db, 'customers', selectedCustomer.id!);
+      batch.update(custRef, {
+        balance: newBalance,
+        totalDebt: remainingDebt,
+        updatedAt: serverTimestamp()
+      });
+
+      await batch.commit();
+
+      setSelectedCustomer(prev => prev ? { ...prev, balance: newBalance, totalDebt: remainingDebt } : null);
+      setCreditAmount('');
+      alert('Crédito de R$ ' + amount.toFixed(2).replace('.', ',') + ' adicionado com sucesso!');
+
+      const heading = '⚽ *ERP CLUB DA BOLA - Comprovante de Crédito* ⚽';
+      const message = `${heading}\n` +
+        `-------------------------------------------\n` +
+        `👤 *Cliente:* ${selectedCustomer.name}\n` +
+        `📅 *Data:* ${new Date().toLocaleString('pt-BR')}\n` +
+        `🟩 *Crédito Adicionado:* ${formatCurrency(amount)} (${creditMethod})\n` +
+        `💰 *Novo Saldo:* ${formatCurrency(newBalance)}\n` +
+        `-------------------------------------------\n` +
+        `Obrigado! Seu pagamento antecipado foi registrado.\n\n_Produzido por: Brener Gomes_`;
+
+      const encoded = encodeURIComponent(message);
+      const phone = selectedCustomer.contact ? selectedCustomer.contact.replace(/\D/g, '') : '';
+      let finalPhone = phone;
+      if (phone && phone.length <= 11) {
+        finalPhone = '55' + phone;
+      }
+      try {
+        window.open(`https://wa.me/${finalPhone}?text=${encoded}`, '_blank');
+      } catch (err) {
+        console.warn("WhatsApp block or error:", err);
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert('Erro ao adicionar crédito: ' + err.message);
     }
   };
 
@@ -541,10 +611,13 @@ export default function Customers() {
     e.preventDefault();
     try {
       const formattedContact = formatPhoneNumber(contact);
+      const numericBalance = parseFloat(balance.replace(',', '.')) || 0;
+      const computedDebt = numericBalance < 0 ? Math.abs(numericBalance) : 0;
       const customerData = {
         name,
         contact: formattedContact,
-        totalDebt: editingCustomer?.totalDebt || 0,
+        balance: numericBalance,
+        totalDebt: computedDebt,
         updatedAt: serverTimestamp()
       };
 
@@ -580,7 +653,14 @@ export default function Customers() {
 
   const filtered = customers.filter(c => {
     const matchesSearch = smartSearchMatch([c.name, c.contact, c.id, c.instagram, c.observations], search);
-    const matchesDebt = filterDebt === 'has-debt' ? c.totalDebt > 0 : filterDebt === 'no-debt' ? c.totalDebt <= 0 : true;
+    const currentBalance = c.balance !== undefined ? c.balance : -(c.totalDebt || 0);
+    const matchesDebt = filterDebt === 'has-debt' 
+      ? currentBalance < 0 
+      : filterDebt === 'has-credit' 
+        ? currentBalance > 0 
+        : filterDebt === 'no-debt' 
+          ? currentBalance >= 0 
+          : true;
     return matchesSearch && matchesDebt;
   });
 
@@ -672,8 +752,9 @@ export default function Customers() {
               className="bg-white/60 border border-slate-200 rounded-2xl px-4 py-3 text-[9px] font-black uppercase tracking-widest outline-none focus:ring-2 focus:ring-red-800 transition-all shadow-sm flex-1 sm:flex-initial"
             >
               <option value="all">Todos os Clientes</option>
-              <option value="has-debt">Com Dívida Ativa</option>
-              <option value="no-debt">Sem Dívida</option>
+              <option value="has-debt">Com Débito Ativo</option>
+              <option value="has-credit">Com Crédito Ativo</option>
+              <option value="no-debt">Sem Débito</option>
             </select>
           </div>
         </div>
@@ -747,14 +828,26 @@ export default function Customers() {
                       {customer.contact}
                     </div>
                   </td>
-                  <td className="px-8 py-5 text-right font-display tabular-nums">
-                    <div className={cn(
-                      "text-xl font-bold tracking-tight",
-                      customer.totalDebt > 0 ? 'text-red-800' : 'text-slate-900'
-                    )}>
-                      <RollingCounter value={formatCurrency(customer.totalDebt)} />
-                    </div>
-                    {customer.totalDebt > 0 && <div className="text-[8px] font-black text-white bg-red-800 rounded-lg px-2 py-0.5 inline-block uppercase tracking-widest mt-1">Atenção Necessária</div>}
+                  <td className="px-8 py-5 text-right font-semibold tabular-nums">
+                    {(() => {
+                      const currentBalance = customer.balance !== undefined ? customer.balance : -(customer.totalDebt || 0);
+                      return (
+                        <>
+                          <div className={cn(
+                            "text-base font-black tracking-tight",
+                            currentBalance > 0 ? 'text-emerald-600' : currentBalance < 0 ? 'text-red-800' : 'text-slate-500'
+                          )}>
+                            {currentBalance > 0 ? '+' : ''}{formatCurrency(currentBalance)}
+                          </div>
+                          <div className={cn(
+                            "text-[8px] font-black uppercase tracking-widest mt-1 inline-block px-2 py-0.5 rounded-md",
+                            currentBalance > 0 ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : currentBalance < 0 ? 'bg-red-50 text-red-800 border border-red-100' : 'bg-slate-50 text-slate-400 border border-slate-100'
+                          )}>
+                            {currentBalance > 0 ? 'Crédito' : currentBalance < 0 ? 'Débito (Fiado)' : 'Sem Saldo'}
+                          </div>
+                        </>
+                      );
+                    })()}
                   </td>
                   <td className="px-8 py-5">
                     <div className="flex items-center justify-end gap-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
@@ -803,12 +896,17 @@ export default function Customers() {
                   </div>
                   <div className="text-right">
                     <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Saldo</p>
-                    <p className={cn(
-                      "text-sm font-black",
-                      customer.totalDebt > 0 ? "text-rose-500" : "text-emerald-600"
-                    )}>
-                      <RollingCounter value={formatCurrency(customer.totalDebt)} />
-                    </p>
+                    {(() => {
+                      const currentBalance = customer.balance !== undefined ? customer.balance : -(customer.totalDebt || 0);
+                      return (
+                        <p className={cn(
+                          "text-sm font-black",
+                          currentBalance > 0 ? "text-emerald-600" : currentBalance < 0 ? "text-rose-500" : "text-slate-500"
+                        )}>
+                          {currentBalance > 0 ? '+' : ''}{formatCurrency(currentBalance)}
+                        </p>
+                      );
+                    })()}
                   </div>
                 </div>
                 <div className="flex items-center justify-between pt-2 border-t border-slate-50">
@@ -892,6 +990,26 @@ export default function Customers() {
                           placeholder="(99) 99999-9999"
                         />
                       </div>
+                      <div className="space-y-1.5">
+                        <div className="flex justify-between items-center">
+                          <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Saldo do Cliente (R$)</label>
+                          <span className="text-[8px] font-bold text-slate-400 uppercase">Sinal de menos (-) para Dívida/Fiado</span>
+                        </div>
+                        <input 
+                          type="text" 
+                          value={balance} 
+                          onChange={e => setBalance(e.target.value)}
+                          className={cn(
+                            "w-full px-4 py-2.5 border rounded-xl outline-none focus:ring-1 font-black text-sm transition-all",
+                            parseFloat(balance) > 0 
+                              ? "border-emerald-200 focus:ring-emerald-500 text-emerald-800 bg-emerald-50/10" 
+                              : parseFloat(balance) < 0 
+                                ? "border-red-200 focus:ring-red-500 text-red-800 bg-red-50/10"
+                                : "border-slate-200 focus:ring-red-800 text-slate-800"
+                          )}
+                          placeholder="Ex: 50.00 ou -120.00"
+                        />
+                      </div>
                     </div>
                     <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
                       <button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-2.5 text-[11px] font-black uppercase text-slate-400 hover:text-slate-600 transition-all tracking-widest">Descartar</button>
@@ -901,12 +1019,22 @@ export default function Customers() {
                 ) : (
                   <div className="p-8 space-y-8 font-sans">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="bg-slate-950 text-white rounded-2xl p-6 border border-slate-800 shadow-xl">
-                        <p className="text-[9px] font-black uppercase text-slate-500 tracking-[0.2em] mb-1">Dívida Total</p>
-                        <p className="text-3xl font-black text-red-600 tracking-tighter">
-                          <RollingCounter value={formatCurrency(editingCustomer?.totalDebt || 0)} />
-                        </p>
-                      </div>
+                      {(() => {
+                        const currentBalance = editingCustomer ? (editingCustomer.balance !== undefined ? editingCustomer.balance : -(editingCustomer.totalDebt || 0)) : 0;
+                        return (
+                          <div className="bg-slate-950 text-white rounded-2xl p-6 border border-slate-800 shadow-xl">
+                            <p className="text-[9px] font-black uppercase text-slate-500 tracking-[0.2em] mb-1">
+                              {currentBalance >= 0 ? 'Saldo em Conta' : 'Dívida Total'}
+                            </p>
+                            <p className={cn(
+                              "text-3xl font-black tracking-tighter",
+                              currentBalance >= 0 ? "text-emerald-400" : "text-red-500"
+                            )}>
+                              <RollingCounter value={`${currentBalance >= 0 ? '+' : ''}${formatCurrency(currentBalance)}`} />
+                            </p>
+                          </div>
+                        );
+                      })()}
                       <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm">
                         <p className="text-[9px] font-black uppercase text-slate-400 tracking-[0.2em] mb-1">Última Transação</p>
                         <p className="text-xl font-black text-slate-900 uppercase tracking-tighter">
@@ -1029,64 +1157,147 @@ export default function Customers() {
                         PDF
                       </button>
                       <div className="text-right">
-                        <p className="text-[10px] font-black uppercase opacity-60 tracking-widest mb-1">Dívida Acumulada</p>
-                        <p className="text-3xl font-black text-red-600 italic tracking-tighter">
-                          <RollingCounter value={formatCurrency(selectedCustomer.totalDebt)} />
-                        </p>
+                        {(() => {
+                          const currentBalance = selectedCustomer.balance !== undefined ? selectedCustomer.balance : -(selectedCustomer.totalDebt || 0);
+                          return (
+                            <>
+                              <p className="text-[10px] font-black uppercase opacity-60 tracking-widest mb-1">
+                                {currentBalance >= 0 ? 'Saldo Disponível' : 'Dívida Acumulada'}
+                              </p>
+                              <p className={cn(
+                                "text-3xl font-black italic tracking-tighter",
+                                currentBalance >= 0 ? "text-emerald-400" : "text-red-500"
+                              )}>
+                                <RollingCounter value={`${currentBalance >= 0 ? '+' : ''}${formatCurrency(currentBalance)}`} />
+                              </p>
+                            </>
+                          );
+                        })()}
                       </div>
                     </div>
                   </div>
                   
-                  <div className="bg-white/5 rounded-2xl p-5 border border-white/5 relative backdrop-blur-sm">
-                    <div className="flex items-center justify-between mb-3 text-[10px] font-black uppercase tracking-widest">
-                      <p className="text-amber-500">Processar Amortização de Saldo</p>
-                      <button 
-                        onClick={() => setPaymentAmount(selectedCustomer.totalDebt.toString())}
-                        className="text-white hover:text-amber-500 transition-colors"
-                      >
-                        Valor Total
-                      </button>
-                    </div>
-                    <div className="flex gap-3">
-                      <div className="flex-1 relative">
-                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 font-black">R$</span>
-                        <input 
-                          type="text" value={paymentAmount} 
-                          inputMode="decimal"
-                          onChange={e => setPaymentAmount(e.target.value.replace(/[^0-9,.]/g, '').replace(',', '.'))}
-                          onFocus={e => e.target.value === '0' ? setPaymentAmount('') : null}
-                          onBlur={e => e.target.value === '' ? setPaymentAmount('0') : null}
-                          className="w-full bg-white/10 border border-white/10 rounded-xl pl-10 pr-4 py-3 outline-none font-black text-xl text-amber-500 focus:bg-white/20 transition-all placeholder:text-white/20 italic tracking-tighter"
-                          placeholder="0,00"
-                        />
-                      </div>
-                      <button 
-                        onClick={handlePayment}
-                        className="bg-red-800 text-white font-black px-8 rounded-xl hover:bg-black transition-all shadow-lg shadow-red-900/20 text-[10px] uppercase tracking-widest active:scale-95"
-                      >
-                        Amortização Direta
-                      </button>
-                    </div>
-
-                    {numericPaymentAmount > 0 && (
-                      <div className="mt-4 p-3 bg-white/5 rounded-xl border border-white/5 flex flex-col gap-2">
-                        <div className="flex justify-between items-center text-[8px] font-black uppercase text-amber-500 tracking-wider">
-                          <span>PIX COPIA E COLA AUTOMÁTICO</span>
-                          <button
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Card 1: Amortizar Débito / Fiado */}
+                    <div className="bg-white/5 rounded-2xl p-5 border border-white/5 relative backdrop-blur-sm flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center justify-between mb-3 text-[10px] font-black uppercase tracking-widest">
+                          <p className="text-red-400 font-black tracking-widest">Amortizar Débito / Fiado</p>
+                          <button 
                             onClick={() => {
-                              navigator.clipboard.writeText(generatePixPayload(numericPaymentAmount));
-                              alert('Chave Copia e Cola Pix copiada com sucesso!');
+                              const currentBalance = selectedCustomer.balance !== undefined ? selectedCustomer.balance : -(selectedCustomer.totalDebt || 0);
+                              const debt = currentBalance < 0 ? Math.abs(currentBalance) : 0;
+                              setPaymentAmount(debt.toString());
                             }}
-                            className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-black px-2 py-0.5 rounded transition-all text-[8px] uppercase tracking-wider"
+                            className="text-white hover:text-red-400 text-[9px] font-black transition-colors"
                           >
-                            Copiar Código
+                            Dívida Total
                           </button>
                         </div>
-                        <p className="text-[9.5px] break-all font-mono bg-black/40 p-2 rounded text-slate-300 border border-white/5 select-all focus:outline-none">
-                          {generatePixPayload(numericPaymentAmount)}
-                        </p>
+                        <div className="flex gap-2">
+                          <div className="flex-1 relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 font-black text-xs">R$</span>
+                            <input 
+                              type="text" value={paymentAmount} 
+                              inputMode="decimal"
+                              onChange={e => setPaymentAmount(e.target.value.replace(/[^0-9,.]/g, '').replace(',', '.'))}
+                              onFocus={e => e.target.value === '0' ? setPaymentAmount('') : null}
+                              onBlur={e => e.target.value === '' ? setPaymentAmount('0') : null}
+                              className="w-full bg-white/10 border border-white/10 rounded-xl pl-8 pr-4 py-2.5 outline-none font-black text-xs text-red-400 focus:bg-white/20 transition-all placeholder:text-white/20 italic tracking-tighter"
+                              placeholder="0,00"
+                            />
+                          </div>
+                          <button 
+                            onClick={handlePayment}
+                            className="bg-red-800 text-white font-black px-4 rounded-xl hover:bg-black transition-all shadow-lg text-[9px] uppercase tracking-widest active:scale-95 shrink-0"
+                          >
+                            Amortizar
+                          </button>
+                        </div>
                       </div>
-                    )}
+
+                      {numericPaymentAmount > 0 && (
+                        <div className="mt-3 p-2 bg-white/5 rounded-xl border border-white/5 flex flex-col gap-1.5 animate-in fade-in zoom-in-95 duration-200">
+                          <div className="flex justify-between items-center text-[7px] font-black uppercase text-amber-500 tracking-wider">
+                            <span>PIX COPIA E COLA</span>
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText(generatePixPayload(numericPaymentAmount));
+                                alert('Chave Copia e Cola Pix copiada com sucesso!');
+                              }}
+                              className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-black px-1.5 py-0.5 rounded transition-all text-[7px] uppercase tracking-wider"
+                            >
+                              Copiar
+                            </button>
+                          </div>
+                          <p className="text-[8px] break-all font-mono bg-black/40 p-1.5 rounded text-slate-300 border border-white/5 focus:outline-none select-all">
+                            {generatePixPayload(numericPaymentAmount)}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Card 2: Adicionar Crédito (Prepayment) */}
+                    <div className="bg-emerald-950/20 rounded-2xl p-5 border border-emerald-500/20 relative backdrop-blur-sm flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center justify-between mb-3 text-[10px] font-black uppercase tracking-widest">
+                          <p className="text-emerald-400 font-black tracking-widest">Adicionar Crédito / Pré-pago</p>
+                          <div className="flex gap-1.5 shrink-0">
+                            {(['Dinheiro', 'Pix', 'Cartão'] as const).map(method => (
+                              <button
+                                key={method}
+                                type="button"
+                                onClick={() => setCreditMethod(method)}
+                                className={cn(
+                                  "px-1.5 py-0.5 rounded text-[7px] font-black uppercase tracking-wider transition-all",
+                                  creditMethod === method ? "bg-emerald-500 text-slate-950" : "bg-white/10 text-white/60 hover:text-white"
+                                )}
+                              >
+                                {method}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <div className="flex-1 relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 font-black text-xs">R$</span>
+                            <input 
+                              type="text" value={creditAmount} 
+                              inputMode="decimal"
+                              onChange={e => setCreditAmount(e.target.value.replace(/[^0-9,.]/g, '').replace(',', '.'))}
+                              className="w-full bg-white/10 border border-emerald-500/20 rounded-xl pl-8 pr-4 py-2.5 outline-none font-black text-xs text-emerald-400 focus:bg-white/20 transition-all placeholder:text-white/20 italic tracking-tighter"
+                              placeholder="0,00"
+                            />
+                          </div>
+                          <button 
+                            onClick={handleAddCredit}
+                            className="bg-emerald-600 text-white font-black px-4 rounded-xl hover:bg-emerald-700 transition-all shadow-lg text-[9px] uppercase tracking-widest active:scale-95 shrink-0"
+                          >
+                            Adicionar
+                          </button>
+                        </div>
+                      </div>
+
+                      {creditMethod === 'Pix' && (parseFloat(creditAmount) || 0) > 0 && (
+                        <div className="mt-3 p-2 bg-white/5 rounded-xl border border-white/5 flex flex-col gap-1.5 animate-in fade-in zoom-in-95 duration-200">
+                          <div className="flex justify-between items-center text-[7px] font-black uppercase text-emerald-400 tracking-wider">
+                            <span>PIX ANTECIPADO COPIA E COLA</span>
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText(generatePixPayload(parseFloat(creditAmount) || 0));
+                                alert('Chave Copia e Cola Pix copiada com sucesso!');
+                              }}
+                              className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black px-1.5 py-0.5 rounded transition-all text-[7px] uppercase tracking-wider"
+                            >
+                              Copiar
+                            </button>
+                          </div>
+                          <p className="text-[8px] break-all font-mono bg-black/40 p-1.5 rounded text-slate-300 border border-white/5 focus:outline-none select-all font-bold">
+                            {generatePixPayload(parseFloat(creditAmount) || 0)}
+                          </p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
                 

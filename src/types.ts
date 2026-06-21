@@ -26,6 +26,7 @@ export interface Customer {
   name: string;
   contact: string;
   totalDebt: number;
+  balance?: number;
   updatedAt: any;
 }
 
@@ -72,6 +73,7 @@ export interface ShipmentItem {
   productName: string;
   quantity: number;
   price: number;
+  supplierCost?: number;
   isDropshipping?: boolean;
   gender?: 'Masculino' | 'Feminino' | 'Ambos';
   status?: 'Pendente' | 'Recebido' | 'Entregue';
@@ -109,7 +111,7 @@ export interface Transaction {
   customerId: string;
   amount: number;
   type: 'payment' | 'debt';
-  paymentMethod?: 'Dinheiro' | 'Cartão' | 'Pix' | 'Fiado';
+  paymentMethod?: 'Dinheiro' | 'Cartão' | 'Pix' | 'Fiado' | 'Saldo';
   saleId?: string;
   createdAt: any;
 }

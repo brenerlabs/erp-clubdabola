@@ -385,7 +385,7 @@ export default function Shipments() {
   const [draggingShipmentId, setDraggingShipmentId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showTimelineId, setShowTimelineId] = useState<string | null>(null);
-  const [expandedCardTab, setExpandedCardTab] = useState<'items' | 'history' | 'correios'>('items');
+  const [expandedCardTab, setExpandedCardTab] = useState<'items' | 'history'>('items');
   const [isSyncing, setIsSyncing] = useState(false);
   const [isSyncingSingle, setIsSyncingSingle] = useState<string | null>(null);
   const [syncFeedback, setSyncFeedback] = useState<{ type: 'success' | 'info' | 'error', message: string } | null>(null);
@@ -689,14 +689,7 @@ export default function Shipments() {
     }
   };
 
-  useEffect(() => {
-    if (shipments.length > 0) {
-      const timer = setTimeout(() => {
-        syncActiveShipments(false);
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [shipments.length > 0]);
+
 
   useEffect(() => {
     const handleStorageChange = () => {
@@ -764,8 +757,8 @@ export default function Shipments() {
     [
       ...shipments
         .filter(s => s.id !== editingShipment?.id)
-        .flatMap(s => s.items.filter(i => i.saleId).map(i => `${i.saleId}-${i.productId}-${i.variationId}`)),
-      ...items.filter(i => i.saleId).map(i => `${i.saleId}-${i.productId}-${i.variationId}`)
+        .flatMap(s => s.items.filter(i => i.saleId).map(i => `${i.saleId}-${i.productId}-${i.variationId || ''}`)),
+      ...items.filter(i => i.saleId).map(i => `${i.saleId}-${i.productId}-${i.variationId || ''}`)
     ]
   );
 
@@ -786,6 +779,7 @@ export default function Shipments() {
       productName: pName,
       quantity: item.quantity,
       price: item.price,
+      supplierCost: products.find(p => p.id === item.productId)?.costPrice || 0,
       isDropshipping: item.isDropshipping || false,
       gender: pGender,
       status: 'Pendente',
@@ -801,8 +795,9 @@ export default function Shipments() {
 
     const currentItems = [...items];
     
-    sale.items.forEach(item => {
-      const itemKey = `${sale.id}-${item.productId}-${item.variationId}`;
+    (sale.items || []).forEach(item => {
+      if (!item || item.isCancelled) return;
+      const itemKey = `${sale.id}-${item.productId}-${item.variationId || ''}`;
       if (shippedItemKeys.has(itemKey)) return; 
 
       const pGender = item.gender || products.find(p => p.id === item.productId)?.gender || 'Ambos';
@@ -821,6 +816,7 @@ export default function Shipments() {
         productName: pName,
         quantity: item.quantity,
         price: item.price,
+        supplierCost: products.find(p => p.id === item.productId)?.costPrice || 0,
         isDropshipping: item.isDropshipping || false,
         gender: pGender,
         status: 'Pendente',
@@ -836,7 +832,9 @@ export default function Shipments() {
   const availableSales = sales.filter(sale => 
     sale.status !== 'Pré-venda' &&
     sale.status !== 'Cancelada' &&
-    sale.items.some(item => !shippedItemKeys.has(`${sale.id}-${item.productId}-${item.variationId}`))
+    !sale.isAdjustment &&
+    !(sale.items || []).some(item => item && item.productId === 'sistema_ajuste_auditoria') &&
+    (sale.items || []).filter(item => item && !item.isCancelled).some(item => !shippedItemKeys.has(`${sale.id}-${item.productId}-${item.variationId || ''}`))
   );
 
   const removeItem = (id: string) => {
@@ -880,6 +878,7 @@ export default function Shipments() {
       productName: pName,
       quantity: Number(stockQuantity) || 1,
       price: Number(stockPrice) || 0,
+      supplierCost: Number(stockPrice) || 0,
       isDropshipping: false,
       gender: pGender,
       status: 'Pendente'
@@ -1025,6 +1024,17 @@ export default function Shipments() {
       setIsModalOpen(false);
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, 'shipments');
+    }
+  };
+
+  const handleDeleteShipment = async (shipmentId: string) => {
+    if (window.confirm("Deseja realmente EXCLUIR permanentemente esta encomenda do sistema e todas as suas informações?")) {
+      try {
+        await deleteDoc(doc(db, 'shipments', shipmentId));
+        setIsModalOpen(false);
+      } catch (err) {
+        handleFirestoreError(err, OperationType.WRITE, 'shipments');
+      }
     }
   };
 
@@ -2126,6 +2136,19 @@ export default function Shipments() {
           <div className="flex items-center justify-end gap-2 shrink-0 self-end sm:self-center">
             <button
               type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                openModal(shipment);
+              }}
+              className="px-3 py-1.5 bg-slate-50 border border-slate-200 text-indigo-600 font-extrabold text-[9px] uppercase tracking-widest rounded-xl hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-700 transition-all cursor-pointer shadow-sm active:scale-95 flex items-center gap-1.5"
+              title="Editar Encomenda"
+            >
+              <Edit2 size={10} className="stroke-[3]" />
+              <span>Editar</span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => {
                 if (showTimelineId === shipment.id) {
                   setShowTimelineId(null);
@@ -2161,7 +2184,6 @@ export default function Shipments() {
                 <div className="flex bg-slate-100/85 p-0.5 rounded-full border border-slate-200/50 select-none relative gap-0.5 justify-stretch">
                   {[
                     { key: 'items', label: '👥 Clientes', activeBgClass: 'bg-white text-slate-800 shadow-sm border border-slate-200/40' },
-                    { key: 'correios', label: '💛 Correios', activeBgClass: 'bg-yellow-400 text-blue-900 shadow-sm border border-yellow-500/20' },
                     { key: 'history', label: '📝 Logs ERP', activeBgClass: 'bg-white text-slate-800 shadow-sm border border-slate-200/40' }
                   ].map(tab => {
                     const isActive = expandedCardTab === tab.key;
@@ -2398,93 +2420,7 @@ export default function Shipments() {
                     </motion.div>
                   )}
 
-                  {expandedCardTab === 'correios' && (
-                    <motion.div 
-                      key="correios-tab"
-                      initial={{ opacity: 0, y: 2 }} 
-                      animate={{ opacity: 1, y: 0 }} 
-                      exit={{ opacity: 0, y: -2 }}
-                      className="space-y-2 pt-0.5"
-                    >
-                      <div className="flex items-center justify-between border-b border-amber-200 pb-1">
-                        <span className="text-[8.5px] bg-yellow-400 text-blue-900 px-1.5 py-0.5 rounded border border-yellow-500 font-extrabold uppercase tracking-wider flex items-center gap-1 select-none">
-                          💛 Rastreio Oficial Correios
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => syncSingleShipment(shipment)}
-                          disabled={isSyncingSingle === shipment.id}
-                          className="text-[8px] font-black uppercase bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-0.5 rounded transition-all flex items-center gap-1 border border-slate-300/40 cursor-pointer"
-                        >
-                          <RefreshCw size={8} className={cn("text-red-800", isSyncingSingle === shipment.id ? "animate-spin" : "")} />
-                          {isSyncingSingle === shipment.id ? 'Sincronizando...' : 'Consultar API'}
-                        </button>
-                      </div>
 
-                      {shipment.correiosHistory && shipment.correiosHistory.length > 0 ? (
-                        <div className="space-y-3 pl-3.5 border-l border-amber-400/50 h-[118px] overflow-y-auto custom-scrollbar pt-1 pr-1">
-                          {shipment.correiosHistory.map((evt: any, i: number) => (
-                            <div key={i} className="relative pl-3.5 pb-1 select-text">
-                              <div className="absolute -left-[19.5px] top-1.5 size-2 rounded-full border border-yellow-400 bg-blue-600 shadow-sm" />
-                              <div className="space-y-0.5">
-                                <p className="text-[9.5px] font-extrabold text-slate-900 leading-tight uppercase tracking-tight">
-                                  {evt.status || evt.descricao}
-                                </p>
-                                {evt.local && (
-                                  <p className="text-[8px] text-slate-500 font-bold uppercase flex items-center gap-1">
-                                    📍 {evt.local || evt.unidade}
-                                  </p>
-                                )}
-                                {evt.subStatus && evt.subStatus.length > 0 && (
-                                  <div className="text-[8px] text-slate-400 font-medium italic space-y-0.5 mt-0.5 pl-1.5 border-l border-slate-200">
-                                    {evt.subStatus.map((sub: string, subIdx: number) => (
-                                      <p key={subIdx}>– {sub}</p>
-                                    ))}
-                                  </div>
-                                )}
-                                <p className="text-[8px] text-slate-400 font-bold tracking-wider mt-1 select-none font-mono">
-                                  📅 {evt.data} às {evt.hora}
-                                </p>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="flex flex-col items-center justify-center py-2 bg-slate-50 border border-slate-200/50 rounded-2xl p-2.5 text-center space-y-1.5 h-[118px]">
-                          <div className="space-y-0.5">
-                            <p className="text-[8.5px] font-black text-slate-700 uppercase">Nenhum evento registrado ainda</p>
-                            <p className="text-[7.5px] font-semibold text-slate-400 uppercase leading-relaxed max-w-[200px] mx-auto">
-                              Padrão para importações recentes. Quer simular o rastreio real dos Correios para testar?
-                            </p>
-                          </div>
-                          <div className="flex gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => simulateCorreiosTracking(shipment)}
-                              className="text-[8px] font-extrabold uppercase bg-yellow-400 text-blue-900 hover:bg-yellow-500 px-2.5 py-1 rounded-xl transition-all shadow-sm border border-yellow-500 cursor-pointer"
-                            >
-                              🔧 Simular Rastreio
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => syncSingleShipment(shipment)}
-                              disabled={isSyncingSingle === shipment.id}
-                              className="text-[8px] font-extrabold uppercase bg-white text-slate-700 hover:bg-slate-100 px-2.5 py-1 rounded-xl transition-all border border-slate-200 cursor-pointer flex items-center gap-1"
-                            >
-                              <RefreshCw size={8} className={isSyncingSingle === shipment.id ? 'animate-spin' : ''} />
-                              Consultar
-                            </button>
-                          </div>
-                        </div>
-                      )}
-
-                      {shipment.lastSyncedAt && (
-                        <p className="text-[7px] font-black text-slate-400 uppercase text-right select-none font-mono tracking-wide pr-1">
-                          Sincronizado: {new Date(shipment.lastSyncedAt).toLocaleString('pt-BR')}
-                        </p>
-                      )}
-                    </motion.div>
-                  )}
                 </AnimatePresence>
 
                 <button 
@@ -2766,20 +2702,7 @@ export default function Shipments() {
               </button>
             </div>
           )}
-          <button 
-            type="button"
-            onClick={() => syncActiveShipments(true)}
-            disabled={isSyncing}
-            className={cn(
-              "font-bold py-2.5 px-3 md:py-3 md:px-5 rounded-xl transition-all border flex items-center justify-center gap-1.5 active:scale-95 shadow-sm text-[10px] md:text-xs cursor-pointer select-none flex-1 sm:flex-initial",
-              isSyncing 
-                ? "bg-slate-100 border-slate-200 text-slate-400" 
-                : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300"
-            )}
-          >
-            <RefreshCw size={13} className={cn("text-red-800 transition-transform duration-300", isSyncing ? "animate-spin text-red-500" : "")} />
-            <span>{isSyncing ? 'Sincronizando...' : 'Atualizar Rastreios'}</span>
-          </button>
+
 
           <button 
             type="button"
@@ -4043,8 +3966,8 @@ export default function Shipments() {
                         {selectedSaleId && (
                           <div className="space-y-2 animate-in fade-in slide-in-from-top-2 border-l-2 border-red-800 pl-4 py-1">
                             <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2">Produtos Disponíveis desta Venda</p>
-                            {sales.find(s => s.id === selectedSaleId)?.items
-                              .filter(item => !shippedItemKeys.has(`${selectedSaleId}-${item.productId}-${item.variationId}`))
+                            {(sales.find(s => s.id === selectedSaleId)?.items || [])
+                              .filter(item => item && !item.isCancelled && !shippedItemKeys.has(`${selectedSaleId}-${item.productId}-${item.variationId || ''}`))
                               .map((item, idx) => (
                                 <div key={idx} className="flex items-center justify-between bg-white border border-slate-100 p-2.5 rounded-xl shadow-sm">
                                   <div className="min-w-0 flex-1">
@@ -4169,12 +4092,28 @@ export default function Shipments() {
                             <p className="text-[10px] text-indigo-600 font-bold uppercase tracking-tight">{formatProductNameWithGender(item.productName, item.gender || products.find(p => p.id === item.productId)?.gender)}</p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-4">
-                          <span className="text-xs font-black text-slate-900">x{item.quantity}</span>
+                        <div className="flex items-center gap-3 shrink-0">
+                          <span className="text-xs font-black text-slate-500 mr-1">x{item.quantity}</span>
+                          
+                          <div className="flex flex-col gap-0.5 items-end">
+                            <label className="text-[7.5px] lg:text-[8px] uppercase font-black text-red-800/80 tracking-wide select-none leading-none">Custo Unit. (R$)</label>
+                            <input 
+                              type="text"
+                              value={item.supplierCost !== undefined ? String(item.supplierCost).replace('.', ',') : String(products.find(p => p.id === item.productId)?.costPrice || item.price).replace('.', ',')}
+                              onChange={(e) => {
+                                const rawVal = e.target.value.replace(/[^0-9,.]/g, '').replace(',', '.');
+                                const val = parseFloat(rawVal) || 0;
+                                setItems(items.map(i => i.id === item.id ? { ...i, supplierCost: val } : i));
+                              }}
+                              className="w-16 px-1.5 py-0.5 text-[10px] sm:text-xs font-mono font-black text-slate-800 bg-red-50/20 border border-red-200/50 focus:border-red-800 focus:outline-none rounded-md text-center"
+                              placeholder="Custo"
+                            />
+                          </div>
+
                           <button 
                             type="button" 
                             onClick={() => removeItem(item.id)}
-                            className="p-1.5 text-rose-400 hover:bg-rose-50 rounded-lg transition-colors"
+                            className="p-1.5 text-rose-400 hover:bg-rose-50 rounded-lg transition-colors animate-pulse"
                           >
                             <Trash2 size={16} />
                           </button>
@@ -4273,17 +4212,26 @@ export default function Shipments() {
                 </div>
               </form>
 
-              <div className="p-8 bg-slate-50 border-t border-slate-100 flex gap-4">
+              <div className="p-8 bg-slate-50 border-t border-slate-100 flex flex-col sm:flex-row gap-3 sm:gap-4">
+                {editingShipment && (
+                  <button 
+                    type="button" 
+                    onClick={() => handleDeleteShipment(editingShipment.id!)}
+                    className="px-6 py-4 bg-rose-50 border border-rose-200 text-rose-700 font-extrabold text-[11px] uppercase tracking-widest rounded-[20px] hover:bg-rose-100 transition-all text-center cursor-pointer"
+                  >
+                    Excluir Encomenda
+                  </button>
+                )}
                 <button 
                   type="button" 
                   onClick={() => setIsModalOpen(false)}
-                  className="flex-1 px-6 py-4 bg-white border border-slate-200 text-slate-600 font-black text-xs uppercase tracking-widest rounded-[20px] hover:bg-slate-100 transition-all"
+                  className="flex-1 px-6 py-4 bg-white border border-slate-200 text-slate-600 font-extrabold text-[11px] uppercase tracking-widest rounded-[20px] hover:bg-slate-100 transition-all text-center cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button 
                   onClick={handleSubmit}
-                  className="flex-[2] px-6 py-4 bg-red-800 text-white font-black text-xs uppercase tracking-widest rounded-[20px] shadow-xl shadow-red-100 hover:bg-black transition-all hover:-translate-y-1 active:translate-y-0"
+                  className="flex-[2] px-6 py-4 bg-red-800 text-white font-extrabold text-[11px] uppercase tracking-widest rounded-[20px] shadow-xl shadow-red-100 hover:bg-black transition-all hover:-translate-y-1 active:translate-y-0 text-center cursor-pointer"
                 >
                   {editingShipment ? 'Salvar Alterações' : 'Criar Lote de Importação'}
                 </button>

@@ -35,9 +35,15 @@ export default function Products() {
 
   // Simulator States
   const [simCost, setSimCost] = useState('50');
-  const [simTaxOpt, setSimTaxOpt] = useState<'historical' | 'conform' | 'import' | 'none'>('historical');
+  const [simCategory, setSimCategory] = useState('Todas');
+  const [simDeclarationRate, setSimDeclarationRate] = useState(100);
+  const [simTaxOpt, setSimTaxOpt] = useState<'historical' | 'prorata' | 'conform' | 'import' | 'none'>('prorata');
+  const [simProRataTaxTotal, setSimProRataTaxTotal] = useState('140');
+  const [simProRataPieces, setSimProRataPieces] = useState('10');
   const [simCustomMarkup, setSimCustomMarkup] = useState('1.8');
   const [simSellingPriceInput, setSimSellingPriceInput] = useState('120');
+  const [customSimCategory, setCustomSimCategory] = useState('');
+  const [isCustomCategory, setIsCustomCategory] = useState(false);
 
   // Form State
   const [name, setName] = useState('');
@@ -358,6 +364,25 @@ export default function Products() {
       setEditingProduct(null);
     }
     setIsModalOpen(true);
+  };
+
+  const handleCategoryChange = (val: string) => {
+    setCategory(val);
+    const upperVal = val.toUpperCase().trim();
+    if (upperVal.includes('CAMISA')) {
+      setIsDropshipping(true);
+      const hasOnlyEmptyVariations = variations.length === 0 || (variations.length === 1 && !variations[0].size && !variations[0].color);
+      if (hasOnlyEmptyVariations) {
+        const defaultSizes = ['P', 'M', 'G', 'GG', 'XG', '3XL', '4XL'];
+        const populated = defaultSizes.map(size => ({
+          id: Math.random().toString(36).substr(2, 9),
+          size,
+          color: '',
+          stock: 10
+        }));
+        setVariations(populated);
+      }
+    }
   };
 
   const confirmDelete = (product: Product) => {
@@ -1120,7 +1145,7 @@ export default function Products() {
       {/* Modal */}
       <AnimatePresence>
         {isModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4">
             <motion.div 
               initial={{ opacity: 0 }} 
               animate={{ opacity: 1 }} 
@@ -1132,22 +1157,30 @@ export default function Products() {
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="bg-white rounded-2xl shadow-2xl relative z-10 w-full max-w-4xl overflow-hidden border border-slate-200"
+              className="bg-white relative z-10 w-full h-full sm:h-auto max-h-full sm:max-h-[85vh] sm:max-w-4xl sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden border-0 sm:border border-slate-200"
             >
-              <form onSubmit={handleSubmit}>
-                <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                  <div className="flex items-center gap-3">
+              <form onSubmit={handleSubmit} className="flex flex-col h-full overflow-hidden">
+                <div className="p-4 sm:p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0">
+                  <div className="flex items-center gap-2 sm:gap-3">
                     <div className="size-8 bg-black rounded-lg flex items-center justify-center text-amber-500 border border-amber-500/20">
                       <Box size={18} />
                     </div>
-                    <h3 className="text-sm font-black uppercase tracking-wider text-slate-900 font-sans">
+                    <h3 className="text-[11px] sm:text-sm font-black uppercase tracking-wider text-slate-900 font-sans">
                       {editingProduct ? 'Configurar Produto' : 'Cadastrar Novo Item'}
                     </h3>
                   </div>
-                  <button type="button" onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-2 hover:bg-slate-200 rounded-lg transition-colors"><X size={20} /></button>
+                  <div className="flex items-center gap-1.5">
+                    <button 
+                      type="submit"
+                      className="sm:hidden px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-[10px] font-black uppercase rounded-lg transition-all tracking-widest shadow-md shadow-emerald-900/10"
+                    >
+                      Salvar Cadastro
+                    </button>
+                    <button type="button" onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-2 hover:bg-slate-200 rounded-lg transition-colors"><X size={20} /></button>
+                  </div>
                 </div>
                 
-                <div className="p-8 overflow-y-auto max-h-[85vh] md:max-h-[70vh] grid grid-cols-1 lg:grid-cols-5 gap-8">
+                <div className="p-8 overflow-y-auto flex-1 grid grid-cols-1 lg:grid-cols-5 gap-8">
                   <div className="lg:col-span-3 space-y-6">
                     <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 p-4 bg-amber-50 border border-amber-200 rounded-2xl">
                       <div className="flex items-center gap-3 flex-1">
@@ -1192,7 +1225,7 @@ export default function Products() {
                           required 
                           type="text" 
                           value={category} 
-                          onChange={e => setCategory(e.target.value.toUpperCase())}
+                          onChange={e => handleCategoryChange(e.target.value.toUpperCase())}
                           className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-red-800 font-black text-sm transition-all uppercase animate-fade-in"
                           placeholder="EX: TÊNIS"
                         />
@@ -1381,7 +1414,7 @@ export default function Products() {
                   </div>
                 </div>
 
-                <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
+                 <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end gap-3 shrink-0">
                   <button 
                     type="button" 
                     onClick={() => setIsModalOpen(false)}
@@ -1391,7 +1424,7 @@ export default function Products() {
                   </button>
                   <button 
                     type="submit"
-                    className="px-10 py-3 bg-red-800 hover:bg-black text-white text-[11px] font-black uppercase rounded-xl transition-all shadow-lg shadow-red-900/20 tracking-widest"
+                    className="px-10 py-3 bg-red-800 hover:bg-black text-white text-[11px] font-black uppercase rounded-xl transition-all shadow-lg shadow-red-900/20 tracking-widest flex items-center justify-center gap-2"
                   >
                     Confirmar Produto
                   </button>
@@ -1703,37 +1736,115 @@ export default function Products() {
       {/* Price Simulator Modal */}
       <AnimatePresence>
         {isSimulatorOpen && (() => {
-          // Calculate historical metrics from shipments list
-          const totalShipmentsCount = shipments.length;
-          const taxedShipments = shipments.filter(s => s.hasTax);
-          const taxationRate = totalShipmentsCount > 0 ? Math.round((taxedShipments.length / totalShipmentsCount) * 100) : 0;
+          // 1. Calculate and map available categories for filtering
+          const simCategories = ['Todas', ...Array.from(new Set(products.filter(p => p.category).map(p => p.category!.toUpperCase().trim()))).sort()];
+
+          // Active category identifier (handles custom text or dropdown choice)
+          const activeCategory = isCustomCategory ? (customSimCategory || 'Nova Categoria') : simCategory;
+
+          // 2. Category-Specific Averages (from database)
+          const categoryProducts = products.filter(p => 
+            activeCategory === 'Todas' || (p.category && p.category.toUpperCase().trim() === activeCategory.toUpperCase().trim())
+          );
           
-          let totalRatio = 0;
-          let count = 0;
-          shipments.forEach(s => {
+          const rawAvgCost = categoryProducts.length > 0 
+            ? categoryProducts.reduce((sum, p) => sum + (p.costPrice || 0), 0) / categoryProducts.length
+            : 50;
+
+          const rawAvgSelling = categoryProducts.length > 0
+            ? categoryProducts.reduce((sum, p) => sum + (p.sellingPrice || 0), 0) / categoryProducts.length
+            : 120;
+
+          // 3. Category-Specific Shipment Historical Taxes (More Realistic Calculation)
+          let matchedShipments = shipments;
+          if (activeCategory !== 'Todas') {
+            matchedShipments = shipments.filter(s => {
+              if (!s.items) return false;
+              return s.items.some((item: any) => {
+                const prod = products.find(p => p.id === item.productId || p.name.toUpperCase().trim() === item.productName?.toUpperCase().trim());
+                return prod && prod.category && prod.category.toUpperCase().trim() === activeCategory.toUpperCase().trim();
+              });
+            });
+          }
+
+          const totalMatchedCount = matchedShipments.length;
+          const taxedMatchedCount = matchedShipments.filter(s => s.hasTax).length;
+          const categoryTaxationFreq = totalMatchedCount > 0 ? Math.round((taxedMatchedCount / totalMatchedCount) * 100) : 0;
+
+          let categoryTotalRatio = 0;
+          let categoryTaxedCount = 0;
+          matchedShipments.forEach(s => {
             if (s.hasTax && s.taxAmount > 0) {
               const shipValue = s.items?.reduce((acc: number, itemObj: any) => acc + ((itemObj.price || 0) * (itemObj.quantity || 1)), 0) || 0;
               if (shipValue > 0) {
-                totalRatio += (s.taxAmount / shipValue);
-                count++;
+                categoryTotalRatio += (s.taxAmount / shipValue);
+                categoryTaxedCount++;
               }
             }
           });
-          const historicalAvgTaxRatio = count > 0 ? (totalRatio / count) : 0.22; // default to 22% fallback
 
-          const currentTaxRate = simTaxOpt === 'none' ? 0 
-            : simTaxOpt === 'conform' ? 0.20 
-            : simTaxOpt === 'import' ? 0.60 
-            : historicalAvgTaxRatio;
+          // Category-specific fallback rates if no historical matches
+          let defaultFallbackRate = 0.22; // 22% fallback
+          const catUpper = activeCategory.toUpperCase().trim();
+          if (catUpper.includes('TÊNIS') || catUpper.includes('CALÇAD') || catUpper.includes('CHUTEIR') || catUpper.includes('ELETRO') || catUpper.includes('RELÓG')) {
+            defaultFallbackRate = 0.45; // Footwear/Electronics have higher audit risk & heavier taxes
+          } else if (catUpper.includes('CAMISA') || catUpper.includes('VESTUÁR') || catUpper.includes('ROUPA') || catUpper.includes('BERMUD')) {
+            defaultFallbackRate = 0.20; // Clothes are usually lower/often fall in Remessa Conforme boundaries
+          }
 
+          const categoryHistoricalAvgTaxRatio = categoryTaxedCount > 0 ? (categoryTotalRatio / categoryTaxedCount) : defaultFallbackRate;
+
+          // 4. Current Tax Rate based on Option and Declared Ratio (Realistic Aduaneiro compounded calculation)
           const parsedCost = parseFloat(simCost.replace(',', '.')) || 0;
-          const estimatedUnitTax = parsedCost * currentTaxRate;
+          // Real dropshippers declare less to prevent high taxes. Declared Value = Cost * (Rate / 100)
+          const declaredVal = parsedCost * (simDeclarationRate / 100);
+
+          const parsedProRataTaxTotal = parseFloat(simProRataTaxTotal.replace(',', '.')) || 140;
+          const parsedProRataPieces = parseFloat(simProRataPieces) || 10;
+          const customProrataTaxRate = parsedProRataPieces > 0 ? (parsedProRataTaxTotal / parsedProRataPieces) : 14;
+
+          let estimatedUnitTax = 0;
+          let fedTaxAmount = 0;   // Federal Import tax
+          let icmsTaxAmount = 0;  // State compounded tax (ICMS "por dentro")
+          let flatPostFee = 0;    // Dispatch postal fee (Despacho Postal Correios)
+
+          if (simTaxOpt === 'prorata') {
+            estimatedUnitTax = customProrataTaxRate;
+            fedTaxAmount = estimatedUnitTax * 0.6; // representative split
+            icmsTaxAmount = estimatedUnitTax * 0.4;
+          } else if (simTaxOpt === 'conform') {
+            // Remessa Conforme Program: 
+            // 20% Federal Tax up to $50 (equivalent to approx R$ 260.00), 60% with USD 20 deduction (R$ 40) above.
+            if (declaredVal <= 260) {
+              fedTaxAmount = declaredVal * 0.20;
+            } else {
+              fedTaxAmount = Math.max(0, declaredVal * 0.60 - 40.00);
+            }
+            // ICMS is calculated "por dentro" at 17% effective rate (which mathematically divides the base by 0.83)
+            const icmsBase = (declaredVal + fedTaxAmount) / 0.83;
+            icmsTaxAmount = icmsBase * 0.17;
+            estimatedUnitTax = fedTaxAmount + icmsTaxAmount;
+          } else if (simTaxOpt === 'import') {
+            // Standard/Classic regime (60% federal duties + compound ICMS + Despacho Postal)
+            fedTaxAmount = declaredVal * 0.60;
+            const icmsBase = (declaredVal + fedTaxAmount) / 0.83;
+            icmsTaxAmount = icmsBase * 0.17;
+            flatPostFee = 16.00; // Despacho Postal Correios fee
+            estimatedUnitTax = fedTaxAmount + icmsTaxAmount + flatPostFee;
+          } else if (simTaxOpt === 'historical') {
+            // Calculated from real matched historical batches
+            estimatedUnitTax = declaredVal * categoryHistoricalAvgTaxRatio;
+            fedTaxAmount = estimatedUnitTax * 0.6; // representative subdivision
+            icmsTaxAmount = estimatedUnitTax * 0.4;
+          } else { // none
+            estimatedUnitTax = 0;
+          }
 
           // Delivery fees
           const deliveryParagominas = 8.00;
           const deliverySaoLuis = 20.00;
 
-          // Total cost unit scenarios
+          // Total cost unit scenarios with advanced custom taxes
           const costParaNoTax = parsedCost + deliveryParagominas;
           const costParaWithTax = parsedCost + estimatedUnitTax + deliveryParagominas;
 
@@ -1753,8 +1864,6 @@ export default function Products() {
           const marginParaNoTax = targetSelling > 0 ? ((targetSelling - costParaNoTax) / targetSelling) * 100 : 0;
           const marginParaWithTax = targetSelling > 0 ? ((targetSelling - costParaWithTax) / targetSelling) * 100 : 0;
 
-          const marginSLNoTax = targetSelling > 0 ? ((targetSelling - costSLNoTax) / targetSelling) * 150 : 0;
-          // Wait, let's fix the 150 typo -> it should be 100
           const marginSLNoTaxFixed = targetSelling > 0 ? ((targetSelling - costSLNoTax) / targetSelling) * 100 : 0;
           const marginSLWithTax = targetSelling > 0 ? ((targetSelling - costSLWithTax) / targetSelling) * 100 : 0;
 
@@ -1781,9 +1890,11 @@ export default function Products() {
                     </div>
                     <div>
                       <h3 className="text-sm font-black uppercase tracking-wider text-slate-900">
-                        Simulador de Precificação Inteligente
+                        Simulador de Custos e Precificação Multicategorias
                       </h3>
-                      <p className="text-[9px] font-bold text-slate-500 uppercase mt-0.5 tracking-widest">Ajuste de Margem Real por Região & Alfândega</p>
+                      <p className="text-[9px] font-bold text-slate-500 uppercase mt-0.5 tracking-widest">
+                        Cálculo Real de Impostos Aduaneiros e Margem Líquida Precisa
+                      </p>
                     </div>
                   </div>
                   <button type="button" onClick={() => setIsSimulatorOpen(false)} className="text-slate-400 hover:text-slate-650 p-2 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer select-none">
@@ -1797,24 +1908,86 @@ export default function Products() {
                   {/* Explanation Banner regarding recent API lack of updates */}
                   <div className="bg-gradient-to-r from-red-900/10 to-transparent border-l-4 border-red-800 p-4 rounded-r-2xl space-y-1">
                     <p className="text-[10px] font-black uppercase text-red-900 tracking-wider flex items-center gap-2">
-                      💡 Suas Perguntas Frequentes: Por que novos códigos de rastreio não mostram eventos na API?
+                      💡 Cálculo Inteligente Multi-Filtros do Club da Bola
                     </p>
                     <p className="text-[9px] font-bold text-slate-650 leading-normal uppercase">
-                      Ao postar novos códigos de importações (Dropshipping internacional), os Correios demoram de 3 a 5 dias úteis para registrar o primeiro evento no banco nacional de dados (quando o objeto chega ao país ou é transferido pelas aduanas internacionais de Shenzhen/Hong Kong).
-                      <span className="block mt-1 font-extrabold text-red-850">
-                        O ERP Club da Bola foi projetado de forma robusta e possui a solução "Simular Rastreio" na aba dos Correios para você testar ações internas de status no ambiente de testes antes das atualizações oficiais!
-                      </span>
+                      Nosso simulador agora é 100% dinâmico! Selecione qualquer categoria abaixo para carregar automaticamente as médias históricas de custos armazenadas no seu estoque e calcular os riscos aduaneiros baseados nas alíquotas reais vigentes (como Remessa Conforme e ICMS em cadeia por dentro).
                     </p>
                   </div>
 
                   <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                     {/* Left Column - Inputs */}
                     <div className="lg:col-span-5 space-y-6 bg-white p-6 rounded-3xl border border-slate-200/50 shadow-sm">
-                      <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-800 border-b border-slate-100 pb-2">📂 Variáveis e Custos de Aquisição</h4>
+                      <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-800 border-b border-slate-100 pb-2 flex items-center justify-between">
+                        <span>📂 Variáveis de Aquisição</span>
+                        <span className="text-[8px] bg-red-100 text-red-800 px-1.5 py-0.5 rounded font-black tracking-widest uppercase">REAL ADUANA</span>
+                      </h4>
+
+                      {/* Category Selection Filter */}
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Filtrar por Categoria do Estoque</label>
+                        <div className="flex gap-2">
+                          <select
+                            value={isCustomCategory ? 'custom' : simCategory}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val === 'custom') {
+                                setIsCustomCategory(true);
+                              } else {
+                                setIsCustomCategory(false);
+                                setSimCategory(val);
+                              }
+                            }}
+                            className="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none font-black text-xs text-slate-800 transition-all uppercase focus:border-red-800"
+                          >
+                            {simCategories.map(cat => (
+                              <option key={cat} value={cat}>{cat === 'Todas' ? 'Todas as Categorias' : cat}</option>
+                            ))}
+                            <option value="custom">+ Nova Categoria...</option>
+                          </select>
+                        </div>
+
+                        {isCustomCategory && (
+                          <div className="mt-2 text-left animate-fade-in">
+                            <input 
+                              type="text"
+                              value={customSimCategory}
+                              onChange={(e) => setCustomSimCategory(e.target.value.toUpperCase())}
+                              className="w-full bg-slate-50 border border-red-200 focus:border-red-800 font-black text-xs uppercase rounded-xl p-2.5 focus:outline-none"
+                              placeholder="Digite a categoria customizada"
+                            />
+                            <p className="text-[8px] text-slate-400 font-extrabold mt-1 uppercase tracking-wider">
+                              *Criando simulação fantasma para uma nova categoria sem histórico
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Average metrics badge & autofill action button */}
+                        {categoryProducts.length > 0 && (
+                          <div className="bg-slate-50 border border-slate-100 p-2.5 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-2.5">
+                            <div className="text-[8.5px] text-slate-500 font-bold uppercase leading-snug">
+                              <p>Média real de estoque de <span className="text-slate-850 font-black">{activeCategory}</span>:</p>
+                              <p className="mt-0.5 text-slate-700">Cost: <span className="text-slate-900 font-extrabold">{formatCurrency(rawAvgCost)}</span> & Venda: <span className="text-slate-900 font-extrabold">{formatCurrency(rawAvgSelling)}</span></p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSimCost(rawAvgCost.toFixed(2).replace('.', ','));
+                                setSimSellingPriceInput(rawAvgSelling.toFixed(2).replace('.', ','));
+                              }}
+                              className="bg-red-800 hover:bg-black text-[8px] font-black uppercase text-white px-2.5 py-1.5 rounded-lg tracking-widest transition-all cursor-pointer shadow-sm active:scale-95 shrink-0"
+                            >
+                              ⚡ Aplicar Médias
+                            </button>
+                          </div>
+                        )}
+                      </div>
                       
                       {/* Cost Price */}
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Preço de Custo da Camisa (R$)</label>
+                      <div className="space-y-1.5 border-t border-slate-100 pt-4">
+                        <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider">
+                          Preço de Custo Real ({activeCategory === 'Todas' ? 'Geral' : activeCategory})
+                        </label>
                         <div className="relative">
                           <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-sm font-bold">R$</span>
                           <input 
@@ -1827,16 +2000,60 @@ export default function Products() {
                         </div>
                       </div>
 
-                      {/* Tax Scenario Slider/Buttons */}
-                      <div className="space-y-3">
+                      {/* Declaration Rate Slider */}
+                      <div className="space-y-3 border-t border-slate-100 pt-4">
                         <div className="flex justify-between items-center">
+                          <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Subfaturamento / Declaração Aduaneira</label>
+                          <span className="text-[9px] font-black text-slate-700 bg-slate-100 px-2 py-0.5 rounded font-mono">
+                            {simDeclarationRate}% do custo
+                          </span>
+                        </div>
+                        
+                        <div className="grid grid-cols-3 gap-2 text-center">
+                          {[100, 50, 30].map(val => (
+                            <button
+                              key={val}
+                              type="button"
+                              onClick={() => setSimDeclarationRate(val)}
+                              className={cn(
+                                "p-2 rounded-xl border text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer",
+                                simDeclarationRate === val 
+                                  ? "bg-slate-950 text-white border-slate-950 shadow-sm" 
+                                  : "bg-slate-50 text-slate-600 border-slate-200/60 hover:bg-slate-100"
+                              )}
+                            >
+                              {val === 100 ? '100% (Real)' : `${val}% (Comum)`}
+                            </button>
+                          ))}
+                        </div>
+                        
+                        <p className="text-[8px] font-semibold text-slate-400 leading-normal uppercase">
+                          * dropshippers geralmente mandam declarar {simDeclarationRate === 100 ? 'o valor cheio do item' : 'cerca de ' + simDeclarationRate + '% para otimizar tributos'}. Valor declarado simulado: <span className="font-extrabold text-slate-800">{formatCurrency(declaredVal)}</span>.
+                        </p>
+                      </div>
+
+                      {/* Tax Scenario Slider/Buttons */}
+                      <div className="space-y-3 border-t border-slate-100 pt-4">
+                        <div className="flex justify-between items-center border-b border-slate-50 pb-2">
                           <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Ajuste de Taxa da Alfândega</label>
                           <span className="text-[9px] font-black text-red-800 bg-red-50 border border-red-100 px-2 py-0.5 rounded uppercase font-mono">
-                            {Math.round(currentTaxRate * 100)}% de Imposto
+                            Imp: {Math.round(estimatedUnitTax > 0 ? (estimatedUnitTax / declaredVal) * 100 : 0)}% real declarado
                           </span>
                         </div>
                         
                         <div className="grid grid-cols-2 gap-2 text-center">
+                          <button
+                            type="button"
+                            onClick={() => setSimTaxOpt('prorata')}
+                            className={cn(
+                              "p-2.5 rounded-xl border text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer col-span-2",
+                              simTaxOpt === 'prorata' 
+                                ? "bg-red-800 text-white border-red-900 shadow-md ring-1 ring-red-500/50" 
+                                : "bg-red-50/50 text-red-900 border-red-200 hover:bg-red-50"
+                            )}
+                          >
+                            ⭐ Custo Pró-rata de Encomenda (Lote)
+                          </button>
                           <button
                             type="button"
                             onClick={() => setSimTaxOpt('none')}
@@ -1859,7 +2076,7 @@ export default function Products() {
                                 : "bg-slate-50 text-slate-600 border-slate-200/60 hover:bg-slate-100"
                             )}
                           >
-                            Conforme (20%)
+                            Conforme (20% + ICMS)
                           </button>
                           <button
                             type="button"
@@ -1871,7 +2088,7 @@ export default function Products() {
                                 : "bg-slate-50 text-slate-600 border-slate-200/60 hover:bg-slate-100"
                             )}
                           >
-                            Tributado (60%)
+                            Tributo Bruto (60% + ICMS)
                           </button>
                           <button
                             type="button"
@@ -1883,16 +2100,55 @@ export default function Products() {
                                 : "bg-slate-50 text-slate-600 border-slate-200/60 hover:bg-slate-100"
                             )}
                           >
-                            História ERP ({(historicalAvgTaxRatio * 100).toFixed(0)}%)
+                            História ERP ({(categoryHistoricalAvgTaxRatio * 100).toFixed(0)}%)
                           </button>
                         </div>
 
+                        {/* Interactive Prorated Fields when selected */}
+                        {simTaxOpt === 'prorata' && (
+                          <motion.div 
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            className="bg-red-50/40 p-4 rounded-2xl border border-red-200/70 space-y-3 text-left overflow-hidden"
+                          >
+                            <span className="text-[9px] font-black text-red-900 uppercase tracking-widest block mb-1">
+                              🧮 Configurar Rateio Pro-Rata de Lote
+                            </span>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="space-y-1">
+                                <label className="text-[8.5px] uppercase font-bold text-slate-500 tracking-wider">Taxa Total (R$)</label>
+                                <input 
+                                  type="text"
+                                  value={simProRataTaxTotal}
+                                  onChange={(e) => setSimProRataTaxTotal(e.target.value.replace(/[^0-9,.]/g, ''))}
+                                  className="w-full bg-white border border-red-200 focus:border-red-800 font-mono font-black text-xs text-slate-900 rounded-lg p-2 focus:outline-none"
+                                  placeholder="Ex: 140,00"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-[8.5px] uppercase font-bold text-slate-500 tracking-wider font-sans">Qtd de Peças</label>
+                                <input 
+                                  type="text"
+                                  value={simProRataPieces}
+                                  onChange={(e) => setSimProRataPieces(e.target.value.replace(/[^0-9]/g, ''))}
+                                  className="w-full bg-white border border-red-200 focus:border-red-800 font-mono font-black text-xs text-slate-900 rounded-lg p-2 focus:outline-none"
+                                  placeholder="Ex: 10"
+                                />
+                              </div>
+                            </div>
+                            <div className="text-[8.5px] font-black text-red-950 uppercase tracking-wide bg-white/60 p-2 rounded-lg border border-red-200/40 mt-1 flex justify-between">
+                              <span>Imposto Pró-Rata:</span>
+                              <span>{formatCurrency(customProrataTaxRate)} por peça</span>
+                            </div>
+                          </motion.div>
+                        )}
+
                         {/* Taxation ERP statistics */}
                         <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200/40 text-[9px] text-slate-500 font-bold space-y-1 select-none leading-relaxed">
-                          <p className="uppercase text-[8px] tracking-widest text-slate-400 font-black">📊 Estatísticas Reais de Importações</p>
-                          <p>• Total de Lotes Importados: <span className="text-slate-800 font-black">{totalShipmentsCount}</span></p>
-                          <p>• Taxação Alfandegária: <span className="text-slate-800 font-black">{taxationRate}% de frequência</span></p>
-                          <p>• Alíquota Efetiva Média: <span className="text-slate-800 font-black">{(historicalAvgTaxRatio * 100).toFixed(1)}% sobre valor declarado</span></p>
+                          <p className="uppercase text-[8px] tracking-widest text-slate-400 font-black">📊 Estatísticas para {activeCategory}</p>
+                          <p className="flex justify-between"><span>• Lotes Matched:</span> <span className="text-slate-800 font-black">{totalMatchedCount}</span></p>
+                          <p className="flex justify-between"><span>• Frequência de Taxação:</span> <span className="text-slate-800 font-black">{categoryTaxationFreq}%</span></p>
+                          <p className="flex justify-between"><span>• Alíquota Histórica Média:</span> <span className="text-slate-800 font-black">{(categoryHistoricalAvgTaxRatio * 100).toFixed(1)}%</span></p>
                         </div>
                       </div>
 
@@ -1935,6 +2191,59 @@ export default function Products() {
 
                     {/* Right Column - Results Comparison */}
                     <div className="lg:col-span-7 space-y-6">
+
+                      {/* Advanced breakdown of real customs calculation */}
+                      <div className="bg-white rounded-3xl p-5 border border-slate-200/50 shadow-sm space-y-3">
+                        <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                          <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-900 flex items-center gap-2">
+                            🧾 Detalhes do Cálculo Real de Imposto Aduaneiro (Almoxarifado)
+                          </h4>
+                          <span className="text-[8px] font-mono bg-red-500 font-bold text-white px-1.5 py-0.5 rounded tracking-widest uppercase">RECEITA FEDERAL</span>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-[9px]">
+                          <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                            <span className="text-[8px] text-slate-400 font-black uppercase">Taxa Federal</span>
+                            <p className="text-xs font-black text-slate-900 mt-1 font-mono">{formatCurrency(fedTaxAmount)}</p>
+                            <p className="text-[7.5px] text-slate-500 font-semibold uppercase mt-0.5">
+                              {simTaxOpt === 'conform' ? '20% Remessa' : simTaxOpt === 'import' ? '60% Regime Comum' : 'Histórico Proporcional'}
+                            </p>
+                          </div>
+                          
+                          <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                            <span className="text-[8px] text-slate-400 font-black uppercase">ICMS por Dentro</span>
+                            <p className="text-xs font-black text-slate-900 mt-1 font-mono">{formatCurrency(icmsTaxAmount)}</p>
+                            <p className="text-[7.5px] text-slate-500 font-semibold uppercase mt-0.5">
+                              17% Efetivo (÷0.83)
+                            </p>
+                          </div>
+
+                          <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                            <span className="text-[8px] text-slate-400 font-black uppercase">Despacho Postal</span>
+                            <p className="text-xs font-black text-slate-900 mt-1 font-mono">{formatCurrency(flatPostFee)}</p>
+                            <p className="text-[7.5px] text-slate-500 font-semibold uppercase mt-0.5">
+                              Post flat Correios
+                            </p>
+                          </div>
+
+                          <div className="bg-red-50/20 p-3 rounded-2xl border border-red-100/30">
+                            <span className="text-[8px] text-red-900 font-black uppercase">Total Aduaneiro</span>
+                            <p className="text-xs font-black text-red-900 mt-1 font-mono">{formatCurrency(estimatedUnitTax)}</p>
+                            <p className="text-[7.5px] text-red-700 font-bold uppercase mt-0.5">
+                              +{Math.round((estimatedUnitTax / (parsedCost || 1)) * 100)}% adicionados ao custo
+                            </p>
+                          </div>
+                        </div>
+
+                        {simTaxOpt !== 'none' && (
+                          <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-3 text-[8.5px] text-slate-900 font-medium">
+                            <p className="uppercase font-black text-amber-900 tracking-wider">💡 Informações da Fórmula Real:</p>
+                            <p className="mt-1 leading-normal">
+                              O ICMS aduaneiro no Brasil é calculado integralmente <span className="font-bold">"por dentro"</span>. A fórmula aplicada é: <span className="font-bold font-mono text-amber-950">Base = (Valor Declarado + Imposto de Importação) / (1 - Alíquota ICMS)</span>. Isso gera uma alíquota combinada final superior à simples soma das taxas nominais.
+                            </p>
+                          </div>
+                        )}
+                      </div>
                       
                       {/* Side by side Region Cards */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1948,7 +2257,7 @@ export default function Products() {
                                 <p className="text-[8px] font-bold text-slate-400 uppercase mt-0.5">Taxa de Logística Padrão</p>
                               </div>
                               <span className="text-[10px] font-black text-blue-900 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded font-mono">
-                                + R$ 8,00
+                                + {formatCurrency(deliveryParagominas)}
                               </span>
                             </div>
 
@@ -1998,13 +2307,13 @@ export default function Products() {
                             <div className="flex justify-between">
                               <span>Sem taxa de aduana:</span>
                               <span className="font-extrabold text-slate-900 font-mono">
-                                R$ { (targetSelling - costParaNoTax).toFixed(2) } ({marginParaNoTax.toFixed(0)}% margem)
+                                {formatCurrency(targetSelling - costParaNoTax)} ({marginParaNoTax.toFixed(0)}% margem)
                               </span>
                             </div>
                             <div className="flex justify-between">
                               <span>Com taxa de aduana:</span>
                               <span className="font-extrabold text-slate-900 font-mono">
-                                R$ { (targetSelling - costParaWithTax).toFixed(2) } ({marginParaWithTax.toFixed(0)}% margem)
+                                {formatCurrency(targetSelling - costParaWithTax)} ({marginParaWithTax.toFixed(0)}% margem)
                               </span>
                             </div>
                           </div>
@@ -2019,7 +2328,7 @@ export default function Products() {
                                 <p className="text-[8px] font-bold text-slate-400 uppercase mt-0.5">Taxa de Logística Longa</p>
                               </div>
                               <span className="text-[10px] font-black text-red-800 bg-red-50 border border-red-100 px-2 py-0.5 rounded font-mono">
-                                + R$ 20,00
+                                + {formatCurrency(deliverySaoLuis)}
                               </span>
                             </div>
 
@@ -2069,13 +2378,13 @@ export default function Products() {
                             <div className="flex justify-between">
                               <span>Sem taxa de aduana:</span>
                               <span className="font-extrabold text-slate-900 font-mono">
-                                R$ { (targetSelling - costSLNoTax).toFixed(2) } ({marginSLNoTaxFixed.toFixed(0)}% margem)
+                                {formatCurrency(targetSelling - costSLNoTax)} ({marginSLNoTaxFixed.toFixed(0)}% margem)
                               </span>
                             </div>
                             <div className="flex justify-between">
                               <span>Com taxa de aduana:</span>
                               <span className="font-extrabold text-slate-900 font-mono">
-                                R$ { (targetSelling - costSLWithTax).toFixed(2) } ({marginSLWithTax.toFixed(0)}% margem)
+                                {formatCurrency(targetSelling - costSLWithTax)} ({marginSLWithTax.toFixed(0)}% margem)
                               </span>
                             </div>
                           </div>
@@ -2151,6 +2460,9 @@ export default function Products() {
                     onClick={() => {
                       // Pre-fill the standard cost price inside the Deploy Form with the simulation cost!
                       setCostPrice(simCost);
+                      if (activeCategory !== 'Todas') {
+                        setCategory(activeCategory);
+                      }
                       setIsSimulatorOpen(false);
                       openModal(); // Open product catalog deployment form
                     }}

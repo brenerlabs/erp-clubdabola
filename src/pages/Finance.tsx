@@ -32,7 +32,10 @@ import {
   Percent,
   TrendingDown,
   Scale,
-  RefreshCw
+  RefreshCw,
+  Database,
+  Shield,
+  Download
 } from 'lucide-react';
 import { formatCurrency, cn, cleanVariationName, cleanProductNameWithVariation, formatVariationWithGender, formatProductNameWithGender, smartSearchMatch } from '../lib/utils';
 import { motion } from 'motion/react';
@@ -599,6 +602,87 @@ export default function Finance() {
 
   const [isResetIconLoading, setIsResetIconLoading] = useState(false);
   const [showConfirmReset, setShowConfirmReset] = useState(false);
+
+  const [isBackupLoading, setIsBackupLoading] = useState(false);
+  const [lastBackupInfo, setLastBackupInfo] = useState<{ date: string; count: number } | null>(() => {
+    try {
+      const saved = localStorage.getItem('last_manual_backup_info');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const runManualBackup = async () => {
+    try {
+      setIsBackupLoading(true);
+      
+      const backupData: Record<string, any[]> = {};
+      const collectionsToBackup = ['sales', 'transactions', 'shipments', 'compensations', 'expenses', 'customers', 'products'];
+      let totalDocsCount = 0;
+
+      for (const colName of collectionsToBackup) {
+        const querySnapshot = await getDocs(collection(db, colName));
+        const colData = querySnapshot.docs.map(docSnapshot => {
+          const data = docSnapshot.data();
+          const serializedData = { ...data };
+          
+          // Convert firestore timestamps safely to ISO strings
+          Object.keys(serializedData).forEach(key => {
+            const val = serializedData[key];
+            if (val && typeof val === 'object' && 'seconds' in val && 'nanoseconds' in val) {
+              serializedData[key] = new Date(val.seconds * 1000).toISOString();
+            }
+          });
+          
+          return {
+            id: docSnapshot.id,
+            ...serializedData
+          };
+        });
+        backupData[colName] = colData;
+        totalDocsCount += colData.length;
+      }
+
+      const backupObj = {
+        version: "1.0",
+        timestamp: new Date().toISOString(),
+        total_records: totalDocsCount,
+        data: backupData
+      };
+
+      const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(
+        JSON.stringify(backupObj, null, 2)
+      )}`;
+      
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", jsonString);
+      
+      const formattedDate = new Date().toISOString().slice(0,19).replace(/[:T]/g, "_");
+      downloadAnchor.setAttribute("download", `BKP_FIRESTORE_${formattedDate}.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+
+      const backupInfo = {
+        date: new Date().toLocaleString('pt-BR'),
+        count: totalDocsCount
+      };
+      localStorage.setItem('last_manual_backup_info', JSON.stringify(backupInfo));
+      setLastBackupInfo(backupInfo);
+
+      showAlert(
+        "✅ Backup Concluido!", 
+        `Backup manual de ${totalDocsCount} registros do Firestore concluído e salvo localmente com sucesso!`, 
+        "success"
+      );
+    } catch (error) {
+      console.error("Erro durante o backup manual:", error);
+      showAlert("Erro de Backup", "Falha ao gerar o arquivo de backup de dados do Firestore.", "error");
+    } finally {
+      setIsBackupLoading(false);
+    }
+  };
 
   // Expense management inputs and states
   const [expDescription, setExpDescription] = useState('');
@@ -2605,6 +2689,49 @@ export default function Finance() {
             )}
           </div>
         </div>
+      </div>
+
+      {/* Backup manual de segurança */}
+      <div className="mt-12 p-8 bg-emerald-50/20 border border-emerald-100/65 rounded-[32px] group hover:border-emerald-200 transition-all">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="flex items-center gap-4 text-center md:text-left">
+            <div className="size-14 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shadow-lg shadow-emerald-200">
+              <Database size={28} className={isBackupLoading ? "animate-spin" : ""} />
+            </div>
+            <div>
+              <h4 className="text-lg font-black text-emerald-950 uppercase tracking-tighter italic">Backup de Segurança (Firestore)</h4>
+              <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest mt-1">Exportação manual completa de dados em tempo real</p>
+              {lastBackupInfo ? (
+                <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider mt-1">
+                  Último Backup: <span className="text-emerald-700">{lastBackupInfo.date}</span> ({lastBackupInfo.count} registros)
+                </p>
+              ) : (
+                <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mt-1">Nenhum backup local realizado nesta sessão</p>
+              )}
+            </div>
+          </div>
+
+          <button 
+            onClick={runManualBackup}
+            disabled={isBackupLoading}
+            className="flex items-center gap-3 px-8 py-4 bg-emerald-600 text-white rounded-2xl text-[11px] font-black uppercase tracking-[0.2em] hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-100 active:scale-95 disabled:opacity-50"
+          >
+            {isBackupLoading ? (
+              <>
+                <RefreshCw size={18} className="animate-spin" />
+                Gerando Backup...
+              </>
+            ) : (
+              <>
+                <Download size={18} />
+                Realizar Backup Manual
+              </>
+            )}
+          </button>
+        </div>
+        <p className="mt-4 text-[9px] text-emerald-600/70 font-bold uppercase text-center md:text-right tracking-widest">
+          * Exporta com segurança todas as tabelas: Vendas, Transações, Clientes, Produtos, Encomendas, Configurações e Finanças.
+        </p>
       </div>
 
       {/* Danger Zone */}
