@@ -2,13 +2,14 @@ import React, { useState, useEffect, useContext } from 'react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, where, orderBy, writeBatch } from 'firebase/firestore';
 import { Customer, Transaction, Sale, Product, generatePixPayload, getCustomerLoyaltyTier } from '../types';
-import { Plus, Search, Edit2, Trash2, Copy, User, Phone, Wallet, History, ArrowDownCircle, ArrowUpCircle, X, ShoppingBag, Star, FileText, Sparkles } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Copy, User, Phone, Wallet, History, ArrowDownCircle, ArrowUpCircle, X, ShoppingBag, Star, FileText, Sparkles, MessageCircle } from 'lucide-react';
 import { formatCurrency, cn, cleanVariationName, cleanProductNameWithVariation, formatVariationWithGender, formatProductNameWithGender, smartSearchMatch } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { RollingCounter } from '../components/RollingCounter';
 import { SidebarContext } from '../App';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { shareWhatsAppReceipt } from '../lib/whatsappReceipt';
 
 export default function Customers() {
   const { setIsSidebarOpen } = useContext(SidebarContext);
@@ -1470,6 +1471,17 @@ export default function Customers() {
                               </div>
                             );
                           })}
+                        </div>
+                        
+                        <div className="mt-4 pt-3 border-t border-slate-100 flex justify-end">
+                          <button
+                            type="button"
+                            onClick={() => shareWhatsAppReceipt(sale, products, selectedCustomer?.contact)}
+                            className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-600 hover:text-white border border-emerald-150 transition-all rounded-xl select-none active:scale-95 text-emerald-700 font-black uppercase text-[9px] tracking-wider flex items-center gap-1.5 cursor-pointer shadow-sm"
+                          >
+                            <MessageCircle size={12} />
+                            <span>Reenviar WhatsApp</span>
+                          </button>
                         </div>
                       </div>
                     ))}

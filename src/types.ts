@@ -80,6 +80,7 @@ export interface ShipmentItem {
   isCustomized?: boolean;
   customName?: string;
   customNumber?: string;
+  showInPDV?: boolean;
 }
 
 export interface ShipmentStatusHistory {

@@ -416,6 +416,7 @@ export default function Shipments() {
   };
 
   const [collapsedSuppliers, setCollapsedSuppliers] = useState<string[]>([]);
+  const [linkingItemId, setLinkingItemId] = useState<string | null>(null);
 
   const toggleSupplierCollapsed = (supplier: string) => {
     setCollapsedSuppliers(prev => 
@@ -436,6 +437,7 @@ export default function Shipments() {
   const [notes, setNotes] = useState('');
   const [supplierName, setSupplierName] = useState('');
   const [sendWhatsAppOnSave, setSendWhatsAppOnSave] = useState(true);
+  const [typedCosts, setTypedCosts] = useState<Record<string, string>>({});
 
   // Supplier Autocomplete Suggestions state and memo calculations
   const [showSupplierSuggestions, setShowSupplierSuggestions] = useState(false);
@@ -732,6 +734,7 @@ export default function Shipments() {
       setNotes('');
       setSupplierName('');
     }
+    setTypedCosts({});
     setSelectedSaleId('');
     setAddItemMode('sale');
     setSelectedStockProductId('');
@@ -1474,18 +1477,11 @@ export default function Shipments() {
       textHeader: 'text-amber-850'
     },
     {
-      id: 'recebido',
-      title: 'Recebido ✓',
-      statuses: ['Recebido'] as Shipment['status'][],
+      id: 'receb_entregue',
+      title: 'Recebido / Entregue ✓📦',
+      statuses: ['Recebido', 'Entregue'] as Shipment['status'][],
       bgHeader: 'bg-emerald-50 border-emerald-250/50 text-emerald-850',
       textHeader: 'text-emerald-900 font-extrabold'
-    },
-    {
-      id: 'entregue',
-      title: 'Entregue 📦',
-      statuses: ['Entregue'] as Shipment['status'][],
-      bgHeader: 'bg-indigo-50 border-indigo-250/50 text-indigo-850',
-      textHeader: 'text-indigo-900 font-extrabold'
     }
   ], []);
 
@@ -1527,13 +1523,9 @@ export default function Shipments() {
       if (shipment.status !== 'Em Trânsito' && shipment.status !== 'Chegou no Brasil' && shipment.status !== 'Fiscalização' && shipment.status !== 'Em trânsito para o destino final') {
         targetStatus = 'Em Trânsito';
       }
-    } else if (columnId === 'recebido') {
-      if (shipment.status !== 'Recebido') {
+    } else if (columnId === 'receb_entregue') {
+      if (shipment.status !== 'Recebido' && shipment.status !== 'Entregue') {
         targetStatus = 'Recebido';
-      }
-    } else if (columnId === 'entregue') {
-      if (shipment.status !== 'Entregue') {
-        targetStatus = 'Entregue';
       }
     }
 
@@ -1574,8 +1566,8 @@ export default function Shipments() {
     return matchesSearch && matchesStatus;
   });
 
-  const inTransitFiltered = filtered.filter(s => s.status !== 'Entregue');
-  const deliveredFiltered = filtered.filter(s => s.status === 'Entregue');
+  const inTransitFiltered = filtered.filter(s => s.status !== 'Entregue' && s.status !== 'Recebido');
+  const deliveredFiltered = filtered.filter(s => s.status === 'Entregue' || s.status === 'Recebido');
 
   // --- COMPUTE ADVANCED OPERATIONAL INTELLIGENCE METRICS ---
   const totalShipmentsCount = shipments.length;
@@ -3442,7 +3434,7 @@ export default function Shipments() {
                       <CheckCircle2 size={18} className="text-emerald-600 shrink-0" />
                       <div className="text-left">
                         <p className="text-[10px] font-black uppercase text-slate-800 tracking-wider">
-                          Encomendas Entregues ({deliveredFiltered.length})
+                          Encomendas Recebidas / Entregues ({deliveredFiltered.length})
                         </p>
                         <p className="text-[9px] text-slate-400 font-medium leading-none mt-0.5">
                           Arquivadas e ocultas para visualização limpa por padrão
@@ -4077,47 +4069,161 @@ export default function Shipments() {
                     </div>
                   )}
 
-                  <div className="space-y-2 mt-4 max-h-48 overflow-y-auto custom-scrollbar pr-2">
-                    {items.map(item => (
-                      <div key={item.id} className="bg-white p-3 rounded-2xl flex items-center justify-between border border-slate-100 shadow-sm animate-in fade-in slide-in-from-top-2">
-                        <div className="flex items-center gap-3">
-                          <div className="size-8 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400 relative">
-                             <Box size={16} />
-                             {item.isDropshipping && (
-                               <div className="absolute top-0 right-0 size-3 bg-amber-500 rounded-full border-2 border-slate-50" />
-                             )}
-                          </div>
-                          <div>
-                            <p className="text-xs font-black text-slate-900">{item.customerName}</p>
-                            <p className="text-[10px] text-indigo-600 font-bold uppercase tracking-tight">{formatProductNameWithGender(item.productName, item.gender || products.find(p => p.id === item.productId)?.gender)}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3 shrink-0">
-                          <span className="text-xs font-black text-slate-500 mr-1">x{item.quantity}</span>
-                          
-                          <div className="flex flex-col gap-0.5 items-end">
-                            <label className="text-[7.5px] lg:text-[8px] uppercase font-black text-red-800/80 tracking-wide select-none leading-none">Custo Unit. (R$)</label>
-                            <input 
-                              type="text"
-                              value={item.supplierCost !== undefined ? String(item.supplierCost).replace('.', ',') : String(products.find(p => p.id === item.productId)?.costPrice || item.price).replace('.', ',')}
-                              onChange={(e) => {
-                                const rawVal = e.target.value.replace(/[^0-9,.]/g, '').replace(',', '.');
-                                const val = parseFloat(rawVal) || 0;
-                                setItems(items.map(i => i.id === item.id ? { ...i, supplierCost: val } : i));
-                              }}
-                              className="w-16 px-1.5 py-0.5 text-[10px] sm:text-xs font-mono font-black text-slate-800 bg-red-50/20 border border-red-200/50 focus:border-red-800 focus:outline-none rounded-md text-center"
-                              placeholder="Custo"
-                            />
-                          </div>
+                  {items.length > 0 && (() => {
+                    const totalQty = items.reduce((acc, item) => acc + (item.quantity || 0), 0);
+                    const totalCost = items.reduce((acc, item) => {
+                      const itemCost = item.supplierCost !== undefined 
+                        ? item.supplierCost 
+                        : (products.find(p => p.id === item.productId)?.costPrice || item.price || 0);
+                      return acc + (itemCost * (item.quantity || 0));
+                    }, 0);
+                    const averageCost = totalQty > 0 ? totalCost / totalQty : 0;
 
-                          <button 
-                            type="button" 
-                            onClick={() => removeItem(item.id)}
-                            className="p-1.5 text-rose-400 hover:bg-rose-50 rounded-lg transition-colors animate-pulse"
-                          >
-                            <Trash2 size={16} />
-                          </button>
+                    return (
+                      <div className="grid grid-cols-3 gap-3 bg-gradient-to-r from-slate-50 to-slate-100/50 border border-slate-200/60 p-3.5 rounded-2xl mt-4 select-none animate-in fade-in slide-in-from-top-1 shadow-sm">
+                        <div className="text-center">
+                          <p className="text-[8px] sm:text-[9px] uppercase font-black text-slate-400 tracking-wider">Itens Totais</p>
+                          <p className="text-xs sm:text-sm font-black text-slate-900 mt-0.5">{totalQty} un</p>
                         </div>
+                        <div className="text-center border-x border-slate-200">
+                          <p className="text-[8px] sm:text-[9px] uppercase font-black text-slate-400 tracking-wider">Custo Total</p>
+                          <p className="text-xs sm:text-sm font-black text-rose-800 mt-0.5">{formatCurrency(totalCost)}</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-[8px] sm:text-[9px] uppercase font-black text-slate-400 tracking-wider">Custo Médio</p>
+                          <p className="text-xs sm:text-sm font-black text-indigo-700 mt-0.5">{formatCurrency(averageCost)}</p>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  <div className="space-y-2 mt-4 max-h-64 overflow-y-auto custom-scrollbar pr-2">
+                    {items.map(item => (
+                      <div key={item.id} className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm animate-in fade-in slide-in-from-top-2 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="size-8 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400 relative">
+                               <Box size={16} />
+                               {item.isDropshipping && (
+                                 <div className="absolute top-0 right-0 size-3 bg-amber-500 rounded-full border-2 border-slate-50" />
+                               )}
+                            </div>
+                            <div>
+                              <p className="text-xs font-black text-slate-900">{item.customerName}</p>
+                              <p className="text-[10px] text-indigo-600 font-bold uppercase tracking-tight">{formatProductNameWithGender(item.productName, item.gender || products.find(p => p.id === item.productId)?.gender)}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 shrink-0">
+                            <span className="text-xs font-black text-slate-500 mr-1">x{item.quantity}</span>
+                            
+                            <div className="flex flex-col gap-0.5 items-end">
+                              <label className="text-[7.5px] lg:text-[8px] uppercase font-black text-red-800/80 tracking-wide select-none leading-none">Custo Unit. (R$)</label>
+                              <input 
+                                type="text"
+                                value={
+                                  typedCosts[item.id] !== undefined 
+                                    ? typedCosts[item.id] 
+                                    : (item.supplierCost !== undefined 
+                                        ? String(item.supplierCost).replace('.', ',') 
+                                        : String(products.find(p => p.id === item.productId)?.costPrice || item.price || 0).replace('.', ','))
+                                }
+                                onChange={(e) => {
+                                  const filtered = e.target.value.replace(/[^0-9,.]/g, '').replace('.', ',');
+                                  const parts = filtered.split(',');
+                                  const safeVal = parts[0] + (parts.length > 1 ? ',' + parts.slice(1).join('') : '');
+                                  
+                                  setTypedCosts(prev => ({ ...prev, [item.id]: safeVal }));
+                                  
+                                  const dotVal = safeVal.replace(',', '.');
+                                  const parsed = parseFloat(dotVal);
+                                  const numericVal = isNaN(parsed) ? 0 : parsed;
+                                  setItems(items.map(i => i.id === item.id ? { ...i, supplierCost: numericVal } : i));
+                                }}
+                                className="w-16 px-1.5 py-0.5 text-[10px] sm:text-xs font-mono font-black text-slate-800 bg-red-50/20 border border-red-200/50 focus:border-red-800 focus:outline-none rounded-md text-center"
+                                placeholder="Custo"
+                              />
+                            </div>
+
+                            <button 
+                              type="button" 
+                              onClick={() => removeItem(item.id)}
+                              className="p-1.5 text-rose-400 hover:bg-rose-50 rounded-lg transition-colors animate-pulse"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* If it's a Stock item, offer PDV visibility and sale options */}
+                        {item.customerId === 'estoque' && (
+                          <div className="pt-2 border-t border-slate-100 flex flex-col gap-2">
+                            <div className="flex items-center justify-between select-none">
+                              <div className="flex items-center gap-2">
+                                <span className="text-[8.5px] uppercase font-black text-slate-400 tracking-wider">Destino:</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setItems(items.map(i => i.id === item.id ? { ...i, showInPDV: !i.showInPDV } : i));
+                                  }}
+                                  className={cn(
+                                    "px-2 py-0.5 rounded-lg text-[9px] font-black uppercase transition-all tracking-wider flex items-center gap-1 cursor-pointer border",
+                                    item.showInPDV 
+                                      ? "bg-emerald-500 border-emerald-600 text-white shadow-sm" 
+                                      : "bg-slate-100 hover:bg-slate-200 text-slate-600 border-slate-250 animate-pulse"
+                                  )}
+                                >
+                                  {item.showInPDV ? "✓ Disponível no PDV" : "Disponibilizar no PDV"}
+                                </button>
+                              </div>
+
+                              {!item.showInPDV && (
+                                <button
+                                  type="button"
+                                  onClick={() => setLinkingItemId(linkingItemId === item.id ? null : item.id)}
+                                  className="px-2 py-0.5 bg-red-50 hover:bg-red-100/80 text-red-850 rounded-lg text-[9px] font-black uppercase transition-all tracking-wider border border-red-200/40 cursor-pointer"
+                                >
+                                  {linkingItemId === item.id ? "Cancelar" : "Vincular a Venda"}
+                                </button>
+                              )}
+                            </div>
+
+                            {linkingItemId === item.id && !item.showInPDV && (
+                              <div className="p-3 bg-red-50/30 rounded-2xl border border-red-100/50 space-y-2 animate-in fade-in slide-in-from-top-1">
+                                <p className="text-[9px] font-black uppercase text-red-800 tracking-wider">Para qual venda em aberto vincular?</p>
+                                <select
+                                  onChange={(e) => {
+                                    const saleId = e.target.value;
+                                    if (saleId) {
+                                      const sale = sales.find(s => s.id === saleId);
+                                      if (sale) {
+                                        setItems(items.map(i => {
+                                          if (i.id === item.id) {
+                                            return {
+                                              ...i,
+                                              customerId: sale.id!,
+                                              customerName: sale.customerName || 'Cliente',
+                                              showInPDV: false
+                                            };
+                                          }
+                                          return i;
+                                        }));
+                                        setLinkingItemId(null);
+                                      }
+                                    }
+                                  }}
+                                  className="w-full text-xs font-bold p-2 bg-white border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-red-800"
+                                >
+                                  <option value="">Selecione...</option>
+                                  {availableSales.map(s => (
+                                    <option key={s.id} value={s.id}>
+                                      {s.customerName} - {formatCurrency(s.total)} ({(s.items || []).map(si => si.name).join(', ')})
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     ))}
                     {items.length === 0 && (

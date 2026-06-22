@@ -38,6 +38,8 @@ import {
   Download
 } from 'lucide-react';
 import { formatCurrency, cn, cleanVariationName, cleanProductNameWithVariation, formatVariationWithGender, formatProductNameWithGender, smartSearchMatch } from '../lib/utils';
+import { shareWhatsAppReceipt } from '../lib/whatsappReceipt';
+import { MessageCircle } from 'lucide-react';
 import { motion } from 'motion/react';
 import { RollingCounter } from '../components/RollingCounter';
 import jsPDF from 'jspdf';
@@ -1961,6 +1963,18 @@ export default function Finance() {
                                 {sale.downPayment > 0 && <span>Entrada: {formatCurrency(sale.downPayment)} • </span>}
                                 <span>Subtotal: {formatCurrency(sale.subtotal)}</span>
                               </div>
+
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  shareWhatsAppReceipt(sale, products);
+                                }}
+                                className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-600 hover:text-white border border-emerald-150 transition-all rounded-xl select-none active:scale-[0.98] text-emerald-700 font-black uppercase text-[8.5px] tracking-wider flex items-center gap-1 cursor-pointer shadow-sm"
+                              >
+                                <MessageCircle size={10} strokeWidth={2.5} />
+                                <span>Reenviar WhatsApp</span>
+                              </button>
                             </div>
                           </div>
                         )}
