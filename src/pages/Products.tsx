@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, orderBy, writeBatch } from 'firebase/firestore';
-import { Product, Variation, Sale } from '../types';
+import { Product, Variation, Sale, Transaction } from '../types';
 import { Plus, Search, Edit2, Trash2, Copy, Package, Box, X, Eye, FileText, Download, TrendingUp, ShoppingBag, Users, Calendar, Calculator, DollarSign, Percent, ChevronDown, ChevronRight } from 'lucide-react';
 import { formatCurrency, calculateMargin, calculateMarkup, cn, cleanVariationName, smartSearchMatch } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -14,6 +14,7 @@ export default function Products() {
   const [products, setProducts] = useState<Product[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [shipments, setShipments] = useState<any[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [search, setSearch] = useState(() => {
     const saved = localStorage.getItem('products-search');
     if (saved) {
@@ -89,6 +90,34 @@ export default function Products() {
     });
     return unsubscribeSales;
   }, []);
+
+  useEffect(() => {
+    const qTransactions = query(collection(db, 'transactions'));
+    const unsubscribeTransactions = onSnapshot(qTransactions, (snapshot) => {
+      setTransactions(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as any)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'transactions');
+    });
+    return unsubscribeTransactions;
+  }, []);
+
+  const getSaleBalance = (sale: Sale) => {
+    if (sale.paymentMethod !== 'Fiado') return 0;
+    if (sale.status === 'Cancelada') return 0;
+    const paymentsForSale = transactions
+      .filter(t => t.saleId === sale.id && t.type === 'payment')
+      .reduce((acc, t) => acc + t.amount, 0);
+    return Math.max(0, sale.total - paymentsForSale);
+  };
+
+  const getSaleStatus = (sale: Sale) => {
+    if (sale.status === 'Cancelada') return 'Cancelada';
+    if (sale.status === 'Pré-venda') return 'Pré-venda';
+    if (sale.paymentMethod === 'Fiado') {
+      return getSaleBalance(sale) === 0 ? 'Concluída' : 'Pendente';
+    }
+    return sale.status || 'Concluída';
+  };
 
   // Padronização automática de categorias cadastradas na base de dados para Caixa Alta (CX)
   useEffect(() => {
@@ -287,7 +316,8 @@ export default function Products() {
         const itemPriceStr = formatCurrency(item.price || product.sellingPrice || 0);
         const methodStr = sale.paymentMethod || 'Outro';
         const itemTotalStr = formatCurrency((item.price || product.sellingPrice || 0) * (item.quantity || 0));
-        const statusStr = sale.status || 'Concluída';
+        const rawStatus = getSaleStatus(sale);
+        const statusStr = rawStatus === 'Concluída' && sale.paymentMethod === 'Fiado' ? 'Fiado Pago' : rawStatus;
 
         tableRows.push([
           dateStr,
@@ -1695,14 +1725,20 @@ export default function Products() {
                                       <td className="px-6 py-4 text-right font-mono text-slate-500 tabular-nums">{formatCurrency(item.price || historyProduct.sellingPrice || 0)}</td>
                                       <td className="px-6 py-4 text-right font-bold text-slate-500 uppercase tracking-wide text-[10px]">{sale.paymentMethod || 'Outro'}</td>
                                       <td className="px-6 py-4 text-center">
-                                        <span className={cn(
-                                          "px-2 py-0.5 text-[8px] font-black uppercase rounded-[6px] tracking-widest leading-none bg-slate-50 text-slate-700",
-                                          sale.status === 'Concluída' ? "bg-emerald-50 text-emerald-700" :
-                                          sale.status === 'Pendente' ? "bg-amber-50 text-amber-700 font-bold" :
-                                          "bg-blue-50 text-blue-700"
-                                        )}>
-                                          {sale.status || 'Concluída'}
-                                        </span>
+                                        {(() => {
+                                          const realStatus = getSaleStatus(sale);
+                                          return (
+                                            <span className={cn(
+                                              "px-2 py-0.5 text-[8px] font-black uppercase rounded-[6px] tracking-widest leading-none bg-slate-50 text-slate-700",
+                                              realStatus === 'Concluída' ? "bg-emerald-50 text-emerald-700 font-bold" :
+                                              realStatus === 'Pendente' ? "bg-amber-50 text-amber-700 font-bold animate-pulse" :
+                                              realStatus === 'Cancelada' ? "bg-red-50 text-red-700 line-through" :
+                                              "bg-blue-50 text-blue-700"
+                                            )}>
+                                              {realStatus === 'Concluída' && sale.paymentMethod === 'Fiado' ? 'Fiado Pago' : realStatus}
+                                            </span>
+                                          );
+                                        })()}
                                       </td>
                                       <td className="px-6 py-4 text-right font-black font-mono text-slate-900 tabular-nums italic">
                                         {formatCurrency((item.price || historyProduct.sellingPrice || 0) * (item.quantity || 0))}

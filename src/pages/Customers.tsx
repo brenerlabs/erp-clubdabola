@@ -504,6 +504,24 @@ export default function Customers() {
       }).join(', ');
     };
 
+    const getSaleBalance = (sale: Sale) => {
+      if (sale.paymentMethod !== 'Fiado') return 0;
+      if (sale.status === 'Cancelada') return 0;
+      const paymentsForSale = transactions
+        .filter(t => t.saleId === sale.id && t.type === 'payment')
+        .reduce((acc, t) => acc + t.amount, 0);
+      return Math.max(0, sale.total - paymentsForSale);
+    };
+
+    const getSaleStatus = (sale: Sale) => {
+      if (sale.status === 'Cancelada') return 'Cancelada';
+      if (sale.status === 'Pré-venda') return 'Pré-venda';
+      if (sale.paymentMethod === 'Fiado') {
+        return getSaleBalance(sale) === 0 ? 'Concluída' : 'Pendente';
+      }
+      return sale.status || 'Concluída';
+    };
+
     const ordersTableData = customerSales.map(s => {
       const sDateObj = s.createdAt?.seconds 
         ? new Date(s.createdAt.seconds * 1000) 
@@ -513,7 +531,10 @@ export default function Customers() {
       const orderRef = `#${s.id?.slice(-6).toUpperCase()}`;
       const itemsList = formatItemsColumn(s.items);
       const method = s.paymentMethod || 'Outro';
-      const statusStr = s.status || 'Concluída';
+      
+      const rawStatus = getSaleStatus(s);
+      const statusStr = rawStatus === 'Concluída' && s.paymentMethod === 'Fiado' ? 'Fiado Pago' : rawStatus;
+      
       const totalStr = formatCurrency(s.total);
 
       return [dateStr, orderRef, itemsList, method, statusStr, totalStr];
@@ -1441,18 +1462,53 @@ export default function Customers() {
                         <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Nenhum pedido realizado</p>
                       </div>
                     )}
-                    {customerSales.map(sale => (
-                      <div key={sale.id} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                        <div className="flex justify-between items-start mb-4">
-                          <div>
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Pedido #{sale.id?.slice(-6).toUpperCase()}</p>
-                            <p className="text-xs font-bold text-slate-600">{new Date(sale.createdAt?.seconds * 1000).toLocaleDateString()}</p>
+                    {customerSales.map(sale => {
+                      const getSaleBalance = (sVal: Sale) => {
+                        if (sVal.paymentMethod !== 'Fiado') return 0;
+                        if (sVal.status === 'Cancelada') return 0;
+                        const paymentsForSale = transactions
+                          .filter(t => t.saleId === sVal.id && t.type === 'payment')
+                          .reduce((acc, t) => acc + t.amount, 0);
+                        return Math.max(0, sVal.total - paymentsForSale);
+                      };
+
+                      const getSaleStatus = (sVal: Sale) => {
+                        if (sVal.status === 'Cancelada') return 'Cancelada';
+                        if (sVal.status === 'Pré-venda') return 'Pré-venda';
+                        if (sVal.paymentMethod === 'Fiado') {
+                          return getSaleBalance(sVal) === 0 ? 'Concluída' : 'Pendente';
+                        }
+                        return sVal.status || 'Concluída';
+                      };
+
+                      const rawStatus = getSaleStatus(sale);
+                      const isFiadoPaid = sale.paymentMethod === 'Fiado' && rawStatus === 'Concluída';
+
+                      return (
+                        <div key={sale.id} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                          <div className="flex justify-between items-start mb-4">
+                            <div>
+                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Pedido #{sale.id?.slice(-6).toUpperCase()}</p>
+                              <p className="text-xs font-bold text-slate-600">
+                                {sale.createdAt?.seconds 
+                                  ? new Date(sale.createdAt.seconds * 1000).toLocaleDateString('pt-BR') 
+                                  : sale.createdAt instanceof Date ? sale.createdAt.toLocaleDateString('pt-BR') : 'Sem data'}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                               <p className="text-lg font-black text-slate-900 italic tracking-tighter">{formatCurrency(sale.total)}</p>
+                               <div className="flex items-center gap-1.5 justify-end mt-0.5">
+                                 <span className={cn(
+                                   "text-[9px] font-black uppercase rounded-[6px] px-1.5 py-0.5 tracking-wider",
+                                   isFiadoPaid 
+                                     ? "bg-emerald-50 text-emerald-700 border border-emerald-100" 
+                                     : (sale.paymentMethod === 'Fiado' ? "bg-amber-50 text-amber-600 border border-amber-100 animate-pulse" : "bg-slate-100 text-slate-700")
+                                 )}>
+                                   {isFiadoPaid ? 'Fiado Pago ✓' : (sale.paymentMethod === 'Fiado' ? 'Fiado Pendente' : sale.paymentMethod)}
+                                 </span>
+                               </div>
+                            </div>
                           </div>
-                          <div className="text-right">
-                             <p className="text-lg font-black text-slate-900 italic tracking-tighter">{formatCurrency(sale.total)}</p>
-                             <p className="text-[9px] font-black uppercase text-amber-500 tracking-widest">{sale.paymentMethod}</p>
-                          </div>
-                        </div>
                         <div className="space-y-2 border-t border-slate-50 pt-4">
                           {sale.items.map((item, idx) => {
                             const iGender = item.gender || products.find(p => p.id === item.productId)?.gender || 'Ambos';
@@ -1484,7 +1540,8 @@ export default function Customers() {
                           </button>
                         </div>
                       </div>
-                    ))}
+                    );
+                  })}
                   </div>
                 )}
 

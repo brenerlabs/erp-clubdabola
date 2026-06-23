@@ -495,9 +495,20 @@ export default function PublicReceipt({ receiptId }: PublicReceiptProps) {
                       <span>Valor Pago</span>
                       <span className="font-mono text-emerald-400">{formatCurrency(compensatedAmount)}</span>
                     </div>
-                    <div className="flex justify-between text-rose-400 uppercase font-black text-[11px]">
+                    <div className={cn(
+                      "flex justify-between uppercase font-black text-[11px]",
+                      (sale.total - compensatedAmount) > 0 ? "text-rose-400" : "text-emerald-400"
+                    )}>
                       <span className="flex items-center gap-1">
-                        <Clock size={10} className="animate-pulse" /> Valor Pendente
+                        {(sale.total - compensatedAmount) > 0 ? (
+                          <>
+                            <Clock size={10} className="animate-pulse" /> Valor Pendente
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle2 size={10} className="text-emerald-400" /> Fiado Quitado ✓
+                          </>
+                        )}
                       </span>
                       <span className="font-mono">{formatCurrency(Math.max(0, sale.total - compensatedAmount))}</span>
                     </div>
