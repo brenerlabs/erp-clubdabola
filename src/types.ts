@@ -121,9 +121,23 @@ export interface Expense {
   id?: string;
   description: string;
   amount: number;
-  category: 'Marketing/Ads' | 'Plataforma/Sistemas' | 'Embalagens' | 'Aluguel/Estrutura' | 'Logística Extra' | 'Outros';
+  category: 'Marketing/Ads' | 'Plataforma/Sistemas' | 'Embalagens' | 'Aluguel/Estrutura' | 'Logística Extra' | 'Outros' | 'Perdas/Avarias' | 'Consumo Próprio';
   createdAt: any;
   updatedAt: any;
+}
+
+export interface StockAdjustment {
+  id?: string;
+  productId: string;
+  productName: string;
+  variationId: string;
+  variationName: string;
+  quantity: number;
+  type: 'Avaria' | 'Perda' | 'Consumo Próprio' | 'Demonstração' | 'Outros';
+  costPrice: number;
+  totalCost: number;
+  notes?: string;
+  createdAt: any;
 }
 
 export interface CustomerPhoto {

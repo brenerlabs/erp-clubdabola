@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../lib/firebase';
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
-import { Sale, Shipment, Transaction, Customer, Product } from '../types';
+import { Sale, Shipment, Transaction, Customer, Product, Expense } from '../types';
 import { formatCurrency, cn, smartSearchMatch } from '../lib/utils';
 import { 
   Search, 
@@ -21,11 +21,16 @@ import {
   ShoppingBag,
   ArrowDownCircle,
   ArrowUpCircle,
-  RefreshCw
+  RefreshCw,
+  Percent,
+  TrendingDown,
+  ArrowDownRight,
+  Briefcase
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 
 export default function Reports() {
   const [sales, setSales] = useState<Sale[]>([]);
@@ -33,13 +38,14 @@ export default function Reports() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Copy state helper
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  // Active view tab: 'all' | 'products' | 'customers'
-  const [activeTab, setActiveTab] = useState<'all' | 'products' | 'customers'>('all');
+  // Active view tab: 'all' | 'products' | 'customers' | 'dre'
+  const [activeTab, setActiveTab] = useState<'all' | 'products' | 'customers' | 'dre'>('all');
 
   // Unified page filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -74,12 +80,17 @@ export default function Reports() {
       setIsLoading(false);
     });
 
+    const unsubExp = onSnapshot(collection(db, 'expenses'), (snapshot) => {
+      setExpenses(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Expense)));
+    });
+
     return () => {
       unsubSales();
       unsubShipments();
       unsubTrans();
       unsubCust();
       unsubProd();
+      unsubExp();
     };
   }, []);
 
@@ -342,6 +353,148 @@ export default function Reports() {
   }, [sales, shipments]);
 
 
+  // 4. DRE (DEMONSTRATIVO DE RESULTADOS DO EXERCÍCIO) MONTHLY CALCULATION
+  const dreByMonth = React.useMemo(() => {
+    const monthlyData: {
+      [monthKey: string]: {
+        monthKey: string;
+        monthLabel: string;
+        grossRevenue: number;
+        cmv: number;
+        grossProfit: number;
+        expensesTotal: number;
+        expensesByCategory: { [category: string]: number };
+        netProfit: number;
+        margin: number;
+        salesCount: number;
+        cancelledSalesCount: number;
+        cancelledSalesAmount: number;
+      }
+    } = {};
+
+    const getMonthKeyAndLabel = (timestamp: any) => {
+      if (!timestamp) return null;
+      const date = timestamp.seconds ? new Date(timestamp.seconds * 1000) : new Date(timestamp);
+      const year = date.getFullYear();
+      const month = date.getMonth(); // 0-11
+      const monthKey = `${year}-${String(month + 1).padStart(2, '0')}`;
+      const monthsLabel = [
+        'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+        'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+      ];
+      const monthLabel = `${monthsLabel[month]} ${year}`;
+      return { monthKey, monthLabel };
+    };
+
+    // Process Sales (Gross Revenue and CMV)
+    sales.forEach(sale => {
+      const monthInfo = getMonthKeyAndLabel(sale.createdAt);
+      if (!monthInfo) return;
+      const { monthKey, monthLabel } = monthInfo;
+
+      if (!monthlyData[monthKey]) {
+        monthlyData[monthKey] = {
+          monthKey,
+          monthLabel,
+          grossRevenue: 0,
+          cmv: 0,
+          grossProfit: 0,
+          expensesTotal: 0,
+          expensesByCategory: {
+            'Marketing/Ads': 0,
+            'Plataforma/Sistemas': 0,
+            'Embalagens': 0,
+            'Aluguel/Estrutura': 0,
+            'Logística Extra': 0,
+            'Perdas/Avarias': 0,
+            'Consumo Próprio': 0,
+            'Outros': 0
+          },
+          netProfit: 0,
+          margin: 0,
+          salesCount: 0,
+          cancelledSalesCount: 0,
+          cancelledSalesAmount: 0
+        };
+      }
+
+      if (sale.status === 'Cancelada') {
+        monthlyData[monthKey].cancelledSalesCount += 1;
+        monthlyData[monthKey].cancelledSalesAmount += sale.total;
+        return;
+      }
+
+      const isAdjustment = sale.isAdjustment || (sale.items || []).some(item => item && item.productId === 'sistema_ajuste_auditoria');
+      if (isAdjustment) return;
+
+      monthlyData[monthKey].grossRevenue += sale.total;
+      monthlyData[monthKey].salesCount += 1;
+
+      // Calculate CMV (Custo da Mercadoria Vendida)
+      let saleCmv = 0;
+      sale.items?.forEach(item => {
+        const product = products.find(p => p.id === item.productId);
+        const cost = product ? (product.costPrice || 0) : 0;
+        saleCmv += cost * item.quantity;
+      });
+      monthlyData[monthKey].cmv += saleCmv;
+    });
+
+    // Process Expenses
+    expenses.forEach(exp => {
+      const monthInfo = getMonthKeyAndLabel(exp.createdAt);
+      if (!monthInfo) return;
+      const { monthKey, monthLabel } = monthInfo;
+
+      if (!monthlyData[monthKey]) {
+        monthlyData[monthKey] = {
+          monthKey,
+          monthLabel,
+          grossRevenue: 0,
+          cmv: 0,
+          grossProfit: 0,
+          expensesTotal: 0,
+          expensesByCategory: {
+            'Marketing/Ads': 0,
+            'Plataforma/Sistemas': 0,
+            'Embalagens': 0,
+            'Aluguel/Estrutura': 0,
+            'Logística Extra': 0,
+            'Perdas/Avarias': 0,
+            'Consumo Próprio': 0,
+            'Outros': 0
+          },
+          netProfit: 0,
+          margin: 0,
+          salesCount: 0,
+          cancelledSalesCount: 0,
+          cancelledSalesAmount: 0
+        };
+      }
+
+      const category = exp.category || 'Outros';
+      const amount = exp.amount || 0;
+
+      monthlyData[monthKey].expensesTotal += amount;
+      if (!monthlyData[monthKey].expensesByCategory[category]) {
+        monthlyData[monthKey].expensesByCategory[category] = 0;
+      }
+      monthlyData[monthKey].expensesByCategory[category] += amount;
+    });
+
+    // Calculate Final Margins
+    Object.keys(monthlyData).forEach(key => {
+      const data = monthlyData[key];
+      data.grossProfit = data.grossRevenue - data.cmv;
+      data.netProfit = data.grossProfit - data.expensesTotal;
+      data.margin = data.grossRevenue > 0 ? (data.netProfit / data.grossRevenue) * 100 : 0;
+    });
+
+    // Sort by monthKey descending
+    return Object.values(monthlyData).sort((a, b) => b.monthKey.localeCompare(a.monthKey));
+  }, [sales, products, expenses]);
+
+
   // METRIC COMPUTATIONS FOR CURRENT FILTER
   const metrics = React.useMemo(() => {
     const totalAmount = filteredRecords.reduce((acc, r) => acc + r.amount, 0);
@@ -437,7 +590,7 @@ export default function Reports() {
           formatCurrency(it.revenue),
           `${it.buyers.size} compradores / ${it.uniqueSaleIds.size} vendas`
         ]);
-    } else {
+    } else if (activeTab === 'customers') {
       reportTitle = "Histórico de Performance e LTV de Clientes";
       headers = [['Cliente', 'Totais Gastos (LTV)', 'Pedidos Concluídos', 'Itens Comprados', 'Última Compra']];
       body = customerStats
@@ -449,6 +602,45 @@ export default function Reports() {
           `${cStat.productsCount} unidade(s)`,
           cStat.lastPurchaseDate ? formatDateShort(cStat.lastPurchaseDate) : '-'
         ]);
+    } else if (activeTab === 'dre') {
+      reportTitle = "Demonstrativo de Resultados do Exercício (DRE) MoM";
+      // Get the 5 most recent months (or all) and reverse so it goes chronologically in columns
+      const months = dreByMonth.slice(0, 5).reverse();
+      headers = [['Indicador / Mês', ...months.map(m => m.monthLabel)]];
+      
+      const formatRow = (label: string, fieldKey: string, isExpense = false, expenseCategory?: string) => {
+        return [
+          label,
+          ...months.map(m => {
+            if (expenseCategory) {
+              const val = m.expensesByCategory[expenseCategory] || 0;
+              return formatCurrency(val);
+            }
+            const val = (m as any)[fieldKey] || 0;
+            if (fieldKey === 'margin') {
+              return `${val.toFixed(1)}%`;
+            }
+            return formatCurrency(val);
+          })
+        ];
+      };
+
+      body = [
+        formatRow('Receita Bruta (A)', 'grossRevenue'),
+        formatRow('(-) Custo de Mercadorias Vendidas - CMV (B)', 'cmv'),
+        formatRow('(=) Lucro Bruto / Margem de Contribuição (C = A - B)', 'grossProfit'),
+        formatRow('(-) Despesas Operacionais Totais (D)', 'expensesTotal'),
+        formatRow('     • Marketing & Tráfego Pago', '', true, 'Marketing/Ads'),
+        formatRow('     • Plataformas & Sistemas', '', true, 'Plataforma/Sistemas'),
+        formatRow('     • Embalagens & Brindes', '', true, 'Embalagens'),
+        formatRow('     • Aluguel & Infraestrutura', '', true, 'Aluguel/Estrutura'),
+        formatRow('     • Logística Extra', '', true, 'Logística Extra'),
+        formatRow('     • Perdas & Avarias de Estoque', '', true, 'Perdas/Avarias'),
+        formatRow('     • Consumo Próprio & Amostras', '', true, 'Consumo Próprio'),
+        formatRow('     • Outras Despesas Gerais', '', true, 'Outros'),
+        formatRow('(=) Lucro Líquido Real (E = C - D)', 'netProfit'),
+        formatRow('Margem de Lucratividade Real (%)', 'margin')
+      ];
     }
     
     doc.text(reportTitle.toUpperCase(), 14, 42);
@@ -467,16 +659,35 @@ export default function Reports() {
     
     doc.setTextColor(100, 116, 139);
     doc.setFontSize(7.5);
-    doc.text("VOLUME TOTAL SELECIONADO", 18, 57);
-    doc.text("REGISTROS EXPORTADOS", 85, 57);
-    doc.text("VALOR MÉDIO DO TICKET", 145, 57);
     
-    doc.setTextColor(15, 23, 42);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
-    doc.text(formatCurrency(metrics.totalAmount), 18, 63);
-    doc.text(`${metrics.count} registro(s)`, 85, 63);
-    doc.text(formatCurrency(metrics.avgTicket), 145, 63);
+    if (activeTab === 'dre') {
+      const months = dreByMonth.slice(0, 5);
+      const sumRevenue = months.reduce((acc, m) => acc + m.grossRevenue, 0);
+      const sumNetProfit = months.reduce((acc, m) => acc + m.netProfit, 0);
+      const avgMargin = sumRevenue > 0 ? (sumNetProfit / sumRevenue) * 100 : 0;
+
+      doc.text("RECEITA BRUTA TOTAL (PERÍODO)", 18, 57);
+      doc.text("LUCRO LÍQUIDO REAL TOTAL", 85, 57);
+      doc.text("MARGEM MÉDIA REAL (%)", 145, 57);
+      
+      doc.setTextColor(15, 23, 42);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.text(formatCurrency(sumRevenue), 18, 63);
+      doc.text(formatCurrency(sumNetProfit), 85, 63);
+      doc.text(`${avgMargin.toFixed(1)}%`, 145, 63);
+    } else {
+      doc.text("VOLUME TOTAL SELECIONADO", 18, 57);
+      doc.text("REGISTROS EXPORTADOS", 85, 57);
+      doc.text("VALOR MÉDIO DO TICKET", 145, 57);
+      
+      doc.setTextColor(15, 23, 42);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.text(formatCurrency(metrics.totalAmount), 18, 63);
+      doc.text(`${metrics.count} registro(s)`, 85, 63);
+      doc.text(formatCurrency(metrics.avgTicket), 145, 63);
+    }
     
     autoTable(doc, {
       startY: 72,
@@ -568,10 +779,20 @@ export default function Reports() {
         >
           👥 Clientes (LTV)
         </button>
+        <button
+          onClick={() => { setActiveTab('dre'); setSearchQuery(''); }}
+          className={cn(
+            "px-3 py-2 md:px-6 md:py-3 font-bold text-[10px] md:text-xs uppercase tracking-wider border-b-2 transition-all flex-1 md:flex-initial",
+            activeTab === 'dre' ? "border-red-800 text-red-800 font-extrabold" : "border-transparent text-slate-400 hover:text-slate-600"
+          )}
+        >
+          📊 DRE & Lucratividade Real
+        </button>
       </div>
 
       {/* Unified Filters Dashboard */}
-      <div className="bg-white rounded-[20px] md:rounded-[24px] border border-slate-100 shadow-sm p-4 md:p-6 space-y-4">
+      {activeTab !== 'dre' && (
+        <div className="bg-white rounded-[20px] md:rounded-[24px] border border-slate-100 shadow-sm p-4 md:p-6 space-y-4">
         <div className="flex items-center gap-2 text-[10px] uppercase font-black text-slate-400 tracking-wider">
           <Filter size={12} className="text-slate-400" />
           Filtros de Pesquisa
@@ -661,8 +882,10 @@ export default function Reports() {
           </div>
         )}
       </div>
+      )}
 
       {/* KPI Stats Panel - Dynamic counts based on filters */}
+      {activeTab !== 'dre' && (
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-white p-5 rounded-[20px] border border-slate-100 shadow-sm flex items-center gap-4">
           <div className="size-11 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
@@ -704,6 +927,7 @@ export default function Reports() {
           </div>
         </div>
       </div>
+      )}
 
       {isLoading ? (
         <div className="flex flex-col items-center justify-center py-20 gap-4">
@@ -1038,6 +1262,240 @@ export default function Reports() {
                   </tbody>
                 </table>
               </div>
+            </motion.div>
+          )}
+
+          {activeTab === 'dre' && (
+            <motion.div
+              key="dre"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12 }}
+              className="space-y-6"
+            >
+              {/* DRE Header and Period Summary */}
+              <div className="bg-white rounded-[24px] border border-slate-100 shadow-sm p-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <h3 className="font-sans font-bold text-slate-900 text-sm uppercase tracking-wider">Demonstrativo de Resultados do Exercício (DRE)</h3>
+                    <p className="text-[10px] text-slate-400 font-medium">Análise de lucratividade real consolidando faturamento, CMV de estoque, despesas operacionais e custos com perdas ou retiradas</p>
+                  </div>
+                  <div className="text-[9px] font-black text-red-800 bg-red-50 border border-red-100/50 uppercase px-2.5 py-1 rounded-lg shrink-0">
+                    Lucratividade Mês a Mês
+                  </div>
+                </div>
+
+                {dreByMonth.length > 0 && (
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-6">
+                    <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                      <p className="text-[9px] uppercase font-black text-slate-400 tracking-wider">Receita Bruta ({dreByMonth[0].monthLabel})</p>
+                      <h4 className="text-base font-bold text-slate-900 mt-1">{formatCurrency(dreByMonth[0].grossRevenue)}</h4>
+                      <p className="text-[9px] text-slate-400 mt-0.5 font-medium">{dreByMonth[0].salesCount} vendas realizadas</p>
+                    </div>
+
+                    <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                      <p className="text-[9px] uppercase font-black text-slate-400 tracking-wider">Custo de Mercadorias (CMV)</p>
+                      <h4 className="text-base font-bold text-slate-900 mt-1">{formatCurrency(dreByMonth[0].cmv)}</h4>
+                      <p className="text-[9px] text-slate-400 mt-0.5 font-medium">
+                        {dreByMonth[0].grossRevenue > 0 ? ((dreByMonth[0].cmv / dreByMonth[0].grossRevenue) * 100).toFixed(1) : 0}% do faturamento
+                      </p>
+                    </div>
+
+                    <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                      <p className="text-[9px] uppercase font-black text-slate-400 tracking-wider">Resultado Bruto</p>
+                      <h4 className="text-base font-bold text-slate-900 mt-1">{formatCurrency(dreByMonth[0].grossProfit)}</h4>
+                      <p className="text-[9px] text-slate-400 mt-0.5 font-medium">
+                        Margem: {dreByMonth[0].grossRevenue > 0 ? ((dreByMonth[0].grossProfit / dreByMonth[0].grossRevenue) * 100).toFixed(1) : 0}%
+                      </p>
+                    </div>
+
+                    <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                      <p className="text-[9px] uppercase font-black text-slate-400 tracking-wider">Despesas Operacionais</p>
+                      <h4 className="text-base font-bold text-slate-900 mt-1">{formatCurrency(dreByMonth[0].expensesTotal)}</h4>
+                      <p className="text-[9px] text-slate-400 mt-0.5 font-medium">
+                        Proporção: {dreByMonth[0].grossRevenue > 0 ? ((dreByMonth[0].expensesTotal / dreByMonth[0].grossRevenue) * 100).toFixed(1) : 0}%
+                      </p>
+                    </div>
+
+                    <div className={cn(
+                      "p-4 rounded-2xl border col-span-2 md:col-span-1",
+                      dreByMonth[0].netProfit >= 0 
+                        ? "bg-emerald-50/50 border-emerald-100 text-emerald-900" 
+                        : "bg-rose-50/50 border-rose-100 text-rose-900"
+                    )}>
+                      <p className="text-[9px] uppercase font-black text-slate-400 tracking-wider">Lucro Líquido Real</p>
+                      <h4 className="text-base font-bold mt-1">{formatCurrency(dreByMonth[0].netProfit)}</h4>
+                      <p className="text-[9px] mt-0.5 font-medium">
+                        Margem Real: {dreByMonth[0].margin.toFixed(1)}%
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {dreByMonth.length === 0 ? (
+                <div className="bg-white rounded-[24px] border border-slate-100 p-12 text-center text-slate-400">
+                  <Package className="mx-auto text-slate-300 mb-2" size={32} />
+                  <p className="text-sm font-bold">Nenhum dado de faturamento ou despesas encontrado.</p>
+                  <p className="text-xs text-slate-400 mt-1">Realize vendas e adicione despesas no painel financeiro para gerar o DRE.</p>
+                </div>
+              ) : (
+                <>
+                  {/* Recharts MoM Chart */}
+                  <div className="bg-white rounded-[24px] border border-slate-100 shadow-sm p-6">
+                    <h4 className="font-sans font-bold text-slate-900 text-xs uppercase tracking-wider mb-4 flex items-center gap-2">
+                      <TrendingUp size={14} className="text-red-800" />
+                      Evolução de Lucratividade Mês a Mês
+                    </h4>
+                    <div className="h-[280px] w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <ComposedChart
+                          data={dreByMonth.slice(0, 6).reverse().map(m => ({
+                            name: m.monthLabel.split(' ')[0],
+                            'Receita Bruta': m.grossRevenue,
+                            'Despesas': m.expensesTotal,
+                            'Lucro Líquido': m.netProfit,
+                            'Margem %': m.margin
+                          }))}
+                          margin={{ top: 10, right: 10, bottom: 0, left: -10 }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                          <XAxis dataKey="name" tick={{ fontSize: 9, fontWeight: 700, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                          <YAxis tick={{ fontSize: 9, fontWeight: 700, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                          <Tooltip 
+                            contentStyle={{ borderRadius: '16px', border: '1px solid #f1f5f9', boxShadow: '0 4px 12px rgba(0,0,0,0.05)', fontSize: '11px', fontFamily: 'Inter' }}
+                            formatter={(value: any, name: string) => {
+                              if (name === 'Margem %') return [`${parseFloat(value).toFixed(1)}%`, name];
+                              return [formatCurrency(value), name];
+                            }}
+                          />
+                          <Legend wrapperStyle={{ fontSize: '10px', fontWeight: 700, paddingTop: '10px' }} />
+                          <Bar dataKey="Receita Bruta" fill="#991b1b" radius={[4, 4, 0, 0]} barSize={25} />
+                          <Bar dataKey="Despesas" fill="#64748b" radius={[4, 4, 0, 0]} barSize={25} />
+                          <Line type="monotone" dataKey="Lucro Líquido" stroke="#10b981" strokeWidth={3} dot={{ r: 4 }} />
+                        </ComposedChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  {/* Horizontal Tabular DRE Sheet */}
+                  <div className="bg-white rounded-[24px] border border-slate-100 shadow-sm overflow-hidden">
+                    <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+                      <h4 className="font-sans font-bold text-slate-900 text-xs uppercase tracking-wider">Demonstrativo Detalhado (DRE Estruturado)</h4>
+                      <p className="text-[10px] text-slate-400 font-medium">Siga a estrutura contábil padrão para analisar as deduções e margens de contribuição passo a passo</p>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <table className="w-full border-collapse">
+                        <thead>
+                          <tr className="bg-slate-50/40 border-b border-slate-100 text-left">
+                            <th className="p-4 px-6 text-[10px] font-black uppercase tracking-wider text-slate-400 border-r border-slate-100 min-w-[280px]">Indicador de Resultados</th>
+                            {dreByMonth.slice(0, 5).reverse().map(m => (
+                              <th key={m.monthKey} className="p-4 px-6 text-[10px] font-black uppercase tracking-wider text-slate-500 text-right min-w-[140px]">
+                                {m.monthLabel}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {/* Revenue Row */}
+                          <tr className="bg-slate-50/10 font-bold">
+                            <td className="p-4 px-6 text-xs text-slate-900 border-r border-slate-100 uppercase tracking-wide">Receita Bruta de Vendas (A)</td>
+                            {dreByMonth.slice(0, 5).reverse().map(m => (
+                              <td key={m.monthKey} className="p-4 px-6 text-[13px] font-mono text-slate-900 text-right">
+                                {formatCurrency(m.grossRevenue)}
+                              </td>
+                            ))}
+                          </tr>
+
+                          {/* CMV Row */}
+                          <tr className="text-slate-600 font-medium">
+                            <td className="p-4 px-6 text-xs text-slate-600 border-r border-slate-100 pl-8">(-) Custo de Mercadorias Vendidas - CMV (B)</td>
+                            {dreByMonth.slice(0, 5).reverse().map(m => (
+                              <td key={m.monthKey} className="p-4 px-6 text-xs font-mono text-right text-rose-700">
+                                - {formatCurrency(m.cmv)}
+                              </td>
+                            ))}
+                          </tr>
+
+                          {/* Gross Profit Row */}
+                          <tr className="bg-slate-50/50 font-bold border-y border-slate-100">
+                            <td className="p-4 px-6 text-xs text-slate-900 border-r border-slate-100 uppercase tracking-wide">(=) Resultado Operacional Bruto (C = A - B)</td>
+                            {dreByMonth.slice(0, 5).reverse().map(m => (
+                              <td key={m.monthKey} className="p-4 px-6 text-[13px] font-mono text-slate-900 text-right font-black">
+                                {formatCurrency(m.grossProfit)}
+                              </td>
+                            ))}
+                          </tr>
+
+                          {/* Expenses Total Header Row */}
+                          <tr className="font-bold text-slate-900 bg-slate-50/10">
+                            <td className="p-4 px-6 text-xs border-r border-slate-100 uppercase tracking-wide">(-) Despesas Operacionais Gerais (D)</td>
+                            {dreByMonth.slice(0, 5).reverse().map(m => (
+                              <td key={m.monthKey} className="p-4 px-6 text-xs font-mono text-right text-rose-700">
+                                - {formatCurrency(m.expensesTotal)}
+                              </td>
+                            ))}
+                          </tr>
+
+                          {/* Individual Expense Categories */}
+                          {[
+                            { label: 'Marketing & Tráfego Pago', key: 'Marketing/Ads' },
+                            { label: 'Plataformas & Sistemas', key: 'Plataforma/Sistemas' },
+                            { label: 'Embalagens & Brindes', key: 'Embalagens' },
+                            { label: 'Aluguel & Infraestrutura', key: 'Aluguel/Estrutura' },
+                            { label: 'Logística Extra', key: 'Logística Extra' },
+                            { label: 'Perdas & Avarias (Ajustes de Estoque)', key: 'Perdas/Avarias', highlight: true },
+                            { label: 'Consumo Próprio & Amostras (Ajustes de Estoque)', key: 'Consumo Próprio', highlight: true },
+                            { label: 'Outras Despesas de Gestão', key: 'Outros' }
+                          ].map(cat => (
+                            <tr key={cat.key} className={cn("text-slate-500 hover:bg-slate-50/20 transition-all text-[11.5px]", cat.highlight && "bg-amber-50/20")}>
+                              <td className="p-3.5 px-6 border-r border-slate-100 pl-10 flex items-center gap-1.5 font-medium">
+                                <span className="text-slate-300">•</span>
+                                {cat.label}
+                              </td>
+                              {dreByMonth.slice(0, 5).reverse().map(m => {
+                                const value = m.expensesByCategory[cat.key] || 0;
+                                return (
+                                  <td key={m.monthKey} className="p-3.5 px-6 font-mono text-right text-slate-600">
+                                    {value > 0 ? `- ${formatCurrency(value)}` : '-'}
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          ))}
+
+                          {/* Net Profit Row */}
+                          <tr className="bg-emerald-50/20 border-t border-slate-200/80 font-bold">
+                            <td className="p-4 px-6 text-xs text-emerald-950 border-r border-slate-100 uppercase tracking-wider font-extrabold">(=) Resultado Líquido Real (E = C - D)</td>
+                            {dreByMonth.slice(0, 5).reverse().map(m => (
+                              <td key={m.monthKey} className={cn(
+                                "p-4 px-6 text-sm font-mono text-right font-black",
+                                m.netProfit >= 0 ? "text-emerald-700" : "text-rose-700"
+                              )}>
+                                {formatCurrency(m.netProfit)}
+                              </td>
+                            ))}
+                          </tr>
+
+                          {/* Profit Margin Row */}
+                          <tr className="bg-slate-50/30 font-bold">
+                            <td className="p-4 px-6 text-xs text-slate-800 border-r border-slate-100 uppercase tracking-wider font-extrabold">Margem de Lucratividade Real (%)</td>
+                            {dreByMonth.slice(0, 5).reverse().map(m => (
+                              <td key={m.monthKey} className={cn(
+                                "p-4 px-6 text-xs font-mono text-right font-bold",
+                                m.margin >= 15 ? "text-emerald-600" : m.margin >= 5 ? "text-amber-600" : "text-rose-600"
+                              )}>
+                                {m.margin.toFixed(1)}%
+                              </td>
+                            ))}
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </>
+              )}
             </motion.div>
           )}
         </AnimatePresence>

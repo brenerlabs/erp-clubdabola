@@ -2,12 +2,13 @@ import React, { useState, useEffect, useContext } from 'react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, orderBy, writeBatch } from 'firebase/firestore';
 import { Product, Variation, Sale, Transaction } from '../types';
-import { Plus, Search, Edit2, Trash2, Copy, Package, Box, X, Eye, FileText, Download, TrendingUp, ShoppingBag, Users, Calendar, Calculator, DollarSign, Percent, ChevronDown, ChevronRight } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Copy, Package, Box, X, Eye, FileText, Download, TrendingUp, ShoppingBag, Users, Calendar, Calculator, DollarSign, Percent, ChevronDown, ChevronRight, ShieldAlert } from 'lucide-react';
 import { formatCurrency, calculateMargin, calculateMarkup, cn, cleanVariationName, smartSearchMatch } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { SidebarContext } from '../App';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import LossAndConsumptionModal from '../components/LossAndConsumptionModal';
 
 export default function Products() {
   const { setIsSidebarOpen } = useContext(SidebarContext);
@@ -27,6 +28,7 @@ export default function Products() {
   const [filterGender, setFilterGender] = useState('Todos');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSimulatorOpen, setIsSimulatorOpen] = useState(false);
+  const [isLossModalOpen, setIsLossModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [historyProduct, setHistoryProduct] = useState<Product | null>(null);
   const [isImporting, setIsImporting] = useState(false);
@@ -58,12 +60,12 @@ export default function Products() {
   const [lastAddedId, setLastAddedId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (isModalOpen || historyProduct || isSimulatorOpen) {
+    if (isModalOpen || historyProduct || isSimulatorOpen || isLossModalOpen) {
       setIsSidebarOpen(false);
     } else {
       setIsSidebarOpen(true);
     }
-  }, [isModalOpen, historyProduct, isSimulatorOpen, setIsSidebarOpen]);
+  }, [isModalOpen, historyProduct, isSimulatorOpen, isLossModalOpen, setIsSidebarOpen]);
 
   useEffect(() => {
     const q = query(collection(db, 'products'), orderBy('name', 'asc'));
@@ -727,6 +729,13 @@ export default function Products() {
             className="bg-amber-400 hover:bg-amber-500 text-blue-950 font-black py-2.5 px-3 md:py-3 md:px-5 rounded-xl transition-all shadow-lg shadow-amber-500/10 flex items-center justify-center gap-1.5 active:scale-95 text-[10px] md:text-xs uppercase tracking-widest cursor-pointer flex-1 sm:flex-initial"
           >
             <Calculator size={14} className="text-blue-950" /> Simulador
+          </button>
+          <button 
+            type="button"
+            onClick={() => setIsLossModalOpen(true)}
+            className="bg-rose-50 hover:bg-rose-100 text-rose-800 font-black py-2.5 px-3 md:py-3 md:px-5 rounded-xl transition-all border border-rose-200 shadow-sm flex items-center justify-center gap-1.5 active:scale-95 text-[10px] md:text-xs uppercase tracking-widest cursor-pointer flex-1 sm:flex-initial"
+          >
+            <ShieldAlert size={14} className="text-rose-850 animate-pulse" /> Perdas/Consumo
           </button>
           <label className={cn(
             "flex items-center justify-center gap-1.5 px-3 py-2.5 md:px-5 md:py-3 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl cursor-pointer transition-all active:scale-95 text-[10px] md:text-xs uppercase tracking-widest border border-slate-200 shadow-sm flex-1 sm:flex-initial text-center select-none",
@@ -2519,6 +2528,16 @@ export default function Products() {
             </div>
           );
         })()}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isLossModalOpen && (
+          <LossAndConsumptionModal 
+            isOpen={isLossModalOpen} 
+            onClose={() => setIsLossModalOpen(false)} 
+            products={products} 
+          />
+        )}
       </AnimatePresence>
     </motion.div>
   );

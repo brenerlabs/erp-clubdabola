@@ -689,7 +689,7 @@ export default function Finance() {
   // Expense management inputs and states
   const [expDescription, setExpDescription] = useState('');
   const [expAmount, setExpAmount] = useState('');
-  const [expCategory, setExpCategory] = useState<'Marketing/Ads' | 'Plataforma/Sistemas' | 'Embalagens' | 'Aluguel/Estrutura' | 'Logística Extra' | 'Outros'>('Marketing/Ads');
+  const [expCategory, setExpCategory] = useState<'Marketing/Ads' | 'Plataforma/Sistemas' | 'Embalagens' | 'Aluguel/Estrutura' | 'Logística Extra' | 'Outros' | 'Perdas/Avarias' | 'Consumo Próprio'>('Marketing/Ads');
   const [isSavingExpense, setIsSavingExpense] = useState(false);
 
   const handleAddExpense = async (e: React.FormEvent) => {
@@ -2613,6 +2613,8 @@ export default function Finance() {
                 <option value="Embalagens">Embalagens / Brindes</option>
                 <option value="Aluguel/Estrutura">Aluguel / Estrutura</option>
                 <option value="Logística Extra">Logística Extra</option>
+                <option value="Perdas/Avarias">Perdas / Avarias (Estoque)</option>
+                <option value="Consumo Próprio">Consumo Próprio / Amostras</option>
                 <option value="Outros">Outras Despesas</option>
               </select>
             </div>
