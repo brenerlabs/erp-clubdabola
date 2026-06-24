@@ -25,12 +25,14 @@ import {
   Percent,
   TrendingDown,
   ArrowDownRight,
-  Briefcase
+  Briefcase,
+  AlertTriangle,
+  CheckCircle2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
+import { ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Cell } from 'recharts';
 
 export default function Reports() {
   const [sales, setSales] = useState<Sale[]>([]);
@@ -46,6 +48,13 @@ export default function Reports() {
 
   // Active view tab: 'all' | 'products' | 'customers' | 'dre'
   const [activeTab, setActiveTab] = useState<'all' | 'products' | 'customers' | 'dre'>('all');
+
+  // Subview for products tab: 'general' | 'abc'
+  const [productSubView, setProductSubView] = useState<'general' | 'abc'>('general');
+  // ABC classification criteria: 'revenue' | 'quantity'
+  const [abcCriteria, setAbcCriteria] = useState<'revenue' | 'quantity'>('revenue');
+  // ABC classification filter: 'all' | 'A' | 'B' | 'C'
+  const [abcFilter, setAbcFilter] = useState<'all' | 'A' | 'B' | 'C'>('all');
 
   // Unified page filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -296,6 +305,177 @@ export default function Reports() {
 
     return Object.values(statsMap).sort((a, b) => b.revenue - a.revenue);
   }, [sales]);
+
+
+  // 2.5 DYNAMIC ABC CURVE AND INVENTORY TURNOVER (GIRO DE ESTOQUE) CALCULATIONS
+  const abcAndTurnoverStats = React.useMemo(() => {
+    // 1. Calculate time span in days
+    let daysInPeriod = 30;
+    if (startDate && endDate) {
+      const start = new Date(startDate).getTime();
+      const end = new Date(endDate).getTime();
+      const diff = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+      if (diff > 0) daysInPeriod = diff;
+    } else if (sales.length > 0) {
+      const times = sales
+        .map(s => {
+          const t = s.createdAt;
+          if (!t) return null;
+          return t.seconds ? t.seconds * 1000 : new Date(t).getTime();
+        })
+        .filter((t): t is number => t !== null);
+      if (times.length > 1) {
+        const min = Math.min(...times);
+        const max = Math.max(...times);
+        const diff = Math.ceil((max - min) / (1000 * 60 * 60 * 24));
+        if (diff > 0) daysInPeriod = diff;
+      }
+    }
+
+    // 2. Aggregate sales for each product in the filtered period
+    const productSalesMap: { [prodId: string]: { qtySold: number; revenue: number } } = {};
+    
+    sales.forEach(sale => {
+      // Filter out cancelled and adjustments
+      if (sale.status === 'Cancelada') return;
+      const isAdjustment = sale.isAdjustment || (sale.items || []).some(item => item && item.productId === 'sistema_ajuste_auditoria');
+      if (isAdjustment) return;
+
+      // Filter by date range if specified
+      if (startDate || endDate) {
+        const saleTime = sale.createdAt?.seconds ? sale.createdAt.seconds * 1000 : new Date(sale.createdAt).getTime();
+        if (startDate) {
+          const startTime = new Date(startDate + 'T00:00:00').getTime();
+          if (saleTime < startTime) return;
+        }
+        if (endDate) {
+          const endTime = new Date(endDate + 'T23:59:59').getTime();
+          if (saleTime > endTime) return;
+        }
+      }
+
+      // Sum items
+      (sale.items || []).forEach(item => {
+        if (!productSalesMap[item.productId]) {
+          productSalesMap[item.productId] = { qtySold: 0, revenue: 0 };
+        }
+        productSalesMap[item.productId].qtySold += item.quantity || 0;
+        productSalesMap[item.productId].revenue += (item.quantity || 0) * (item.price || 0);
+      });
+    });
+
+    // 3. Build stats list including ALL products from catalog (so we can see products with 0 sales)
+    let list = products.map(prod => {
+      const salesData = productSalesMap[prod.id || ''] || { qtySold: 0, revenue: 0 };
+      const totalStock = prod.totalStock || 0;
+      const minStock = prod.minStock || 0;
+      const costPrice = prod.costPrice || 0;
+      const sellingPrice = prod.sellingPrice || 0;
+
+      // Turnover rate (Giro de Estoque)
+      const turnRate = totalStock > 0 ? (salesData.qtySold / totalStock) : (salesData.qtySold > 0 ? salesData.qtySold : 0);
+
+      // Average daily sales and stock coverage
+      const dailyVelocity = salesData.qtySold / daysInPeriod;
+      const coverageDays = dailyVelocity > 0 ? (totalStock / dailyVelocity) : (totalStock > 0 ? Infinity : 0);
+
+      // Recommended Action
+      let recommendation = 'Estável';
+      if (totalStock === 0) {
+        recommendation = 'Repor Urgente';
+      } else if (salesData.qtySold === 0) {
+        recommendation = 'Sem Saída (Promover)';
+      } else if (totalStock <= minStock) {
+        recommendation = 'Estoque Baixo';
+      } else if (coverageDays < 15) {
+        recommendation = 'Repor Estoque';
+      } else if (coverageDays > 120) {
+        recommendation = 'Excesso (Promoção)';
+      }
+
+      return {
+        id: prod.id || '',
+        name: prod.name,
+        category: prod.category || 'Outros',
+        totalStock,
+        minStock,
+        costPrice,
+        sellingPrice,
+        qtySold: salesData.qtySold,
+        revenue: salesData.revenue,
+        turnRate,
+        dailyVelocity,
+        coverageDays,
+        recommendation
+      };
+    });
+
+    // 4. Sort based on criteria
+    const sortKey = abcCriteria === 'revenue' ? 'revenue' : 'qtySold';
+    list.sort((a, b) => b[sortKey] - a[sortKey]);
+
+    // 5. Compute total sum for criteria and assign ABC classes
+    const totalSum = list.reduce((sum, item) => sum + item[sortKey], 0);
+    
+    let runningSum = 0;
+    list = list.map(item => {
+      runningSum += item[sortKey];
+      const cumulativePercent = totalSum > 0 ? (runningSum / totalSum) * 100 : 100;
+      
+      // Class A: Top 70%
+      // Class B: Next 20% (up to 90%)
+      // Class C: Bottom 10% (above 90% or 0 sales)
+      let abcClass: 'A' | 'B' | 'C' = 'C';
+      if (item[sortKey] > 0) {
+        if (cumulativePercent <= 70) {
+          abcClass = 'A';
+        } else if (cumulativePercent <= 90) {
+          abcClass = 'B';
+        } else {
+          abcClass = 'C';
+        }
+      } else {
+        abcClass = 'C'; // 0 sales is always Class C
+      }
+
+      return {
+        ...item,
+        cumulativePercent,
+        abcClass
+      };
+    });
+
+    // 6. Calculate summaries for each ABC class
+    const summaries = {
+      totalRevenue: list.reduce((acc, x) => acc + x.revenue, 0),
+      totalQtySold: list.reduce((acc, x) => acc + x.qtySold, 0),
+      classA: { count: 0, revenue: 0, qty: 0 },
+      classB: { count: 0, revenue: 0, qty: 0 },
+      classC: { count: 0, revenue: 0, qty: 0 },
+    };
+
+    list.forEach(item => {
+      if (item.abcClass === 'A') {
+        summaries.classA.count++;
+        summaries.classA.revenue += item.revenue;
+        summaries.classA.qty += item.qtySold;
+      } else if (item.abcClass === 'B') {
+        summaries.classB.count++;
+        summaries.classB.revenue += item.revenue;
+        summaries.classB.qty += item.qtySold;
+      } else {
+        summaries.classC.count++;
+        summaries.classC.revenue += item.revenue;
+        summaries.classC.qty += item.qtySold;
+      }
+    });
+
+    return {
+      list,
+      daysInPeriod,
+      summaries
+    };
+  }, [products, sales, startDate, endDate, abcCriteria]);
 
 
   // 3. CUSTOMER HISTORICAL LAUNCH DATA
@@ -1095,96 +1275,461 @@ export default function Reports() {
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -12 }}
-              className="grid grid-cols-1 lg:grid-cols-3 gap-6"
+              className="space-y-6"
             >
-              {/* Leaderboard left */}
-              <div className="lg:col-span-2 bg-white rounded-[24px] border border-slate-100 shadow-sm overflow-hidden">
-                <div className="px-6 py-4.5 border-b border-slate-100 bg-slate-50/50">
-                  <h3 className="font-sans font-bold text-slate-900 text-xs uppercase tracking-wider">Desempenho Geral de Itens / Vendas</h3>
-                  <p className="text-[10px] text-slate-400 font-medium">Produtos classificados por faturamento descendente</p>
+              {/* Product Sub-View Toggle Navigation */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-[20px] border border-slate-100 shadow-sm">
+                <div className="flex bg-slate-100 p-1 rounded-xl w-full sm:max-w-md">
+                  <button
+                    onClick={() => setProductSubView('general')}
+                    className={cn(
+                      "flex-1 py-1.5 px-3 rounded-lg text-[10.5px] font-black uppercase tracking-wider transition-all",
+                      productSubView === 'general'
+                        ? "bg-white text-slate-900 shadow-sm"
+                        : "text-slate-400 hover:text-slate-600"
+                    )}
+                  >
+                    📈 Desempenho Geral
+                  </button>
+                  <button
+                    onClick={() => setProductSubView('abc')}
+                    className={cn(
+                      "flex-1 py-1.5 px-3 rounded-lg text-[10.5px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5",
+                      productSubView === 'abc'
+                        ? "bg-white text-red-800 shadow-sm"
+                        : "text-slate-400 hover:text-slate-600"
+                    )}
+                  >
+                    🔥 Curva ABC & Giro
+                  </button>
                 </div>
-                
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left">
-                    <thead>
-                      <tr className="bg-slate-50/20 border-b border-slate-100">
-                        <th className="p-4 px-6 text-[10px] font-bold uppercase tracking-wider text-slate-400">Item</th>
-                        <th className="p-4 px-6 text-[10px] font-bold uppercase tracking-wider text-slate-400">Unidades Vendidas</th>
-                        <th className="p-4 px-6 text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Faturado</th>
-                        <th className="p-4 px-6 text-[10px] font-bold uppercase tracking-wider text-slate-400">Compradores Únicos</th>
-                        <th className="p-4 px-6 text-[10px] font-bold uppercase tracking-wider text-slate-400">Vendas Diferentes</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {productStats.length === 0 ? (
-                        <tr>
-                          <td colSpan={5} className="p-12 text-center text-slate-400">Nenhum produto registrado em vendas concluídas.</td>
-                        </tr>
-                      ) : (
-                        productStats
-                          .filter(p => smartSearchMatch([p.name, p.id], searchQuery))
-                          .map((it, idx) => (
-                            <tr key={it.id} className="hover:bg-slate-50/30 transition-colors">
-                              <td className="p-4 px-6">
-                                <div className="flex items-center gap-3">
-                                  <div className="size-8 rounded-xl bg-red-50 text-red-800 flex items-center justify-center font-bold text-xs">
-                                    #{idx + 1}
-                                  </div>
-                                  <span className="font-bold text-xs uppercase text-slate-800">{it.name}</span>
-                                </div>
-                              </td>
-                              <td className="p-4 px-6 font-mono font-bold text-slate-900">x{it.qtySold}</td>
-                              <td className="p-4 px-6 font-mono font-bold text-slate-900">{formatCurrency(it.revenue)}</td>
-                              <td className="p-4 px-6 font-medium text-slate-600 text-xs">{it.buyers.size} compradores</td>
-                              <td className="p-4 px-6 font-medium text-slate-600 text-xs">{it.uniqueSaleIds.size} vendas</td>
-                            </tr>
-                          ))
-                      )}
-                    </tbody>
-                  </table>
+
+                <div className="text-[9px] font-black uppercase text-slate-400 tracking-wider flex items-center gap-1.5">
+                  <Clock size={11} />
+                  Período analisado: {abcAndTurnoverStats.daysInPeriod} dias
                 </div>
               </div>
 
-              {/* Product quick info cards */}
-              <div className="space-y-4">
-                <div className="bg-slate-950 text-white p-6 rounded-[24px] relative overflow-hidden shadow-xl">
-                  <div className="absolute right-[-40px] bottom-[-40px] opacity-10">
-                    <BarChart3 size={150} />
-                  </div>
-                  <h4 className="font-sans font-bold text-xs text-red-500 uppercase tracking-[0.15em] mb-1">Destaque de Vendas</h4>
-                  <p className="text-[10px] text-slate-300">Produto Líder em Faturamento</p>
-                  
-                  {productStats.length > 0 ? (
-                    <div className="mt-8">
-                      <h3 className="text-xl font-bold uppercase tracking-tight text-white mb-1 truncate">{productStats[0].name}</h3>
-                      <p className="text-3xl font-mono font-black text-red-500">{formatCurrency(productStats[0].revenue)}</p>
-                      <p className="text-[10px] text-slate-400 mt-2 font-medium">Composto por <span className="font-bold text-white">{productStats[0].qtySold} unidades</span> encomendadas em nossa plataforma de pontvenda.</p>
+              {productSubView === 'general' ? (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {/* Leaderboard left */}
+                  <div className="lg:col-span-2 bg-white rounded-[24px] border border-slate-100 shadow-sm overflow-hidden">
+                    <div className="px-6 py-4.5 border-b border-slate-100 bg-slate-50/50">
+                      <h3 className="font-sans font-bold text-slate-900 text-xs uppercase tracking-wider">Desempenho Geral de Itens / Vendas</h3>
+                      <p className="text-[10px] text-slate-400 font-medium">Produtos classificados por faturamento descendente</p>
                     </div>
-                  ) : (
-                    <p className="text-xs text-slate-400 mt-4">Sem dados disponíveis.</p>
-                  )}
-                </div>
+                    
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left">
+                        <thead>
+                          <tr className="bg-slate-50/20 border-b border-slate-100">
+                            <th className="p-4 px-6 text-[10px] font-bold uppercase tracking-wider text-slate-400">Item</th>
+                            <th className="p-4 px-6 text-[10px] font-bold uppercase tracking-wider text-slate-400">Unidades Vendidas</th>
+                            <th className="p-4 px-6 text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Faturado</th>
+                            <th className="p-4 px-6 text-[10px] font-bold uppercase tracking-wider text-slate-400">Compradores Únicos</th>
+                            <th className="p-4 px-6 text-[10px] font-bold uppercase tracking-wider text-slate-400">Vendas Diferentes</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {productStats.length === 0 ? (
+                            <tr>
+                              <td colSpan={5} className="p-12 text-center text-slate-400">Nenhum produto registrado em vendas concluídas.</td>
+                            </tr>
+                          ) : (
+                            productStats
+                              .filter(p => smartSearchMatch([p.name, p.id], searchQuery))
+                              .map((it, idx) => (
+                                <tr key={it.id} className="hover:bg-slate-50/30 transition-colors">
+                                  <td className="p-4 px-6">
+                                    <div className="flex items-center gap-3">
+                                      <div className="size-8 rounded-xl bg-red-50 text-red-800 flex items-center justify-center font-bold text-xs">
+                                        #{idx + 1}
+                                      </div>
+                                      <span className="font-bold text-xs uppercase text-slate-800">{it.name}</span>
+                                    </div>
+                                  </td>
+                                  <td className="p-4 px-6 font-mono font-bold text-slate-900">x{it.qtySold}</td>
+                                  <td className="p-4 px-6 font-mono font-bold text-slate-900">{formatCurrency(it.revenue)}</td>
+                                  <td className="p-4 px-6 font-medium text-slate-600 text-xs">{it.buyers.size} compradores</td>
+                                  <td className="p-4 px-6 font-medium text-slate-600 text-xs">{it.uniqueSaleIds.size} vendas</td>
+                                </tr>
+                              ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
 
-                <div className="bg-white border border-slate-100 p-6 rounded-[24px]">
-                  <h4 className="font-sans font-bold text-xs text-slate-400 uppercase tracking-[0.1em] mb-4">Volume total faturado</h4>
+                  {/* Product quick info cards */}
                   <div className="space-y-4">
-                    {productStats.slice(0, 5).map((stat) => (
-                      <div key={stat.id} className="space-y-1">
-                        <div className="flex justify-between text-xs font-bold uppercase">
-                          <span className="text-slate-700 truncate max-w-[150px]">{stat.name}</span>
-                          <span className="font-mono text-slate-900">{formatCurrency(stat.revenue)}</span>
-                        </div>
-                        <div className="w-full h-1.5 bg-slate-105 rounded-full overflow-hidden">
-                          <div 
-                            className="h-full bg-red-800 rounded-full" 
-                            style={{ width: `${(stat.revenue / (productStats[0]?.revenue || 1)) * 100}%` }}
-                          />
-                        </div>
+                    <div className="bg-slate-950 text-white p-6 rounded-[24px] relative overflow-hidden shadow-xl">
+                      <div className="absolute right-[-40px] bottom-[-40px] opacity-10">
+                        <BarChart3 size={150} />
                       </div>
-                    ))}
+                      <h4 className="font-sans font-bold text-xs text-red-500 uppercase tracking-[0.15em] mb-1">Destaque de Vendas</h4>
+                      <p className="text-[10px] text-slate-300">Produto Líder em Faturamento</p>
+                      
+                      {productStats.length > 0 ? (
+                        <div className="mt-8">
+                          <h3 className="text-xl font-bold uppercase tracking-tight text-white mb-1 truncate">{productStats[0].name}</h3>
+                          <p className="text-3xl font-mono font-black text-red-500">{formatCurrency(productStats[0].revenue)}</p>
+                          <p className="text-[10px] text-slate-400 mt-2 font-medium">Composto por <span className="font-bold text-white">{productStats[0].qtySold} unidades</span> encomendadas em nossa plataforma de pontvenda.</p>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-slate-400 mt-4">Sem dados disponíveis.</p>
+                      )}
+                    </div>
+
+                    <div className="bg-white border border-slate-100 p-6 rounded-[24px]">
+                      <h4 className="font-sans font-bold text-xs text-slate-400 uppercase tracking-[0.1em] mb-4">Volume total faturado</h4>
+                      <div className="space-y-4">
+                        {productStats.slice(0, 5).map((stat) => (
+                          <div key={stat.id} className="space-y-1">
+                            <div className="flex justify-between text-xs font-bold uppercase">
+                              <span className="text-slate-700 truncate max-w-[150px]">{stat.name}</span>
+                              <span className="font-mono text-slate-900">{formatCurrency(stat.revenue)}</span>
+                            </div>
+                            <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                              <div 
+                                className="h-full bg-red-800 rounded-full" 
+                                style={{ width: `${(stat.revenue / (productStats[0]?.revenue || 1)) * 100}%` }}
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
+              ) : (
+                // DYNAMIC ABC CURVE & INVENTORY TURNOVER DASHBOARD
+                <div className="space-y-6">
+                  {/* Summary Metric Cards (A, B, C, Turnover) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {/* Class A */}
+                    <div className="bg-white p-5 rounded-[20px] border border-red-100 shadow-sm flex flex-col justify-between relative overflow-hidden">
+                      <div className="absolute right-3 top-3 size-6 rounded-full bg-red-50 text-red-700 flex items-center justify-center font-black text-xs">
+                        A
+                      </div>
+                      <div>
+                        <p className="text-[9px] uppercase font-black text-slate-400 tracking-wider">Classe A (Alto Impacto)</p>
+                        <h4 className="text-xl font-bold text-slate-900 mt-1">{formatCurrency(abcAndTurnoverStats.summaries.classA.revenue)}</h4>
+                        <p className="text-[10px] text-slate-500 font-medium mt-0.5">
+                          {abcAndTurnoverStats.summaries.classA.count} produto(s) • {abcAndTurnoverStats.summaries.classA.qty} vendidos
+                        </p>
+                      </div>
+                      <div className="mt-4 pt-3 border-t border-slate-50 flex items-center justify-between text-[11px] font-black text-red-800">
+                        <span>REPRESENTATIVIDADE</span>
+                        <span>
+                          {abcAndTurnoverStats.summaries.totalRevenue > 0
+                            ? ((abcAndTurnoverStats.summaries.classA.revenue / abcAndTurnoverStats.summaries.totalRevenue) * 100).toFixed(1)
+                            : 0}%
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Class B */}
+                    <div className="bg-white p-5 rounded-[20px] border border-amber-100 shadow-sm flex flex-col justify-between relative overflow-hidden">
+                      <div className="absolute right-3 top-3 size-6 rounded-full bg-amber-50 text-amber-700 flex items-center justify-center font-black text-xs">
+                        B
+                      </div>
+                      <div>
+                        <p className="text-[9px] uppercase font-black text-slate-400 tracking-wider">Classe B (Médio Impacto)</p>
+                        <h4 className="text-xl font-bold text-slate-900 mt-1">{formatCurrency(abcAndTurnoverStats.summaries.classB.revenue)}</h4>
+                        <p className="text-[10px] text-slate-500 font-medium mt-0.5">
+                          {abcAndTurnoverStats.summaries.classB.count} produto(s) • {abcAndTurnoverStats.summaries.classB.qty} vendidos
+                        </p>
+                      </div>
+                      <div className="mt-4 pt-3 border-t border-slate-50 flex items-center justify-between text-[11px] font-black text-amber-700">
+                        <span>REPRESENTATIVIDADE</span>
+                        <span>
+                          {abcAndTurnoverStats.summaries.totalRevenue > 0
+                            ? ((abcAndTurnoverStats.summaries.classB.revenue / abcAndTurnoverStats.summaries.totalRevenue) * 100).toFixed(1)
+                            : 0}%
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Class C */}
+                    <div className="bg-white p-5 rounded-[20px] border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden">
+                      <div className="absolute right-3 top-3 size-6 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center font-black text-xs">
+                        C
+                      </div>
+                      <div>
+                        <p className="text-[9px] uppercase font-black text-slate-400 tracking-wider">Classe C (Baixo Impacto / Cauda)</p>
+                        <h4 className="text-xl font-bold text-slate-900 mt-1">{formatCurrency(abcAndTurnoverStats.summaries.classC.revenue)}</h4>
+                        <p className="text-[10px] text-slate-500 font-medium mt-0.5">
+                          {abcAndTurnoverStats.summaries.classC.count} produto(s) • {abcAndTurnoverStats.summaries.classC.qty} vendidos
+                        </p>
+                      </div>
+                      <div className="mt-4 pt-3 border-t border-slate-50 flex items-center justify-between text-[11px] font-black text-slate-500">
+                        <span>REPRESENTATIVIDADE</span>
+                        <span>
+                          {abcAndTurnoverStats.summaries.totalRevenue > 0
+                            ? ((abcAndTurnoverStats.summaries.classC.revenue / abcAndTurnoverStats.summaries.totalRevenue) * 100).toFixed(1)
+                            : 0}%
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Stock Turnover Metric */}
+                    <div className="bg-slate-900 text-white p-5 rounded-[20px] shadow-sm flex flex-col justify-between">
+                      <div>
+                        <div className="flex justify-between items-start">
+                          <p className="text-[9px] uppercase font-black text-slate-400 tracking-wider">Giro Geral de Estoque</p>
+                          <span className="text-[9px] font-black uppercase text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded border border-emerald-900/50">EFICIÊNCIA</span>
+                        </div>
+                        <h4 className="text-2xl font-mono font-black mt-1">
+                          {(() => {
+                            const totalStock = products.reduce((acc, p) => acc + (p.totalStock || 0), 0);
+                            const totalSold = abcAndTurnoverStats.summaries.totalQtySold;
+                            const turn = totalStock > 0 ? (totalSold / totalStock) : 0;
+                            return `${turn.toFixed(2)}x`;
+                          })()}
+                        </h4>
+                        <p className="text-[10px] text-slate-400 mt-0.5 font-medium">Giro de estoque acumulado de todos os produtos do catálogo</p>
+                      </div>
+                      <div className="mt-4 pt-3 border-t border-slate-800 text-[10px] text-slate-300 font-medium">
+                        Catálogo ativo com {products.length} itens cadastrados
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Lorenz Curve / ABC Pareto Chart */}
+                  <div className="bg-white rounded-[24px] border border-slate-100 shadow-sm p-6">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                      <div>
+                        <h4 className="font-sans font-bold text-slate-900 text-xs uppercase tracking-wider flex items-center gap-2">
+                          <TrendingUp size={14} className="text-red-800" />
+                          Curva de Distribuição e Acumulado de Vendas (Pareto)
+                        </h4>
+                        <p className="text-[10px] text-slate-400 font-medium mt-0.5">Visão unificada das vendas individuais por produto (barras coloridas por Classe ABC) com linha de faturamento acumulado</p>
+                      </div>
+
+                      {/* Criteria Switcher */}
+                      <div className="flex bg-slate-100 p-1 rounded-xl shrink-0">
+                        <button
+                          onClick={() => setAbcCriteria('revenue')}
+                          className={cn(
+                            "py-1 px-2.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all",
+                            abcCriteria === 'revenue' ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600"
+                          )}
+                        >
+                          R$ Faturamento
+                        </button>
+                        <button
+                          onClick={() => setAbcCriteria('quantity')}
+                          className={cn(
+                            "py-1 px-2.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all",
+                            abcCriteria === 'quantity' ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600"
+                          )}
+                        >
+                          Unidades Vendidas
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="h-[280px] w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <ComposedChart
+                          data={abcAndTurnoverStats.list.slice(0, 15).map(item => ({
+                            name: item.name.length > 15 ? item.name.slice(0, 15) + '...' : item.name,
+                            'Valor': abcCriteria === 'revenue' ? item.revenue : item.qtySold,
+                            'Acumulado %': item.cumulativePercent,
+                            abcClass: item.abcClass
+                          }))}
+                          margin={{ top: 10, right: -5, bottom: 0, left: -20 }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                          <XAxis dataKey="name" tick={{ fontSize: 9, fontWeight: 700, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                          <YAxis yAxisId="left" tick={{ fontSize: 9, fontWeight: 700, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                          <YAxis yAxisId="right" orientation="right" domain={[0, 100]} tick={{ fontSize: 9, fontWeight: 700, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                          <Tooltip
+                            contentStyle={{ borderRadius: '16px', border: '1px solid #f1f5f9', boxShadow: '0 4px 12px rgba(0,0,0,0.05)', fontSize: '11px', fontFamily: 'Inter' }}
+                            formatter={(value: any, name: string) => {
+                              if (name === 'Acumulado %') return [`${parseFloat(value).toFixed(1)}%`, name];
+                              return [abcCriteria === 'revenue' ? formatCurrency(value) : `${value} unidades`, name];
+                            }}
+                          />
+                          <Legend wrapperStyle={{ fontSize: '10px', fontWeight: 700, paddingTop: '10px' }} />
+                          <Bar yAxisId="left" dataKey="Valor" radius={[4, 4, 0, 0]} barSize={25}>
+                            {abcAndTurnoverStats.list.slice(0, 15).map((entry, index) => (
+                              <Cell 
+                                key={`cell-${index}`} 
+                                fill={
+                                  entry.abcClass === 'A' 
+                                    ? '#991b1b' 
+                                    : entry.abcClass === 'B' 
+                                      ? '#d97706' 
+                                      : '#64748b'
+                                } 
+                              />
+                            ))}
+                          </Bar>
+                          <Line yAxisId="right" type="monotone" dataKey="Acumulado %" stroke="#0f172a" strokeWidth={3} dot={{ r: 4, fill: '#0f172a' }} />
+                        </ComposedChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  {/* Table with filtering & advanced inventory KPIs */}
+                  <div className="bg-white rounded-[24px] border border-slate-100 shadow-sm overflow-hidden">
+                    <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                      <div>
+                        <h4 className="font-sans font-bold text-slate-900 text-xs uppercase tracking-wider">Matriz ABC de Giro de Estoque</h4>
+                        <p className="text-[10px] text-slate-400 font-medium">Análise de eficiência de capital de giro, cobertura em dias, velocidade de vendas diárias e ações de compra recomendadas</p>
+                      </div>
+
+                      {/* ABC Filter pills */}
+                      <div className="flex bg-slate-100 p-1 rounded-xl shrink-0 w-fit self-start md:self-center">
+                        {[
+                          { label: 'Todos', value: 'all' },
+                          { label: 'Classe A', value: 'A' },
+                          { label: 'Classe B', value: 'B' },
+                          { label: 'Classe C', value: 'C' }
+                        ].map(p => (
+                          <button
+                            key={p.value}
+                            onClick={() => setAbcFilter(p.value as any)}
+                            className={cn(
+                              "py-1 px-3 rounded-lg text-[9.5px] font-black uppercase tracking-wider transition-all",
+                              abcFilter === p.value 
+                                ? p.value === 'A'
+                                  ? "bg-red-800 text-white shadow-sm"
+                                  : p.value === 'B'
+                                    ? "bg-amber-600 text-white shadow-sm"
+                                    : p.value === 'C'
+                                      ? "bg-slate-700 text-white shadow-sm"
+                                      : "bg-white text-slate-900 shadow-sm"
+                                : "text-slate-400 hover:text-slate-600"
+                            )}
+                          >
+                            {p.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left">
+                        <thead>
+                          <tr className="bg-slate-50/20 border-b border-slate-100">
+                            <th className="p-4 px-6 text-[10px] font-bold uppercase tracking-wider text-slate-400">Produto</th>
+                            <th className="p-4 px-6 text-[10px] font-bold uppercase tracking-wider text-slate-400 text-center">Classe</th>
+                            <th className="p-4 px-6 text-[10px] font-bold uppercase tracking-wider text-slate-400">Estoque Atual / Min</th>
+                            <th className="p-4 px-6 text-[10px] font-bold uppercase tracking-wider text-slate-400 text-right">Vendas do Período</th>
+                            <th className="p-4 px-6 text-[10px] font-bold uppercase tracking-wider text-slate-400 text-right">Giro de Estoque</th>
+                            <th className="p-4 px-6 text-[10px] font-bold uppercase tracking-wider text-slate-400 text-right">Cobertura</th>
+                            <th className="p-4 px-6 text-[10px] font-bold uppercase tracking-wider text-slate-400 text-center">Ação Sugerida</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {abcAndTurnoverStats.list
+                            .filter(item => smartSearchMatch([item.name, item.id, item.category], searchQuery))
+                            .filter(item => abcFilter === 'all' || item.abcClass === abcFilter).length === 0 ? (
+                              <tr>
+                                <td colSpan={7} className="p-12 text-center text-slate-400">Nenhum produto correspondente aos filtros de pesquisa ou classe.</td>
+                              </tr>
+                            ) : (
+                              abcAndTurnoverStats.list
+                                .filter(item => smartSearchMatch([item.name, item.id, item.category], searchQuery))
+                                .filter(item => abcFilter === 'all' || item.abcClass === abcFilter)
+                                .map((item) => (
+                                  <tr key={item.id} className="hover:bg-slate-50/30 transition-colors">
+                                    {/* Product details */}
+                                    <td className="p-4 px-6">
+                                      <div className="flex flex-col">
+                                        <span className="font-bold text-xs uppercase text-slate-800">{item.name}</span>
+                                        <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold mt-0.5">{item.category}</span>
+                                      </div>
+                                    </td>
+
+                                    {/* Class Badge */}
+                                    <td className="p-4 px-6 text-center">
+                                      <span className={cn(
+                                        "inline-block text-[9.5px] font-black uppercase tracking-wider px-2 py-0.5 rounded-lg border",
+                                        item.abcClass === 'A'
+                                          ? "bg-rose-50 text-rose-800 border-rose-100"
+                                          : item.abcClass === 'B'
+                                            ? "bg-amber-50 text-amber-800 border-amber-100"
+                                            : "bg-slate-50 text-slate-500 border-slate-100"
+                                      )}>
+                                        Classe {item.abcClass}
+                                      </span>
+                                    </td>
+
+                                    {/* Stock Current vs Min */}
+                                    <td className="p-4 px-6 font-medium text-xs">
+                                      <div className="flex items-center gap-2">
+                                        {item.totalStock <= item.minStock ? (
+                                          <div className="flex items-center gap-1.5 text-rose-700 bg-rose-50 border border-rose-100 px-2 py-0.5 rounded-md font-bold font-mono">
+                                            <AlertTriangle size={11} className="shrink-0" />
+                                            <span>{item.totalStock} (mín: {item.minStock})</span>
+                                          </div>
+                                        ) : (
+                                          <div className="flex items-center gap-1.5 text-slate-600 font-mono">
+                                            <CheckCircle2 size={11} className="text-emerald-500 shrink-0" />
+                                            <span>{item.totalStock} (mín: {item.minStock})</span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </td>
+
+                                    {/* Sales metrics */}
+                                    <td className="p-4 px-6 text-right font-medium">
+                                      <div className="flex flex-col">
+                                        <span className="font-mono text-xs font-bold text-slate-900">{formatCurrency(item.revenue)}</span>
+                                        <span className="text-[10px] text-slate-400 font-bold font-mono mt-0.5">x{item.qtySold} un.</span>
+                                      </div>
+                                    </td>
+
+                                    {/* Turnover Rate */}
+                                    <td className="p-4 px-6 text-right font-bold font-mono text-xs text-slate-800">
+                                      {item.turnRate.toFixed(2)}x
+                                    </td>
+
+                                    {/* Days of Coverage */}
+                                    <td className="p-4 px-6 text-right text-xs font-semibold font-mono">
+                                      {(() => {
+                                        if (item.totalStock === 0) {
+                                          return <span className="text-rose-700 font-bold uppercase text-[9.5px]">Esgotado</span>;
+                                        }
+                                        if (item.coverageDays === Infinity) {
+                                          return <span className="text-slate-400 italic">Sem Demanda</span>;
+                                        }
+                                        if (item.coverageDays > 365) {
+                                          return <span className="text-slate-500">&gt; 1 Ano</span>;
+                                        }
+                                        return <span className="text-slate-800">{Math.round(item.coverageDays)} dias</span>;
+                                      })()}
+                                    </td>
+
+                                    {/* Action recommended */}
+                                    <td className="p-4 px-6 text-center">
+                                      <span className={cn(
+                                        "inline-block text-[9px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full border",
+                                        item.recommendation === 'Repor Urgente'
+                                          ? "bg-red-50 text-red-700 border-red-100"
+                                          : item.recommendation === 'Estoque Baixo' || item.recommendation === 'Repor Estoque'
+                                            ? "bg-amber-50 text-amber-700 border-amber-100"
+                                            : item.recommendation === 'Excesso (Promoção)'
+                                              ? "bg-indigo-50 text-indigo-700 border-indigo-100/50"
+                                              : item.recommendation === 'Sem Saída (Promover)'
+                                                ? "bg-purple-50 text-purple-700 border-purple-100/50"
+                                                : "bg-emerald-50 text-emerald-800 border-emerald-100"
+                                      )}>
+                                        {item.recommendation}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                ))
+                            )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
             </motion.div>
           )}
 
