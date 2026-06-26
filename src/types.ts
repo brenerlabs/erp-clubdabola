@@ -152,6 +152,7 @@ export interface CustomerPhoto {
   scale?: number;
   offsetX?: number;
   offsetY?: number;
+  mantoType?: string | null;
   createdAt: any;
 }
 
