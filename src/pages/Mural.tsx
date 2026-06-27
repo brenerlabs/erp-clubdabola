@@ -94,11 +94,13 @@ export default function Mural() {
   const [isStoriesModalOpen, setIsStoriesModalOpen] = useState(false);
   const [selectedPhotoForStories, setSelectedPhotoForStories] = useState<CustomerPhoto | null>(null);
   const [storiesText, setStoriesText] = useState('Cliente satisfeito vestindo o manto sagrado! ⚽🔥');
-  const [storiesCoupon, setStoriesCoupon] = useState('CLUB10');
+  const [storiesProduct, setStoriesProduct] = useState('');
+  const [storiesImpactPhrase, setStoriesImpactPhrase] = useState('Qualidade premium e caimento indiscutível! 🔥');
   const [storiesTheme, setStoriesTheme] = useState<'red' | 'black' | 'green' | 'gold'>('red');
   const [storiesShowLogo, setStoriesShowLogo] = useState(true);
   const [isDownloadingStory, setIsDownloadingStory] = useState(false);
   const [isStoryCopied, setIsStoryCopied] = useState(false);
+  const [isDownloadingPhoto, setIsDownloadingPhoto] = useState<{ [id: string]: boolean }>({});
 
   // States & Refs for real-time dragging (align/frame) on the feed cards and modal
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -405,12 +407,12 @@ export default function Mural() {
         }
       }
 
-      // 3. Customer Photo (Polaroid Frame styled inside Stories)
+      // 3. Customer Photo (Polaroid Frame styled inside Stories with 9:16 aspect ratio)
       // Card Container dimensions
-      const cardX = 140;
-      const cardY = 280;
-      const cardW = 800;
-      const cardH = 1060;
+      const cardX = 200;
+      const cardY = 220;
+      const cardW = 680;
+      const cardH = 1200;
       const cardR = 40;
 
       // Draw Card shadow and background
@@ -428,11 +430,11 @@ export default function Mural() {
       ctx.shadowOffsetX = 0;
       ctx.shadowOffsetY = 0;
 
-      // Draw Customer Image frame inside the card
-      const imgX = 180;
-      const imgY = 320;
-      const imgW = 720;
-      const imgH = 800;
+      // Draw Customer Image frame inside the card in a perfect 9:16 aspect ratio
+      const imgW = 560;
+      const imgH = 996; // 9:16 aspect ratio (560 * 16 / 9)
+      const imgX = 260; // Centered: (1080 - 560) / 2
+      const imgY = 280;
       const imgR = 24;
 
       // Load Customer Photo
@@ -469,9 +471,10 @@ export default function Mural() {
         drawW *= scale;
         drawH *= scale;
 
-        // Center position + custom offset coordinates
-        const drawX = imgX + (imgW - drawW) / 2 + oX * 2.5; 
-        const drawY = imgY + (imgH - drawH) / 2 + oY * 2.5;
+        // Center position + custom offset coordinates scaled from the 260px reference editor width
+        const multiplier = imgW / 260;
+        const drawX = imgX + (imgW - drawW) / 2 + oX * multiplier; 
+        const drawY = imgY + (imgH - drawH) / 2 + oY * multiplier;
 
         ctx.drawImage(custImg, drawX, drawY, drawW, drawH);
         ctx.restore();
@@ -485,25 +488,25 @@ export default function Mural() {
 
       // Draw Customer Name inside Card Bottom area
       ctx.fillStyle = "#1e293b";
-      ctx.font = "900 44px Inter, sans-serif";
+      ctx.font = "900 40px Inter, sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText(selectedPhotoForStories.customerName.toUpperCase(), 540, 1200);
+      ctx.fillText(selectedPhotoForStories.customerName.toUpperCase(), 540, 1335);
 
       // Draw Manto Type Tag overlay inside the card bottom area
       const typeText = selectedPhotoForStories.mantoType || 'Manto I (Home)';
-      ctx.font = "800 24px Inter, sans-serif";
+      ctx.font = "800 22px Inter, sans-serif";
       const tagTextWidth = ctx.measureText(typeText.toUpperCase()).width;
       const tagW = tagTextWidth + 40;
-      const tagH = 50;
+      const tagH = 46;
       const tagX = 540 - tagW / 2;
-      const tagY = 1235;
+      const tagY = 1365;
 
       ctx.fillStyle = "#f1f5f9";
       drawRoundedRect(tagX, tagY, tagW, tagH, 12);
       ctx.fill();
 
       ctx.fillStyle = "#475569";
-      ctx.fillText(typeText.toUpperCase(), 540, tagY + 33);
+      ctx.fillText(typeText.toUpperCase(), 540, tagY + 31);
 
       // 4. Marketing Text underneath Card
       ctx.fillStyle = "#ffffff";
@@ -513,7 +516,7 @@ export default function Mural() {
       // Draw wrapped marketing caption text
       const words = storiesText.split(' ');
       let line = '';
-      let textY = 1410;
+      let textY = 1465; // Shifted down by 55px to avoid overlapping with card bottom (at 1420)
       const maxLineWidth = 850;
       const lineHeight = 50;
 
@@ -531,33 +534,54 @@ export default function Mural() {
       }
       ctx.fillText(line, 540, textY);
 
-      // 5. Stylized Discount Coupon voucher box
-      const coupBoxY = 1640;
-      const coupBoxW = 700;
-      const coupBoxH = 150;
-      const coupBoxX = 540 - coupBoxW / 2;
+      // 5. Stylized Product Info & Impact Phrase Capsule
+      const boxY = 1620;
+      const boxW = 820;
+      const boxH = 210;
+      const boxX = 540 - boxW / 2;
 
-      // Draw Coupon Background
-      ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
-      drawRoundedRect(coupBoxX, coupBoxY, coupBoxW, coupBoxH, 24);
+      // Draw Glassmorphism Background
+      ctx.fillStyle = "rgba(255, 255, 255, 0.06)";
+      drawRoundedRect(boxX, boxY, boxW, boxH, 28);
       ctx.fill();
 
-      // Draw Dashed Border
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
-      ctx.lineWidth = 4;
-      ctx.setLineDash([15, 10]);
-      drawRoundedRect(coupBoxX, coupBoxY, coupBoxW, coupBoxH, 24);
+      // Elegant Solid Border
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
+      ctx.lineWidth = 3;
+      drawRoundedRect(boxX, boxY, boxW, boxH, 28);
       ctx.stroke();
-      ctx.setLineDash([]); // clear dash
 
-      // Coupon Text inside Box
-      ctx.fillStyle = "rgba(255, 255, 255, 0.75)";
-      ctx.font = "900 24px Inter, sans-serif";
-      ctx.fillText("USE O CUPOM DE DESCONTO EXCLUSIVO", 540, coupBoxY + 50);
+      // Top Small Label: "PRODUTO ADQUIRIDO"
+      ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
+      ctx.font = "900 20px Inter, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("PRODUTO ADQUIRIDO", 540, boxY + 45);
 
-      ctx.fillStyle = "#fbbf24"; 
-      ctx.font = "900 52px monospace";
-      ctx.fillText(storiesCoupon.toUpperCase(), 540, coupBoxY + 115);
+      // Middle Product Name: Flamengo Manto I (Home) etc.
+      ctx.fillStyle = "#fbbf24"; // Premium Gold
+      ctx.font = "800 34px Inter, sans-serif";
+      let prodName = storiesProduct || "Manto Sagrado";
+      if (prodName.length > 34) {
+        prodName = prodName.slice(0, 31) + "...";
+      }
+      ctx.fillText(prodName.toUpperCase(), 540, boxY + 102);
+
+      // Elegant horizontal divider line
+      ctx.beginPath();
+      ctx.moveTo(boxX + 120, boxY + 132);
+      ctx.lineTo(boxX + boxW - 120, boxY + 132);
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Impactful phrase at the bottom
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "italic 700 24px Inter, sans-serif";
+      let phrase = storiesImpactPhrase || "Vista o seu manto sagrado!";
+      if (phrase.length > 44) {
+        phrase = phrase.slice(0, 41) + "...";
+      }
+      ctx.fillText(phrase, 540, boxY + 175);
 
       // 6. Trigger PNG Download
       const dataUrl = canvas.toDataURL('image/png');
@@ -572,6 +596,67 @@ export default function Mural() {
       alert("Houve um erro ao gerar a arte do Story. Tente novamente.");
     } finally {
       setIsDownloadingStory(false);
+    }
+  };
+
+  const handleDownloadOnlyPhoto = async (item: CustomerPhoto) => {
+    try {
+      setIsDownloadingPhoto(prev => ({ ...prev, [item.id || '']: true }));
+      
+      const canvas = document.createElement('canvas');
+      canvas.width = 1080;
+      canvas.height = 1920;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error("Could not get canvas context");
+
+      // Load image
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+        img.src = item.photoUrl;
+      });
+
+      // Object-cover calculations for 9:16 canvas
+      const imgAspect = img.width / img.height;
+      const frameAspect = 1080 / 1920; // 9:16
+      let drawW = 1080;
+      let drawH = 1920;
+
+      if (imgAspect > frameAspect) {
+        drawW = 1920 * imgAspect;
+      } else {
+        drawH = 1080 / imgAspect;
+      }
+
+      const scale = item.scale || 1.0;
+      const oX = item.offsetX || 0;
+      const oY = item.offsetY || 0;
+
+      // Apply scale
+      drawW *= scale;
+      drawH *= scale;
+
+      // Center position + offsets scaled from the 260px reference editor width
+      const multiplier = 1080 / 260; // 1080 is the canvas width
+      const drawX = (1080 - drawW) / 2 + oX * multiplier;
+      const drawY = (1920 - drawH) / 2 + oY * multiplier;
+
+      // Draw to canvas
+      ctx.drawImage(img, drawX, drawY, drawW, drawH);
+
+      // Trigger download
+      const dataUrl = canvas.toDataURL('image/png');
+      const downloadLink = document.createElement('a');
+      downloadLink.download = `manto_${item.customerName.toLowerCase().replace(/\s+/g, '_')}_916.png`;
+      downloadLink.href = dataUrl;
+      downloadLink.click();
+    } catch (err) {
+      console.error("Error downloading framed photo:", err);
+      alert("Erro ao baixar a foto. Tente novamente.");
+    } finally {
+      setIsDownloadingPhoto(prev => ({ ...prev, [item.id || '']: false }));
     }
   };
 
@@ -1468,14 +1553,15 @@ export default function Mural() {
 
                     {/* Actions Row */}
                     <div className={cn(
-                      "mt-4 pt-3 flex items-center gap-2 border-t",
+                      "mt-4 pt-3 flex items-center gap-1.5 border-t",
                       highContrast ? "border-zinc-800" : "border-slate-150"
                     )}>
                       <button
                         onClick={() => {
                           setSelectedPhotoForStories(item);
                           setStoriesText(`Manto sagrado do(a) ${item.customerName}! ⚽🔥`);
-                          setStoriesCoupon('CLUBBOLA10');
+                          setStoriesProduct(item.saleItemsSummary || item.mantoType || 'Manto Sagrado');
+                          setStoriesImpactPhrase('Qualidade premium e caimento indiscutível! 🔥');
                           setStoriesTheme('red');
                           setStoriesShowLogo(true);
                           setIsStoriesModalOpen(true);
@@ -1490,6 +1576,26 @@ export default function Mural() {
                       >
                         <Instagram size={11} /> Story
                       </button>
+
+                      <button
+                        onClick={() => handleDownloadOnlyPhoto(item)}
+                        disabled={!!isDownloadingPhoto[item.id || '']}
+                        className={cn(
+                          "flex-1 py-2 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1 border",
+                          highContrast
+                            ? "bg-yellow-400 hover:bg-yellow-300 text-black border-black border-2 font-black"
+                            : "bg-emerald-650 hover:bg-emerald-700 text-white shadow-sm border-emerald-700"
+                        )}
+                        title="Baixar Foto Enquadrada (Mural)"
+                      >
+                        {isDownloadingPhoto[item.id || ''] ? (
+                          <div className="size-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        ) : (
+                          <Download size={11} />
+                        )}
+                        <span>Baixar</span>
+                      </button>
+
                       <button
                         onClick={() => {
                           setEditingPhotoId(item.id || null);
@@ -1517,6 +1623,7 @@ export default function Mural() {
                       >
                         <Settings size={11} className={highContrast ? "text-white" : "text-slate-500"} /> Editar
                       </button>
+
                       <button
                         onClick={() => item.id && handleDeletePhoto(item.id)}
                         className={cn(
@@ -2232,23 +2339,43 @@ export default function Mural() {
                     </div>
                   </div>
 
-                  {/* Coupon Input */}
+                  {/* Product Input */}
                   <div className="space-y-2">
                     <label className={cn(
                       "text-[10px] uppercase font-black tracking-wider block",
                       highContrast ? "text-yellow-400" : "text-slate-400"
-                    )}>Cupom de Desconto</label>
+                    )}>Produto Adquirido</label>
                     <input
                       type="text"
                       className={cn(
-                        "w-full px-4 py-3 rounded-xl outline-none font-mono font-black text-sm uppercase tracking-widest border transition-all",
+                        "w-full px-4 py-3 rounded-xl outline-none font-sans font-bold text-xs border transition-all",
                         highContrast
                           ? "bg-zinc-900 border-zinc-700 text-white focus:ring-1 focus:ring-yellow-450"
                           : "bg-white/5 border-white/10 text-white focus:ring-1 focus:ring-red-800 focus:border-red-800"
                       )}
-                      placeholder="Ex: CLUB10"
-                      value={storiesCoupon}
-                      onChange={(e) => setStoriesCoupon(e.target.value)}
+                      placeholder="Ex: Flamengo Manto I 2026/27"
+                      value={storiesProduct}
+                      onChange={(e) => setStoriesProduct(e.target.value)}
+                    />
+                  </div>
+
+                  {/* Impact Phrase Input */}
+                  <div className="space-y-2">
+                    <label className={cn(
+                      "text-[10px] uppercase font-black tracking-wider block",
+                      highContrast ? "text-yellow-400" : "text-slate-400"
+                    )}>Frase de Impacto</label>
+                    <input
+                      type="text"
+                      className={cn(
+                        "w-full px-4 py-3 rounded-xl outline-none font-sans font-bold text-xs border transition-all",
+                        highContrast
+                          ? "bg-zinc-900 border-zinc-700 text-white focus:ring-1 focus:ring-yellow-450"
+                          : "bg-white/5 border-white/10 text-white focus:ring-1 focus:ring-red-800 focus:border-red-800"
+                      )}
+                      placeholder="Ex: Qualidade premium e caimento indiscutível! 🔥"
+                      value={storiesImpactPhrase}
+                      onChange={(e) => setStoriesImpactPhrase(e.target.value)}
                     />
                   </div>
 
@@ -2297,7 +2424,7 @@ export default function Mural() {
                   <button
                     type="button"
                     onClick={() => {
-                      const caption = `${storiesText}\n\n👉 Use o cupom de desconto exclusivo: *${storiesCoupon.toUpperCase()}*\n🛒 Acesse o link da nossa bio para garantir o seu manto sagrado!`;
+                      const caption = `${storiesText}\n\n👉 Produto: *${storiesProduct}*\n✨ ${storiesImpactPhrase}\n🛒 Acesse o link da bio para garantir o seu!`;
                       navigator.clipboard.writeText(caption);
                       setIsStoryCopied(true);
                       setTimeout(() => setIsStoryCopied(false), 2000);
@@ -2315,7 +2442,7 @@ export default function Mural() {
                       </>
                     ) : (
                       <>
-                        <Copy size={14} /> Copiar Texto + Cupom
+                        <Copy size={14} /> Copiar Texto + Produto
                       </>
                     )}
                   </button>
@@ -2340,6 +2467,31 @@ export default function Mural() {
                     ) : (
                       <>
                         <Download size={14} /> Baixar Arte 9:16
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* Download only the photo option */}
+                <div className="mt-3 flex justify-center">
+                  <button
+                    type="button"
+                    disabled={isDownloadingPhoto[selectedPhotoForStories.id || '']}
+                    onClick={() => handleDownloadOnlyPhoto(selectedPhotoForStories)}
+                    className={cn(
+                      "w-full py-3 rounded-xl text-[10px] uppercase font-black tracking-widest flex items-center justify-center gap-1.5 transition-all border",
+                      highContrast
+                        ? "bg-zinc-900 border-white hover:bg-zinc-800 text-white"
+                        : "bg-emerald-600/15 hover:bg-emerald-600/25 border-emerald-500/25 text-emerald-400"
+                    )}
+                  >
+                    {isDownloadingPhoto[selectedPhotoForStories.id || ''] ? (
+                      <>
+                        <div className="size-3.5 border-2 border-emerald-400/30 border-t-emerald-400 rounded-full animate-spin" /> Baixando Foto...
+                      </>
+                    ) : (
+                      <>
+                        <Camera size={14} /> Baixar Apenas Foto 9:16 (WhatsApp/Insta)
                       </>
                     )}
                   </button>
@@ -2392,36 +2544,40 @@ export default function Mural() {
                   )}
 
                   {/* Customer Floating Polaroid Card */}
-                  <div className="bg-white rounded-2xl p-3 shadow-xl flex flex-col relative mt-2 text-slate-900 border border-white/10">
-                    <div className="aspect-square w-full rounded-xl overflow-hidden bg-slate-100 relative">
+                  <div className="bg-white rounded-2xl p-2 mx-auto w-[76%] mt-1 text-slate-900 border border-white/10 shadow-xl flex flex-col relative shrink-0">
+                    <div className="aspect-[9/16] w-full rounded-xl overflow-hidden bg-slate-100 relative">
                       <img
                         src={selectedPhotoForStories.photoUrl}
                         alt="Preview"
                         className="w-full h-full object-cover transition-all animate-fade-in"
                         style={{
-                          transform: `scale(${selectedPhotoForStories.scale || 1.0}) translate(${(selectedPhotoForStories.offsetX || 0) / (selectedPhotoForStories.scale || 1.0)}px, ${(selectedPhotoForStories.offsetY || 0) / (selectedPhotoForStories.scale || 1.0)}px)`
+                          transform: `scale(${selectedPhotoForStories.scale || 1.0}) translate(${((selectedPhotoForStories.offsetX || 0) * (192.8 / 260)) / (selectedPhotoForStories.scale || 1.0)}px, ${((selectedPhotoForStories.offsetY || 0) * (192.8 / 260)) / (selectedPhotoForStories.scale || 1.0)}px)`
                         }}
                       />
                     </div>
                     {/* Name & Tag */}
-                    <div className="pt-2.5 pb-1 text-center">
-                      <span className="text-[10px] font-black uppercase text-slate-800 block truncate">{selectedPhotoForStories.customerName}</span>
-                      <span className="inline-block px-2 py-0.5 mt-1 rounded bg-slate-100 text-slate-500 text-[7px] font-black uppercase tracking-wider">
+                    <div className="pt-2 pb-0.5 text-center">
+                      <span className="text-[9px] font-black uppercase text-slate-800 block truncate leading-tight">{selectedPhotoForStories.customerName}</span>
+                      <span className="inline-block px-1.5 py-0.5 mt-0.5 rounded bg-slate-100 text-slate-500 text-[6.5px] font-black uppercase tracking-wider">
                         {selectedPhotoForStories.mantoType || 'Manto I (Home)'}
                       </span>
                     </div>
                   </div>
 
                   {/* Marketing Caption */}
-                  <p className="text-[10px] font-bold text-white tracking-wide mt-4 line-clamp-3 leading-relaxed px-1">
+                  <p className="text-[9.5px] font-bold text-white tracking-wide mt-3 line-clamp-2 leading-relaxed px-1 shrink-0">
                     "{storiesText}"
                   </p>
 
-                  {/* Coupon Box Voucher */}
-                  <div className="border border-dashed border-white/20 bg-white/5 rounded-xl py-2 px-3 mt-auto flex flex-col items-center justify-center">
-                    <span className="text-[7px] font-black tracking-widest uppercase text-white/70">Cupom de Desconto Exclusivo</span>
-                    <span className="text-xs font-mono font-black text-yellow-400 tracking-widest mt-1 uppercase">
-                      {storiesCoupon || 'CLUB10'}
+                  {/* Product Badge & Impact Capsule */}
+                  <div className="border border-white/10 bg-white/5 rounded-xl py-2 px-2.5 mt-auto flex flex-col items-center justify-center gap-0.5 shrink-0">
+                    <span className="text-[6px] font-black tracking-widest uppercase text-white/50">Produto Adquirido</span>
+                    <span className="text-[9px] font-bold text-yellow-400 tracking-wide uppercase truncate max-w-[210px] text-center">
+                      {storiesProduct || 'Manto Sagrado'}
+                    </span>
+                    <div className="w-[120px] h-[0.5px] bg-white/10 my-0.5" />
+                    <span className="text-[7.5px] font-medium text-white/90 italic tracking-wide text-center max-w-[210px] truncate">
+                      {storiesImpactPhrase || 'Vista o seu manto sagrado!'}
                     </span>
                   </div>
                 </div>
