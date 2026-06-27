@@ -99,6 +99,7 @@ export default function Mural() {
   const [storiesTheme, setStoriesTheme] = useState<'red' | 'black' | 'green' | 'gold'>('red');
   const [storiesShowLogo, setStoriesShowLogo] = useState(true);
   const [storiesFormat, setStoriesFormat] = useState<'story' | 'feed'>('story');
+  const [storiesSticker, setStoriesSticker] = useState<'none' | 'vip' | 'original' | 'sagrado' | 'limitada'>('none');
   const [isDownloadingStory, setIsDownloadingStory] = useState(false);
   const [isStoryCopied, setIsStoryCopied] = useState(false);
   const [isDownloadingPhoto, setIsDownloadingPhoto] = useState<{ [id: string]: boolean }>({});
@@ -482,6 +483,67 @@ export default function Mural() {
 
         ctx.drawImage(custImg, drawX, drawY, drawW, drawH);
         ctx.restore();
+
+        // Draw Selected Sticker/Selo on canvas if not 'none'
+        if (storiesSticker && storiesSticker !== 'none') {
+          ctx.save();
+          // Translate to stamp position: top-right of image
+          const stampX = imgX + imgW - (isFeed ? 40 : 60);
+          const stampY = imgY + (isFeed ? 30 : 40);
+          ctx.translate(stampX, stampY);
+          ctx.rotate(-10 * Math.PI / 180); // Slight tilt
+
+          // Draw badge background circle or pill
+          ctx.shadowColor = "rgba(0, 0, 0, 0.25)";
+          ctx.shadowBlur = 10;
+          ctx.shadowOffsetY = 4;
+
+          let badgeText = '';
+          let badgeBg = '#b91c1c'; // default red
+          if (storiesSticker === 'vip') {
+            badgeText = '⭐ CLIENTE VIP';
+            badgeBg = '#fbbf24'; // amber-400
+          } else if (storiesSticker === 'original') {
+            badgeText = '✅ 100% ORIGINAL';
+            badgeBg = '#15803d'; // green-700
+          } else if (storiesSticker === 'sagrado') {
+            badgeText = '⚽ MANTO SAGRADO';
+            badgeBg = '#dc2626'; // red-600
+          } else if (storiesSticker === 'limitada') {
+            badgeText = '🔥 ED. LIMITADA';
+            badgeBg = '#7c2d12'; // orange-900
+          }
+
+          ctx.fillStyle = badgeBg;
+          
+          // Draw pill shape
+          const pillW = isFeed ? 150 : 210;
+          const pillH = isFeed ? 34 : 46;
+          const pillR = isFeed ? 17 : 23;
+          
+          ctx.beginPath();
+          // Drawing pill rounded rect manually or with roundRect
+          ctx.arc(-pillW/2 + pillR, 0, pillR, Math.PI/2, 3*Math.PI/2);
+          ctx.lineTo(pillW/2 - pillR, -pillR);
+          ctx.arc(pillW/2 - pillR, 0, pillR, 3*Math.PI/2, Math.PI/2);
+          ctx.closePath();
+          ctx.fill();
+
+          // Stroke border
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = isFeed ? 2.5 : 3.5;
+          ctx.stroke();
+
+          // Draw text centered
+          ctx.shadowColor = 'transparent';
+          ctx.fillStyle = storiesSticker === 'vip' ? '#000000' : '#ffffff';
+          ctx.font = isFeed ? "900 12px Inter, sans-serif" : "900 16px Inter, sans-serif";
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(badgeText, 0, 0);
+
+          ctx.restore();
+        }
       } catch (e) {
         console.error("Error loading/drawing customer image", e);
         // Fallback placeholder color
@@ -564,13 +626,15 @@ export default function Mural() {
 
       // Middle Product Name: Flamengo Manto I (Home) etc.
       ctx.fillStyle = "#fbbf24"; // Premium Gold
-      ctx.font = isFeed ? "800 26px Inter, sans-serif" : "800 34px Inter, sans-serif";
-      let prodName = storiesProduct || "Manto Sagrado";
-      const maxProdLen = isFeed ? 26 : 34;
-      if (prodName.length > maxProdLen) {
-        prodName = prodName.slice(0, maxProdLen - 3) + "...";
+      let prodName = (storiesProduct || "Manto Sagrado").toUpperCase();
+      let fontSize = isFeed ? 26 : 34;
+      const maxTextW = isFeed ? 410 : 760;
+      ctx.font = `800 ${fontSize}px Inter, sans-serif`;
+      while (ctx.measureText(prodName).width > maxTextW && fontSize > 12) {
+        fontSize -= 1;
+        ctx.font = `800 ${fontSize}px Inter, sans-serif`;
       }
-      ctx.fillText(prodName.toUpperCase(), isFeed ? 800 : 540, boxY + (isFeed ? 110 : 102));
+      ctx.fillText(prodName, isFeed ? 800 : 540, boxY + (isFeed ? 110 : 102));
 
       // Elegant horizontal divider line
       ctx.beginPath();
@@ -1563,7 +1627,7 @@ export default function Mural() {
 
                       {item.saleItemsSummary && (
                         <p className={cn(
-                          "text-[9px] mt-1 line-clamp-1 truncate font-semibold",
+                          "text-[9px] mt-1 break-words font-semibold leading-relaxed",
                           highContrast ? "text-zinc-300" : "text-slate-500 italic"
                         )} title={item.saleItemsSummary}>
                           Manto(s): {item.saleItemsSummary}
@@ -1595,6 +1659,7 @@ export default function Mural() {
                           setStoriesImpactPhrase('Qualidade premium e caimento indiscutível! 🔥');
                           setStoriesTheme('red');
                           setStoriesShowLogo(true);
+                          setStoriesSticker('none');
                           setIsStoriesModalOpen(true);
                         }}
                         className={cn(
@@ -1907,20 +1972,27 @@ export default function Mural() {
       {/* Customer select photo Modal */}
       <AnimatePresence>
         {isPhotoModalOpen && (
-          <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-md z-[100] flex items-center justify-center p-4">
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="fixed inset-0 bg-slate-950/70 backdrop-blur-md z-[100] flex items-center justify-center p-4 overflow-y-auto"
+          >
             <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              initial={{ opacity: 0, scale: 0.93, y: 15 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ type: "spring", damping: 25, stiffness: 350 }}
               className={cn(
-                "rounded-[32px] max-w-lg w-full flex flex-col shadow-2xl overflow-hidden relative max-h-[90vh] transition-all duration-200 border",
+                "rounded-[32px] max-w-lg w-full flex flex-col shadow-2xl overflow-hidden relative max-h-[85vh] transition-all duration-200 border my-auto",
                 highContrast 
                   ? "bg-black border-white border-4 text-white" 
                   : "bg-white border-slate-100"
               )}
             >
               <div className={cn(
-                "p-6 flex items-center justify-between border-b transition-all duration-200",
+                "p-6 flex items-center justify-between border-b shrink-0 transition-all duration-200",
                 highContrast ? "bg-zinc-950 border-zinc-800 text-white" : "bg-slate-900 border-slate-800 text-white"
               )}>
                 <div className="flex items-center gap-3">
@@ -1955,7 +2027,7 @@ export default function Mural() {
                 </button>
               </div>
 
-              <form onSubmit={handleAddPhotoSubmit} className="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar">
+              <form onSubmit={handleAddPhotoSubmit} className="flex-1 overflow-y-auto p-6 sm:p-8 space-y-6 custom-scrollbar">
                 {/* Photo Dropzone */}
                 <div className="space-y-2">
                   <label className={cn(
@@ -2316,18 +2388,25 @@ export default function Mural() {
                 </div>
               </form>
             </motion.div>
-          </div>
+          </motion.div>
         )}
       </AnimatePresence>
 
       {/* Instagram Stories Post Generator Modal (9:16) */}
       <AnimatePresence>
         {isStoriesModalOpen && selectedPhotoForStories && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md overflow-y-auto">
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md overflow-y-auto"
+          >
             <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              initial={{ opacity: 0, scale: 0.93, y: 15 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ type: "spring", damping: 25, stiffness: 350 }}
               className={cn(
                 "w-full max-w-4xl rounded-[32px] overflow-hidden flex flex-col md:flex-row shadow-2xl border transition-all duration-300 my-8",
                 highContrast 
@@ -2336,7 +2415,7 @@ export default function Mural() {
               )}
             >
               {/* Left Column: Interactive Controls */}
-              <div className="flex-1 p-6 sm:p-8 space-y-6 overflow-y-auto max-h-[85vh] custom-scrollbar">
+              <div className="flex-1 p-6 sm:p-8 space-y-6 overflow-y-auto max-h-[70vh] md:max-h-[80vh] custom-scrollbar">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className={cn(
@@ -2430,6 +2509,40 @@ export default function Mural() {
                     </div>
                   </div>
 
+                  {/* Sticker / Selo Select */}
+                  <div className="space-y-2">
+                    <label className={cn(
+                      "text-[10px] uppercase font-black tracking-wider block",
+                      highContrast ? "text-yellow-400" : "text-slate-400"
+                    )}>Selo de Qualidade / Adesivo (Aesthetic Stamp)</label>
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                      {[
+                        { id: 'none', name: 'Sem Selo', emoji: '❌' },
+                        { id: 'vip', name: 'Cliente VIP', emoji: '⭐' },
+                        { id: 'original', name: '100% Original', emoji: '✅' },
+                        { id: 'sagrado', name: 'Manto Sagrado', emoji: '⚽' },
+                        { id: 'limitada', name: 'Ed. Limitada', emoji: '🔥' }
+                      ].map(st => (
+                        <button
+                          key={st.id}
+                          type="button"
+                          onClick={() => setStoriesSticker(st.id as any)}
+                          className={cn(
+                            "p-2 rounded-xl border text-[9px] font-black uppercase tracking-wider transition-all flex flex-col items-center gap-1",
+                            storiesSticker === st.id
+                              ? highContrast
+                                ? "bg-yellow-400 text-black border-black"
+                                : "bg-white/15 text-white border-white/40 shadow-md scale-102"
+                              : "bg-white/5 text-slate-400 border-white/5 hover:border-white/10 hover:bg-white/10"
+                          )}
+                        >
+                          <span className="text-base">{st.emoji}</span>
+                          <span className="text-[7.5px] leading-tight text-center font-black">{st.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
                   {/* Product Input */}
                   <div className="space-y-2">
                     <label className={cn(
@@ -2487,6 +2600,36 @@ export default function Mural() {
                       value={storiesText}
                       onChange={(e) => setStoriesText(e.target.value)}
                     />
+
+                    {/* Caption Presets (Soccer marketing templates) */}
+                    <div className="space-y-1.5 pt-1">
+                      <span className="text-[8.5px] font-black text-slate-400 uppercase tracking-wider block">Sugestões de Legenda (Copywriting)</span>
+                      <div className="flex gap-2 overflow-x-auto pb-1.5 no-scrollbar scroll-smooth">
+                        {[
+                          { label: "🔥 Armadura", text: "Olha o estilo do(a) {name} vestindo a nova armadura! Qualidade premium impecável! ⚽🔥" },
+                          { label: "❤️ Tradição", text: "Tradição e amor pelo manto! Obrigado(a) {name} por vestir a nossa armadura oficial! 🏟️✨" },
+                          { label: "⭐ Craque", text: "Quem tem estilo e entende de futebol veste o nosso Manto! Valeu pela confiança, {name}! 👏👕" },
+                          { label: "⚡ Jogo", text: "Pronto(a) para apoiar o time na vitória! Garanta a sua armadura oficial no link da bio! 🏆👕" }
+                        ].map((preset, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => {
+                              const name = selectedPhotoForStories.customerName || 'Cliente';
+                              setStoriesText(preset.text.replace('{name}', name));
+                            }}
+                            className={cn(
+                              "px-2.5 py-1.5 rounded-lg border text-[8px] font-black uppercase tracking-wider transition-all whitespace-nowrap shrink-0",
+                              highContrast
+                                ? "bg-zinc-900 border-zinc-700 hover:border-yellow-400 text-white"
+                                : "bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20 text-slate-300 hover:text-white"
+                            )}
+                          >
+                            {preset.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </div>
 
                   {/* Toggle Logo */}
@@ -2622,7 +2765,20 @@ export default function Mural() {
                   {storiesFormat === 'feed' ? (
                     <>
                       {/* Left: Polaroid card */}
-                      <div className="w-[50%] h-full bg-white rounded-xl p-2 text-slate-900 border border-white/10 shadow-xl flex flex-col justify-between shrink-0">
+                      <div className="w-[50%] h-full bg-white rounded-xl p-2 text-slate-900 border border-white/10 shadow-xl flex flex-col justify-between shrink-0 relative">
+                        {storiesSticker && storiesSticker !== 'none' && (
+                          <div className={cn(
+                            "absolute top-2 right-2 z-10 shadow-md px-1 py-0.5 rounded-full border text-[4.5px] font-black uppercase tracking-wider text-center rotate-[-10deg]",
+                            storiesSticker === 'vip' && "bg-amber-400 text-black border-amber-300",
+                            storiesSticker === 'original' && "bg-green-700 text-white border-green-600",
+                            storiesSticker === 'sagrado' && "bg-red-600 text-white border-red-500",
+                            storiesSticker === 'limitada' && "bg-orange-900 text-white border-orange-800"
+                          )}>
+                            {storiesSticker === 'vip' ? '⭐ CLIENTE VIP' : 
+                             storiesSticker === 'original' ? '✅ ORIGINAL' : 
+                             storiesSticker === 'sagrado' ? '⚽ MANTO' : '🔥 LIMITADO'}
+                          </div>
+                        )}
                         <div className="aspect-[9/16] w-full rounded-lg overflow-hidden bg-slate-100 relative">
                           <img
                             src={selectedPhotoForStories.photoUrl}
@@ -2668,13 +2824,16 @@ export default function Mural() {
                         </p>
 
                         {/* Product Badge & Impact Capsule */}
-                        <div className="border border-white/10 bg-white/5 rounded-lg p-1.5 flex flex-col items-center justify-center gap-0.5 shrink-0">
+                        <div className="border border-white/10 bg-white/5 rounded-lg p-1.5 flex flex-col items-center justify-center gap-0.5 shrink-0 w-full">
                           <span className="text-[5px] font-black tracking-widest uppercase text-white/50 leading-none">Produto Adquirido</span>
-                          <span className="text-[7.5px] font-bold text-yellow-400 tracking-wide uppercase truncate max-w-[105px] text-center leading-tight">
+                          <span className={cn(
+                            "font-bold text-yellow-400 tracking-wide uppercase break-words text-center leading-tight w-full",
+                            (storiesProduct || 'Manto Sagrado').length > 40 ? "text-[4.5px]" : (storiesProduct || 'Manto Sagrado').length > 30 ? "text-[5.5px]" : (storiesProduct || 'Manto Sagrado').length > 20 ? "text-[6.5px]" : "text-[7.5px]"
+                          )}>
                             {storiesProduct || 'Manto Sagrado'}
                           </span>
                           <div className="w-[60px] h-[0.5px] bg-white/10 my-0.5" />
-                          <span className="text-[6.5px] font-medium text-white/90 italic tracking-wide text-center max-w-[105px] truncate leading-tight">
+                          <span className="text-[6.5px] font-medium text-white/90 italic tracking-wide text-center leading-tight w-full break-words max-h-[3.6em] overflow-hidden">
                             {storiesImpactPhrase || 'Vista o seu manto sagrado!'}
                           </span>
                         </div>
@@ -2702,6 +2861,19 @@ export default function Mural() {
 
                       {/* Customer Floating Polaroid Card */}
                       <div className="bg-white rounded-2xl p-2 mx-auto w-[76%] mt-1 text-slate-900 border border-white/10 shadow-xl flex flex-col relative shrink-0">
+                        {storiesSticker && storiesSticker !== 'none' && (
+                          <div className={cn(
+                            "absolute top-3 right-3 z-10 shadow-md px-1.5 py-0.5 rounded-full border text-[6px] font-black uppercase tracking-wider text-center rotate-[-10deg]",
+                            storiesSticker === 'vip' && "bg-amber-400 text-black border-amber-300",
+                            storiesSticker === 'original' && "bg-green-700 text-white border-green-600",
+                            storiesSticker === 'sagrado' && "bg-red-600 text-white border-red-500",
+                            storiesSticker === 'limitada' && "bg-orange-900 text-white border-orange-800"
+                          )}>
+                            {storiesSticker === 'vip' ? '⭐ CLIENTE VIP' : 
+                             storiesSticker === 'original' ? '✅ ORIGINAL' : 
+                             storiesSticker === 'sagrado' ? '⚽ MANTO SAGRADO' : '🔥 LIMITADO'}
+                          </div>
+                        )}
                         <div className="aspect-[9/16] w-full rounded-xl overflow-hidden bg-slate-100 relative">
                           <img
                             src={selectedPhotoForStories.photoUrl}
@@ -2727,13 +2899,16 @@ export default function Mural() {
                       </p>
 
                       {/* Product Badge & Impact Capsule */}
-                      <div className="border border-white/10 bg-white/5 rounded-xl py-2 px-2.5 mt-auto flex flex-col items-center justify-center gap-0.5 shrink-0">
+                      <div className="border border-white/10 bg-white/5 rounded-xl py-2 px-2.5 mt-auto flex flex-col items-center justify-center gap-0.5 shrink-0 w-full">
                         <span className="text-[6px] font-black tracking-widest uppercase text-white/50">Produto Adquirido</span>
-                        <span className="text-[9px] font-bold text-yellow-400 tracking-wide uppercase truncate max-w-[210px] text-center">
+                        <span className={cn(
+                          "font-bold text-yellow-400 tracking-wide uppercase break-words text-center leading-tight w-full",
+                          (storiesProduct || 'Manto Sagrado').length > 40 ? "text-[6px]" : (storiesProduct || 'Manto Sagrado').length > 30 ? "text-[7px]" : (storiesProduct || 'Manto Sagrado').length > 20 ? "text-[8px]" : "text-[9px]"
+                        )}>
                           {storiesProduct || 'Manto Sagrado'}
                         </span>
                         <div className="w-[120px] h-[0.5px] bg-white/10 my-0.5" />
-                        <span className="text-[7.5px] font-medium text-white/90 italic tracking-wide text-center max-w-[210px] truncate">
+                        <span className="text-[7.5px] font-medium text-white/90 italic tracking-wide text-center leading-tight w-full break-words max-h-[3.6em] overflow-hidden">
                           {storiesImpactPhrase || 'Vista o seu manto sagrado!'}
                         </span>
                       </div>
@@ -2742,7 +2917,7 @@ export default function Mural() {
                 </div>
               </div>
             </motion.div>
-          </div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>
