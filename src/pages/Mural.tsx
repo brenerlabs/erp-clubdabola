@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useContext } from 'react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, query, onSnapshot, addDoc, deleteDoc, doc, updateDoc, setDoc, getDoc, orderBy } from 'firebase/firestore';
 import { Customer, Sale, CustomerPhoto } from '../types';
-import { Plus, Search, Trash2, Camera, Upload, Image as ImageIcon, Sparkles, X, Settings, Check, HelpCircle, FileImage, Copy, Lightbulb, TrendingUp, Contrast, Instagram, Share2, Download } from 'lucide-react';
+import { Plus, Search, Trash2, Camera, Upload, Image as ImageIcon, Sparkles, X, Settings, Check, HelpCircle, FileImage, Copy, Lightbulb, TrendingUp, Contrast, Instagram, Share2, Download, Grid, RotateCcw } from 'lucide-react';
 import { formatCurrency, cn, smartSearchMatch } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { SidebarContext } from '../App';
@@ -98,6 +98,7 @@ export default function Mural() {
   const [storiesImpactPhrase, setStoriesImpactPhrase] = useState('Qualidade premium e caimento indiscutível! 🔥');
   const [storiesTheme, setStoriesTheme] = useState<'red' | 'black' | 'green' | 'gold'>('red');
   const [storiesShowLogo, setStoriesShowLogo] = useState(true);
+  const [storiesFormat, setStoriesFormat] = useState<'story' | 'feed'>('story');
   const [isDownloadingStory, setIsDownloadingStory] = useState(false);
   const [isStoryCopied, setIsStoryCopied] = useState(false);
   const [isDownloadingPhoto, setIsDownloadingPhoto] = useState<{ [id: string]: boolean }>({});
@@ -338,13 +339,14 @@ export default function Mural() {
       setIsDownloadingStory(true);
       
       const canvas = document.createElement('canvas');
+      const isFeed = storiesFormat === 'feed';
       canvas.width = 1080;
-      canvas.height = 1920;
+      canvas.height = isFeed ? 1080 : 1920;
       const ctx = canvas.getContext('2d');
       if (!ctx) throw new Error("Could not get canvas context");
 
       // 1. Background Gradient
-      const grad = ctx.createLinearGradient(0, 0, 0, 1920);
+      const grad = ctx.createLinearGradient(0, 0, 0, isFeed ? 1080 : 1920);
       if (storiesTheme === 'red') {
         grad.addColorStop(0, '#310a0a');
         grad.addColorStop(0.5, '#7f1d1d');
@@ -363,7 +365,7 @@ export default function Mural() {
         grad.addColorStop(1, '#1c0a00');
       }
       ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, 1080, 1920);
+      ctx.fillRect(0, 0, 1080, isFeed ? 1080 : 1920);
 
       // Helper to draw rounded rectangle clip
       const drawRoundedRect = (cx: number, cy: number, w: number, h: number, r: number) => {
@@ -392,34 +394,36 @@ export default function Mural() {
               logoImg.src = logoFile;
             });
             // Draw logo centered
-            const logoW = 120 * logoScale;
-            const logoH = 120 * logoScale;
-            ctx.drawImage(logoImg, 540 - logoW / 2, 80, logoW, logoH);
+            const logoW = (isFeed ? 100 : 120) * logoScale;
+            const logoH = (isFeed ? 100 : 120) * logoScale;
+            const logoX = isFeed ? (800 - logoW / 2) : (540 - logoW / 2);
+            const logoY = isFeed ? 90 : 80;
+            ctx.drawImage(logoImg, logoX, logoY, logoW, logoH);
           } catch (e) {
             console.error("Error drawing logo on canvas", e);
           }
         } else {
           // Draw a standard beautiful logo
-          ctx.font = "900 48px Inter, sans-serif";
+          ctx.font = isFeed ? "900 36px Inter, sans-serif" : "900 48px Inter, sans-serif";
           ctx.fillStyle = "#ffffff";
           ctx.textAlign = "center";
-          ctx.fillText("⚽ CLUB BOLA", 540, 150);
+          ctx.fillText("⚽ CLUB BOLA", isFeed ? 800 : 540, isFeed ? 130 : 150);
         }
       }
 
-      // 3. Customer Photo (Polaroid Frame styled inside Stories with 9:16 aspect ratio)
+      // 3. Customer Photo (Polaroid Frame styled inside Stories/Feed)
       // Card Container dimensions
-      const cardX = 200;
-      const cardY = 220;
-      const cardW = 680;
-      const cardH = 1200;
-      const cardR = 40;
+      const cardX = isFeed ? 60 : 200;
+      const cardY = isFeed ? 80 : 220;
+      const cardW = isFeed ? 460 : 680;
+      const cardH = isFeed ? 920 : 1200;
+      const cardR = isFeed ? 32 : 40;
 
       // Draw Card shadow and background
       ctx.shadowColor = "rgba(0, 0, 0, 0.4)";
-      ctx.shadowBlur = 40;
+      ctx.shadowBlur = isFeed ? 30 : 40;
       ctx.shadowOffsetX = 0;
-      ctx.shadowOffsetY = 15;
+      ctx.shadowOffsetY = isFeed ? 10 : 15;
       ctx.fillStyle = "#ffffff";
       drawRoundedRect(cardX, cardY, cardW, cardH, cardR);
       ctx.fill();
@@ -430,12 +434,12 @@ export default function Mural() {
       ctx.shadowOffsetX = 0;
       ctx.shadowOffsetY = 0;
 
-      // Draw Customer Image frame inside the card in a perfect 9:16 aspect ratio
-      const imgW = 560;
-      const imgH = 996; // 9:16 aspect ratio (560 * 16 / 9)
-      const imgX = 260; // Centered: (1080 - 560) / 2
-      const imgY = 280;
-      const imgR = 24;
+      // Draw Customer Image frame inside the card
+      const imgW = isFeed ? 400 : 560;
+      const imgH = isFeed ? 711 : 996; // 9:16 aspect ratio (imgW * 16 / 9)
+      const imgX = isFeed ? 90 : 260;
+      const imgY = isFeed ? 110 : 280;
+      const imgR = isFeed ? 20 : 24;
 
       // Load Customer Photo
       try {
@@ -488,124 +492,131 @@ export default function Mural() {
 
       // Draw Customer Name inside Card Bottom area
       ctx.fillStyle = "#1e293b";
-      ctx.font = "900 40px Inter, sans-serif";
+      ctx.font = isFeed ? "900 30px Inter, sans-serif" : "900 40px Inter, sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText(selectedPhotoForStories.customerName.toUpperCase(), 540, 1335);
+      ctx.fillText(selectedPhotoForStories.customerName.toUpperCase(), isFeed ? 290 : 540, isFeed ? 840 : 1335);
 
       // Draw Manto Type Tag overlay inside the card bottom area
       const typeText = selectedPhotoForStories.mantoType || 'Manto I (Home)';
-      ctx.font = "800 22px Inter, sans-serif";
+      ctx.font = isFeed ? "800 16px Inter, sans-serif" : "800 22px Inter, sans-serif";
       const tagTextWidth = ctx.measureText(typeText.toUpperCase()).width;
-      const tagW = tagTextWidth + 40;
-      const tagH = 46;
-      const tagX = 540 - tagW / 2;
-      const tagY = 1365;
+      const tagW = tagTextWidth + (isFeed ? 30 : 40);
+      const tagH = isFeed ? 36 : 46;
+      const tagX = (isFeed ? 290 : 540) - tagW / 2;
+      const tagY = isFeed ? 870 : 1365;
 
       ctx.fillStyle = "#f1f5f9";
-      drawRoundedRect(tagX, tagY, tagW, tagH, 12);
+      drawRoundedRect(tagX, tagY, tagW, tagH, isFeed ? 10 : 12);
       ctx.fill();
 
       ctx.fillStyle = "#475569";
-      ctx.fillText(typeText.toUpperCase(), 540, tagY + 31);
+      ctx.fillText(typeText.toUpperCase(), isFeed ? 290 : 540, tagY + (isFeed ? 24 : 31));
 
-      // 4. Marketing Text underneath Card
+      // 4. Marketing Text underneath Card or on Right side
       ctx.fillStyle = "#ffffff";
-      ctx.font = "700 36px Inter, sans-serif";
+      ctx.font = isFeed ? "700 28px Inter, sans-serif" : "700 36px Inter, sans-serif";
       ctx.textAlign = "center";
       
       // Draw wrapped marketing caption text
       const words = storiesText.split(' ');
       let line = '';
-      let textY = 1465; // Shifted down by 55px to avoid overlapping with card bottom (at 1420)
-      const maxLineWidth = 850;
-      const lineHeight = 50;
+      let textY = isFeed ? 210 : 1465;
+      const maxLineWidth = isFeed ? 420 : 850;
+      const lineHeight = isFeed ? 42 : 50;
 
       for (let n = 0; n < words.length; n++) {
         const testLine = line + words[n] + ' ';
         const metrics = ctx.measureText(testLine);
         const testWidth = metrics.width;
         if (testWidth > maxLineWidth && n > 0) {
-          ctx.fillText(line, 540, textY);
+          ctx.fillText(line, isFeed ? 800 : 540, textY);
           line = words[n] + ' ';
           textY += lineHeight;
         } else {
           line = testLine;
         }
       }
-      ctx.fillText(line, 540, textY);
+      ctx.fillText(line, isFeed ? 800 : 540, textY);
 
       // 5. Stylized Product Info & Impact Phrase Capsule
-      const boxY = 1620;
-      const boxW = 820;
-      const boxH = 210;
-      const boxX = 540 - boxW / 2;
+      const boxY = isFeed ? 560 : 1620;
+      const boxW = isFeed ? 460 : 820;
+      const boxH = isFeed ? 340 : 210;
+      const boxX = isFeed ? 560 : (540 - boxW / 2);
+      const boxR = isFeed ? 24 : 28;
 
       // Draw Glassmorphism Background
       ctx.fillStyle = "rgba(255, 255, 255, 0.06)";
-      drawRoundedRect(boxX, boxY, boxW, boxH, 28);
+      drawRoundedRect(boxX, boxY, boxW, boxH, boxR);
       ctx.fill();
 
       // Elegant Solid Border
       ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
       ctx.lineWidth = 3;
-      drawRoundedRect(boxX, boxY, boxW, boxH, 28);
+      drawRoundedRect(boxX, boxY, boxW, boxH, boxR);
       ctx.stroke();
 
       // Top Small Label: "PRODUTO ADQUIRIDO"
       ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
-      ctx.font = "900 20px Inter, sans-serif";
+      ctx.font = isFeed ? "900 16px Inter, sans-serif" : "900 20px Inter, sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText("PRODUTO ADQUIRIDO", 540, boxY + 45);
+      ctx.fillText("PRODUTO ADQUIRIDO", isFeed ? 800 : 540, boxY + (isFeed ? 50 : 45));
 
       // Middle Product Name: Flamengo Manto I (Home) etc.
       ctx.fillStyle = "#fbbf24"; // Premium Gold
-      ctx.font = "800 34px Inter, sans-serif";
+      ctx.font = isFeed ? "800 26px Inter, sans-serif" : "800 34px Inter, sans-serif";
       let prodName = storiesProduct || "Manto Sagrado";
-      if (prodName.length > 34) {
-        prodName = prodName.slice(0, 31) + "...";
+      const maxProdLen = isFeed ? 26 : 34;
+      if (prodName.length > maxProdLen) {
+        prodName = prodName.slice(0, maxProdLen - 3) + "...";
       }
-      ctx.fillText(prodName.toUpperCase(), 540, boxY + 102);
+      ctx.fillText(prodName.toUpperCase(), isFeed ? 800 : 540, boxY + (isFeed ? 110 : 102));
 
       // Elegant horizontal divider line
       ctx.beginPath();
-      ctx.moveTo(boxX + 120, boxY + 132);
-      ctx.lineTo(boxX + boxW - 120, boxY + 132);
+      ctx.moveTo(boxX + (isFeed ? 60 : 120), boxY + (isFeed ? 160 : 132));
+      ctx.lineTo(boxX + boxW - (isFeed ? 60 : 120), boxY + (isFeed ? 160 : 132));
       ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
       ctx.lineWidth = 2;
       ctx.stroke();
 
       // Impactful phrase at the bottom
       ctx.fillStyle = "#ffffff";
-      ctx.font = "italic 700 24px Inter, sans-serif";
+      ctx.font = isFeed ? "italic 700 18px Inter, sans-serif" : "italic 700 24px Inter, sans-serif";
       let phrase = storiesImpactPhrase || "Vista o seu manto sagrado!";
-      if (phrase.length > 44) {
-        phrase = phrase.slice(0, 41) + "...";
+      const maxPhraseLen = isFeed ? 32 : 44;
+      if (phrase.length > maxPhraseLen) {
+        phrase = phrase.slice(0, maxPhraseLen - 3) + "...";
       }
-      ctx.fillText(phrase, 540, boxY + 175);
+      ctx.fillText(phrase, isFeed ? 800 : 540, boxY + (isFeed ? 230 : 175));
 
       // 6. Trigger PNG Download
       const dataUrl = canvas.toDataURL('image/png');
       const downloadLink = document.createElement('a');
-      downloadLink.download = `story_${selectedPhotoForStories.customerName.toLowerCase().replace(/\s+/g, '_')}.png`;
+      downloadLink.download = `${isFeed ? 'feed' : 'story'}_${selectedPhotoForStories.customerName.toLowerCase().replace(/\s+/g, '_')}.png`;
       downloadLink.href = dataUrl;
       downloadLink.click();
       
-      alert("Story gerado e baixado com sucesso em alta definição!");
+      alert(`${isFeed ? 'Feed (1:1)' : 'Story (9:16)'} gerado e baixado com sucesso em alta definição!`);
     } catch (err) {
       console.error("Error generating Story download", err);
-      alert("Houve um erro ao gerar a arte do Story. Tente novamente.");
+      alert("Houve um erro ao gerar a arte. Tente novamente.");
     } finally {
       setIsDownloadingStory(false);
     }
   };
 
-  const handleDownloadOnlyPhoto = async (item: CustomerPhoto) => {
+  const handleDownloadOnlyPhoto = async (item: CustomerPhoto, forceFormat?: 'story' | 'feed') => {
     try {
       setIsDownloadingPhoto(prev => ({ ...prev, [item.id || '']: true }));
       
       const canvas = document.createElement('canvas');
-      canvas.width = 1080;
-      canvas.height = 1920;
+      const format = forceFormat || storiesFormat || 'story';
+      const isFeed = format === 'feed';
+      const canvasW = 1080;
+      const canvasH = isFeed ? 1080 : 1920;
+      canvas.width = canvasW;
+      canvas.height = canvasH;
       const ctx = canvas.getContext('2d');
       if (!ctx) throw new Error("Could not get canvas context");
 
@@ -618,16 +629,16 @@ export default function Mural() {
         img.src = item.photoUrl;
       });
 
-      // Object-cover calculations for 9:16 canvas
+      // Object-cover calculations for canvas
       const imgAspect = img.width / img.height;
-      const frameAspect = 1080 / 1920; // 9:16
-      let drawW = 1080;
-      let drawH = 1920;
+      const frameAspect = canvasW / canvasH;
+      let drawW = canvasW;
+      let drawH = canvasH;
 
       if (imgAspect > frameAspect) {
-        drawW = 1920 * imgAspect;
+        drawW = canvasH * imgAspect;
       } else {
-        drawH = 1080 / imgAspect;
+        drawH = canvasW / imgAspect;
       }
 
       const scale = item.scale || 1.0;
@@ -639,9 +650,9 @@ export default function Mural() {
       drawH *= scale;
 
       // Center position + offsets scaled from the 260px reference editor width
-      const multiplier = 1080 / 260; // 1080 is the canvas width
-      const drawX = (1080 - drawW) / 2 + oX * multiplier;
-      const drawY = (1920 - drawH) / 2 + oY * multiplier;
+      const multiplier = canvasW / 260; // 260 is the reference width
+      const drawX = (canvasW - drawW) / 2 + oX * multiplier;
+      const drawY = (canvasH - drawH) / 2 + oY * multiplier;
 
       // Draw to canvas
       ctx.drawImage(img, drawX, drawY, drawW, drawH);
@@ -649,7 +660,7 @@ export default function Mural() {
       // Trigger download
       const dataUrl = canvas.toDataURL('image/png');
       const downloadLink = document.createElement('a');
-      downloadLink.download = `manto_${item.customerName.toLowerCase().replace(/\s+/g, '_')}_916.png`;
+      downloadLink.download = `manto_${item.customerName.toLowerCase().replace(/\s+/g, '_')}_${isFeed ? '11' : '916'}.png`;
       downloadLink.href = dataUrl;
       downloadLink.click();
     } catch (err) {
@@ -1487,6 +1498,26 @@ export default function Mural() {
                         >
                           +
                         </button>
+                        <button 
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            if (item.id) {
+                              await updateDoc(doc(db, 'customer_photos', item.id), { 
+                                scale: 1.0,
+                                offsetX: 0,
+                                offsetY: 0
+                              });
+                            }
+                          }}
+                          className={cn(
+                            "size-5 rounded flex items-center justify-center transition-all",
+                            highContrast ? "bg-white text-black hover:bg-yellow-400" : "bg-white/15 text-white hover:bg-white/30"
+                          )}
+                          type="button"
+                          title="Reestabelecer enquadramento perfeito"
+                        >
+                          <RotateCcw size={10} />
+                        </button>
                       </div>
                     </div>
 
@@ -1584,7 +1615,7 @@ export default function Mural() {
                           "flex-1 py-2 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1 border",
                           highContrast
                             ? "bg-yellow-400 hover:bg-yellow-300 text-black border-black border-2 font-black"
-                            : "bg-emerald-650 hover:bg-emerald-700 text-white shadow-sm border-emerald-700"
+                            : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm border-emerald-600"
                         )}
                         title="Baixar Foto Enquadrada (Mural)"
                       >
@@ -1971,42 +2002,62 @@ export default function Mural() {
                         </button>
                       </div>
 
-                      {/* Zoom Controls inside Modal */}
-                      <div className={cn(
-                        "flex items-center justify-center gap-2 p-2 rounded-xl border w-44 mx-auto",
-                        highContrast ? "bg-zinc-950 border-zinc-850" : "bg-slate-50 border-slate-200"
-                      )}>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const nextScale = Math.max(0.1, photoScale - 0.1);
-                            setPhotoScale(nextScale);
-                          }}
-                          className={cn(
-                            "size-7 rounded-lg flex items-center justify-center text-xs font-bold shadow-sm transition-all font-sans",
-                            highContrast ? "bg-zinc-800 hover:bg-zinc-750 text-white" : "bg-white hover:bg-slate-200 text-slate-700"
-                          )}
-                        >
-                          -
-                        </button>
-                        <span className={cn(
-                          "text-[10px] font-mono font-black min-w-[50px] text-center",
-                          highContrast ? "text-yellow-400" : "text-slate-800"
+                      {/* Zoom & Reset Controls inside Modal */}
+                      <div className="flex items-center justify-center gap-2 w-full max-w-[260px] mx-auto">
+                        <div className={cn(
+                          "flex items-center justify-center gap-2 p-2 rounded-xl border w-44",
+                          highContrast ? "bg-zinc-950 border-zinc-850" : "bg-slate-50 border-slate-200"
                         )}>
-                          {Math.round(photoScale * 100)}%
-                        </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const nextScale = Math.max(0.1, photoScale - 0.1);
+                              setPhotoScale(nextScale);
+                            }}
+                            className={cn(
+                              "size-7 rounded-lg flex items-center justify-center text-xs font-bold shadow-sm transition-all font-sans",
+                              highContrast ? "bg-zinc-800 hover:bg-zinc-750 text-white" : "bg-white hover:bg-slate-200 text-slate-700"
+                            )}
+                          >
+                            -
+                          </button>
+                          <span className={cn(
+                            "text-[10px] font-mono font-black min-w-[50px] text-center",
+                            highContrast ? "text-yellow-400" : "text-slate-800"
+                          )}>
+                            {Math.round(photoScale * 100)}%
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const nextScale = Math.min(3.0, photoScale + 0.1);
+                              setPhotoScale(nextScale);
+                            }}
+                            className={cn(
+                              "size-7 rounded-lg flex items-center justify-center text-xs font-bold shadow-sm transition-all font-sans",
+                              highContrast ? "bg-zinc-800 hover:bg-zinc-750 text-white" : "bg-white hover:bg-slate-200 text-slate-700"
+                            )}
+                          >
+                            +
+                          </button>
+                        </div>
+
                         <button
                           type="button"
                           onClick={() => {
-                            const nextScale = Math.min(3.0, photoScale + 0.1);
-                            setPhotoScale(nextScale);
+                            setPhotoScale(1.0);
+                            setPhotoOffsetX(0);
+                            setPhotoOffsetY(0);
                           }}
                           className={cn(
-                            "size-7 rounded-lg flex items-center justify-center text-xs font-bold shadow-sm transition-all font-sans",
-                            highContrast ? "bg-zinc-800 hover:bg-zinc-750 text-white" : "bg-white hover:bg-slate-200 text-slate-700"
+                            "size-11 rounded-xl border transition-all flex items-center justify-center shadow-sm shrink-0",
+                            highContrast
+                              ? "bg-zinc-900 border-zinc-800 text-white hover:bg-zinc-850"
+                              : "bg-white hover:bg-slate-100 border-slate-200 text-slate-700"
                           )}
+                          title="Reestabelecer Enquadramento Perfeito"
                         >
-                          +
+                          <RotateCcw size={14} />
                         </button>
                       </div>
                     </div>
@@ -2298,14 +2349,54 @@ export default function Mural() {
                       <h3 className={cn(
                         "text-sm font-black uppercase tracking-widest",
                         highContrast ? "text-yellow-400" : "text-white"
-                      )}>Gerador de Stories</h3>
-                      <p className="text-[9px] uppercase tracking-wider text-slate-400 font-bold mt-1">Gere posts profissionais em 9:16</p>
+                      )}>Gerador de Mídias</h3>
+                      <p className="text-[9px] uppercase tracking-wider text-slate-400 font-bold mt-1">Gere posts em formato de Story (9:16) ou Feed (1:1)</p>
                     </div>
                   </div>
                 </div>
 
                 {/* Form Fields */}
                 <div className="space-y-4 pt-2">
+                  {/* Format Select (Story vs Feed) */}
+                  <div className="space-y-2">
+                    <label className={cn(
+                      "text-[10px] uppercase font-black tracking-wider block",
+                      highContrast ? "text-yellow-400" : "text-slate-400"
+                    )}>Formato da Arte</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setStoriesFormat('story')}
+                        className={cn(
+                          "py-2.5 rounded-xl border text-[9px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2",
+                          storiesFormat === 'story'
+                            ? highContrast
+                              ? "bg-yellow-400 text-black border-black font-black"
+                              : "bg-white/15 text-white border-white/40 shadow-md scale-102"
+                            : "bg-white/5 text-slate-400 border-white/5 hover:border-white/10 hover:bg-white/10"
+                        )}
+                      >
+                        <Instagram size={12} />
+                        <span>Story / WhatsApp (9:16)</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setStoriesFormat('feed')}
+                        className={cn(
+                          "py-2.5 rounded-xl border text-[9px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2",
+                          storiesFormat === 'feed'
+                            ? highContrast
+                              ? "bg-yellow-400 text-black border-black font-black"
+                              : "bg-white/15 text-white border-white/40 shadow-md scale-102"
+                            : "bg-white/5 text-slate-400 border-white/5 hover:border-white/10 hover:bg-white/10"
+                        )}
+                      >
+                        <Grid size={12} />
+                        <span>Feed de Posts (1:1)</span>
+                      </button>
+                    </div>
+                  </div>
+
                   {/* Theme Select */}
                   <div className="space-y-2">
                     <label className={cn(
@@ -2462,11 +2553,11 @@ export default function Mural() {
                   >
                     {isDownloadingStory ? (
                       <>
-                        <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Gerando Story...
+                        <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> {storiesFormat === 'feed' ? 'Gerando Feed...' : 'Gerando Story...'}
                       </>
                     ) : (
                       <>
-                        <Download size={14} /> Baixar Arte 9:16
+                        <Download size={14} /> {storiesFormat === 'feed' ? 'Baixar Feed (1:1)' : 'Baixar Story (9:16)'}
                       </>
                     )}
                   </button>
@@ -2491,7 +2582,7 @@ export default function Mural() {
                       </>
                     ) : (
                       <>
-                        <Camera size={14} /> Baixar Apenas Foto 9:16 (WhatsApp/Insta)
+                        <Camera size={14} /> Baixar Apenas Foto {storiesFormat === 'feed' ? '1:1 (Feed)' : '9:16 (WhatsApp/Insta)'}
                       </>
                     )}
                   </button>
@@ -2508,78 +2599,146 @@ export default function Mural() {
                 </div>
               </div>
 
-              {/* Right Column: Live 9:16 Mock Preview */}
+              {/* Right Column: Live Mock Preview */}
               <div className={cn(
                 "w-full md:w-[380px] p-6 flex flex-col items-center justify-center border-t md:border-t-0 md:border-l select-none",
                 highContrast ? "bg-zinc-950 border-white/25" : "bg-black/40 border-white/5"
               )}>
-                <span className="text-[9px] uppercase font-black tracking-widest text-slate-500 mb-3 block">Pré-visualização do Story (Instagram)</span>
+                <span className="text-[9px] uppercase font-black tracking-widest text-slate-500 mb-3 block">
+                  {storiesFormat === 'feed' ? 'Pré-visualização do Feed (1:1)' : 'Pré-visualização do Story (Instagram)'}
+                </span>
                 
-                {/* Story Container Frame (9:16 Aspect) */}
+                {/* Container Frame */}
                 <div
                   className={cn(
-                    "aspect-[9/16] w-full max-w-[280px] rounded-[24px] overflow-hidden shadow-2xl relative flex flex-col p-5 text-center border border-white/10 transition-all duration-300",
+                    "w-full max-w-[280px] rounded-[24px] overflow-hidden shadow-2xl relative flex text-center border border-white/10 transition-all duration-300",
+                    storiesFormat === 'feed' ? "aspect-square p-3.5 flex-row gap-2" : "aspect-[9/16] p-5 flex-col",
                     storiesTheme === 'red' && "bg-gradient-to-tr from-rose-950 via-red-900 to-amber-950",
                     storiesTheme === 'black' && "bg-gradient-to-tr from-zinc-950 via-zinc-900 to-zinc-850",
                     storiesTheme === 'green' && "bg-gradient-to-tr from-emerald-950 via-teal-900 to-zinc-950",
                     storiesTheme === 'gold' && "bg-gradient-to-tr from-amber-950 via-yellow-950 to-stone-900"
                   )}
                 >
-                  {/* Top Branding */}
-                  {storiesShowLogo && (
-                    <div className="h-10 flex items-center justify-center gap-1 opacity-90">
-                      {logoFile ? (
-                        <img 
-                          src={logoFile} 
-                          alt="Logo" 
-                          className="h-8 object-contain" 
-                          style={{ transform: `scale(${logoScale})` }}
-                        />
-                      ) : (
-                        <span className="text-[10px] font-black tracking-widest text-white flex items-center gap-1">
-                          ⚽ CLUB BOLA
-                        </span>
+                  {storiesFormat === 'feed' ? (
+                    <>
+                      {/* Left: Polaroid card */}
+                      <div className="w-[50%] h-full bg-white rounded-xl p-2 text-slate-900 border border-white/10 shadow-xl flex flex-col justify-between shrink-0">
+                        <div className="aspect-[9/16] w-full rounded-lg overflow-hidden bg-slate-100 relative">
+                          <img
+                            src={selectedPhotoForStories.photoUrl}
+                            alt="Preview"
+                            className="w-full h-full object-cover transition-all animate-fade-in"
+                            style={{
+                              transform: `scale(${selectedPhotoForStories.scale || 1.0}) translate(${((selectedPhotoForStories.offsetX || 0) * (192.8 / 260)) / (selectedPhotoForStories.scale || 1.0)}px, ${((selectedPhotoForStories.offsetY || 0) * (192.8 / 260)) / (selectedPhotoForStories.scale || 1.0)}px)`
+                            }}
+                          />
+                        </div>
+                        {/* Name & Tag */}
+                        <div className="pt-1.5 pb-0.5 text-center shrink-0">
+                          <span className="text-[8px] font-black uppercase text-slate-800 block truncate leading-tight">{selectedPhotoForStories.customerName}</span>
+                          <span className="inline-block px-1 mt-0.5 rounded bg-slate-100 text-slate-500 text-[5.5px] font-black uppercase tracking-wider">
+                            {selectedPhotoForStories.mantoType || 'Manto I (Home)'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Right: Info column */}
+                      <div className="flex-1 h-full flex flex-col justify-between py-1">
+                        {/* Right Top Logo */}
+                        {storiesShowLogo && (
+                          <div className="h-8 flex items-center justify-center gap-1 opacity-90 shrink-0">
+                            {logoFile ? (
+                              <img 
+                                src={logoFile} 
+                                alt="Logo" 
+                                className="h-6 object-contain" 
+                                style={{ transform: `scale(${logoScale * 0.8})` }}
+                              />
+                            ) : (
+                              <span className="text-[8px] font-black tracking-widest text-white">
+                                ⚽ CLUB BOLA
+                              </span>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Caption text */}
+                        <p className="text-[7.5px] font-bold text-white tracking-wide line-clamp-3 text-center px-0.5 my-auto">
+                          "{storiesText}"
+                        </p>
+
+                        {/* Product Badge & Impact Capsule */}
+                        <div className="border border-white/10 bg-white/5 rounded-lg p-1.5 flex flex-col items-center justify-center gap-0.5 shrink-0">
+                          <span className="text-[5px] font-black tracking-widest uppercase text-white/50 leading-none">Produto Adquirido</span>
+                          <span className="text-[7.5px] font-bold text-yellow-400 tracking-wide uppercase truncate max-w-[105px] text-center leading-tight">
+                            {storiesProduct || 'Manto Sagrado'}
+                          </span>
+                          <div className="w-[60px] h-[0.5px] bg-white/10 my-0.5" />
+                          <span className="text-[6.5px] font-medium text-white/90 italic tracking-wide text-center max-w-[105px] truncate leading-tight">
+                            {storiesImpactPhrase || 'Vista o seu manto sagrado!'}
+                          </span>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      {/* Top Branding */}
+                      {storiesShowLogo && (
+                        <div className="h-10 flex items-center justify-center gap-1 opacity-90">
+                          {logoFile ? (
+                            <img 
+                              src={logoFile} 
+                              alt="Logo" 
+                              className="h-8 object-contain" 
+                              style={{ transform: `scale(${logoScale})` }}
+                            />
+                          ) : (
+                            <span className="text-[10px] font-black tracking-widest text-white flex items-center gap-1">
+                              ⚽ CLUB BOLA
+                            </span>
+                          )}
+                        </div>
                       )}
-                    </div>
+
+                      {/* Customer Floating Polaroid Card */}
+                      <div className="bg-white rounded-2xl p-2 mx-auto w-[76%] mt-1 text-slate-900 border border-white/10 shadow-xl flex flex-col relative shrink-0">
+                        <div className="aspect-[9/16] w-full rounded-xl overflow-hidden bg-slate-100 relative">
+                          <img
+                            src={selectedPhotoForStories.photoUrl}
+                            alt="Preview"
+                            className="w-full h-full object-cover transition-all animate-fade-in"
+                            style={{
+                              transform: `scale(${selectedPhotoForStories.scale || 1.0}) translate(${((selectedPhotoForStories.offsetX || 0) * (192.8 / 260)) / (selectedPhotoForStories.scale || 1.0)}px, ${((selectedPhotoForStories.offsetY || 0) * (192.8 / 260)) / (selectedPhotoForStories.scale || 1.0)}px)`
+                            }}
+                          />
+                        </div>
+                        {/* Name & Tag */}
+                        <div className="pt-2 pb-0.5 text-center">
+                          <span className="text-[9px] font-black uppercase text-slate-800 block truncate leading-tight">{selectedPhotoForStories.customerName}</span>
+                          <span className="inline-block px-1.5 py-0.5 mt-0.5 rounded bg-slate-100 text-slate-500 text-[6.5px] font-black uppercase tracking-wider">
+                            {selectedPhotoForStories.mantoType || 'Manto I (Home)'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Marketing Caption */}
+                      <p className="text-[9.5px] font-bold text-white tracking-wide mt-3 line-clamp-2 leading-relaxed px-1 shrink-0">
+                        "{storiesText}"
+                      </p>
+
+                      {/* Product Badge & Impact Capsule */}
+                      <div className="border border-white/10 bg-white/5 rounded-xl py-2 px-2.5 mt-auto flex flex-col items-center justify-center gap-0.5 shrink-0">
+                        <span className="text-[6px] font-black tracking-widest uppercase text-white/50">Produto Adquirido</span>
+                        <span className="text-[9px] font-bold text-yellow-400 tracking-wide uppercase truncate max-w-[210px] text-center">
+                          {storiesProduct || 'Manto Sagrado'}
+                        </span>
+                        <div className="w-[120px] h-[0.5px] bg-white/10 my-0.5" />
+                        <span className="text-[7.5px] font-medium text-white/90 italic tracking-wide text-center max-w-[210px] truncate">
+                          {storiesImpactPhrase || 'Vista o seu manto sagrado!'}
+                        </span>
+                      </div>
+                    </>
                   )}
-
-                  {/* Customer Floating Polaroid Card */}
-                  <div className="bg-white rounded-2xl p-2 mx-auto w-[76%] mt-1 text-slate-900 border border-white/10 shadow-xl flex flex-col relative shrink-0">
-                    <div className="aspect-[9/16] w-full rounded-xl overflow-hidden bg-slate-100 relative">
-                      <img
-                        src={selectedPhotoForStories.photoUrl}
-                        alt="Preview"
-                        className="w-full h-full object-cover transition-all animate-fade-in"
-                        style={{
-                          transform: `scale(${selectedPhotoForStories.scale || 1.0}) translate(${((selectedPhotoForStories.offsetX || 0) * (192.8 / 260)) / (selectedPhotoForStories.scale || 1.0)}px, ${((selectedPhotoForStories.offsetY || 0) * (192.8 / 260)) / (selectedPhotoForStories.scale || 1.0)}px)`
-                        }}
-                      />
-                    </div>
-                    {/* Name & Tag */}
-                    <div className="pt-2 pb-0.5 text-center">
-                      <span className="text-[9px] font-black uppercase text-slate-800 block truncate leading-tight">{selectedPhotoForStories.customerName}</span>
-                      <span className="inline-block px-1.5 py-0.5 mt-0.5 rounded bg-slate-100 text-slate-500 text-[6.5px] font-black uppercase tracking-wider">
-                        {selectedPhotoForStories.mantoType || 'Manto I (Home)'}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Marketing Caption */}
-                  <p className="text-[9.5px] font-bold text-white tracking-wide mt-3 line-clamp-2 leading-relaxed px-1 shrink-0">
-                    "{storiesText}"
-                  </p>
-
-                  {/* Product Badge & Impact Capsule */}
-                  <div className="border border-white/10 bg-white/5 rounded-xl py-2 px-2.5 mt-auto flex flex-col items-center justify-center gap-0.5 shrink-0">
-                    <span className="text-[6px] font-black tracking-widest uppercase text-white/50">Produto Adquirido</span>
-                    <span className="text-[9px] font-bold text-yellow-400 tracking-wide uppercase truncate max-w-[210px] text-center">
-                      {storiesProduct || 'Manto Sagrado'}
-                    </span>
-                    <div className="w-[120px] h-[0.5px] bg-white/10 my-0.5" />
-                    <span className="text-[7.5px] font-medium text-white/90 italic tracking-wide text-center max-w-[210px] truncate">
-                      {storiesImpactPhrase || 'Vista o seu manto sagrado!'}
-                    </span>
-                  </div>
                 </div>
               </div>
             </motion.div>
