@@ -156,7 +156,7 @@ export default function Compensations() {
         
         <div className="bg-slate-950 rounded-xl p-3 shadow-lg shadow-slate-900/10 border border-white/5 flex flex-col justify-center">
           <p className="text-[9px] font-black uppercase text-amber-500 mb-0.5 tracking-widest opacity-80">Total Recebido</p>
-          <div className="text-base font-black text-white italic tracking-tighter">
+          <div className="text-base font-black text-white tracking-tight">
             <RollingCounter value={formatCurrency(filtered.reduce((acc, t) => acc + t.amount, 0))} />
           </div>
         </div>
@@ -226,7 +226,7 @@ export default function Compensations() {
                     </div>
                   </td>
                   <td className="px-8 py-5 text-right">
-                    <div className="text-lg font-black text-red-800 flex items-center justify-end gap-2 text-right italic tracking-tighter">
+                    <div className="text-lg font-black text-red-800 flex items-center justify-end gap-2 text-right tracking-tight">
                        <ArrowDownCircle size={18} className="opacity-40" />
                        {formatCurrency(t.amount)}
                     </div>

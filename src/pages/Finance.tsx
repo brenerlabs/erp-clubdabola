@@ -1542,7 +1542,7 @@ export default function Finance() {
                   </div>
                   <span className="text-[11px] font-black text-slate-700 uppercase tracking-widest">{m.name}</span>
                 </div>
-                <span className="text-lg font-black text-slate-950 font-display tabular-nums tracking-tighter italic">
+                <span className="text-lg font-black text-slate-950 font-display tabular-nums tracking-tight">
                   <RollingCounter value={formatCurrency(m.value)} />
                 </span>
               </div>

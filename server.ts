@@ -35,7 +35,15 @@ app.post("/api/pdv/copilot", async (req, res) => {
       return res.status(400).json({ error: "O texto para processamento é obrigatório." });
     }
 
-    const prompt = `Você é um assistente de vendas inteligente no PDV. Analise a seguinte mensagem falada ou digitada pelo vendedor e filtre os itens solicitados estruturadamente. Mapeie os itens detalhadamente tentando deduzir o termo de pesquisa mais provável de existir no estoque (exemplo: "duas camisa do flamengo" -> pesquisa: "camisa flamengo", quant: 2). Se um cliente for mencionado, extraia seu nome e WhatsApp se houver.
+    const prompt = `Você é um assistente de vendas inteligente no PDV de uma loja de futebol e vestuário.
+Analise a seguinte mensagem falada ou digitada pelo vendedor e filtre os itens solicitados estruturadamente.
+
+Instruções para extração dos itens:
+1. Extraia a quantidade de cada item solicitado (padrão 1 caso oculta).
+2. Extraia o termo de pesquisa do produto de forma purificada (ex: "duas camisa do flamengo" -> pesquisa: "camisa flamengo", quant: 2). Remova termos de tamanho e cor se possível, pois estes devem ir para os campos específicos de tamanho e cor.
+3. Extraia o tamanho solicitado se mencionado (ex: "P", "M", "G", "GG", "EG", "38", "42", "ÚNICA").
+4. Extraia a cor solicitada se mencionada (ex: "preto", "azul", "vermelho", "branca").
+5. Se um cliente for mencionado, extraia seu nome e WhatsApp se houver.
 
 Texto de entrada: "${text}"`;
 
@@ -50,11 +58,19 @@ Texto de entrada: "${text}"`;
             properties: {
               productSearch: { 
                 type: Type.STRING,
-                description: "Termo de busca do produto purificado (ex: 'Flamengo Oficial 2024' ou 'Calça Jeans')"
+                description: "Termo de busca do produto purificado (ex: 'Flamengo' ou 'Calça Jeans')"
               },
               quantity: { 
                 type: Type.INTEGER,
                 description: "Quantidade solicitada (padrão 1 caso oculto)"
+              },
+              size: {
+                type: Type.STRING,
+                description: "Tamanho solicitado (ex: 'P', 'M', 'G', 'GG', 'ÚNICA') se mencionado, caso contrário nulo ou vazio"
+              },
+              color: {
+                type: Type.STRING,
+                description: "Cor solicitada se mencionada (ex: 'Preta', 'Azul') se mencionado, caso contrário nulo ou vazio"
               }
             },
             required: ["productSearch", "quantity"]

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, orderBy, writeBatch } from 'firebase/firestore';
 import { Product, Variation, Sale, Transaction } from '../types';
-import { Plus, Search, Edit2, Trash2, Copy, Package, Box, X, Eye, FileText, Download, TrendingUp, ShoppingBag, Users, Calendar, Calculator, DollarSign, Percent, ChevronDown, ChevronRight, ShieldAlert } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Copy, Package, Box, X, Eye, FileText, Download, TrendingUp, ShoppingBag, Users, Calendar, Calculator, DollarSign, Percent, ChevronDown, ChevronRight, ShieldAlert, Lock } from 'lucide-react';
 import { formatCurrency, calculateMargin, calculateMarkup, cn, cleanVariationName, smartSearchMatch } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { SidebarContext } from '../App';
@@ -58,6 +58,29 @@ export default function Products() {
   const [isDropshipping, setIsDropshipping] = useState(false);
   const [variations, setVariations] = useState<Variation[]>([]);
   const [lastAddedId, setLastAddedId] = useState<string | null>(null);
+  const [photoUrl, setPhotoUrl] = useState('');
+
+  // Cost Calculator states in Product Modal
+  const [isCostCalcOpen, setIsCostCalcOpen] = useState(false);
+  const [calcSupplierPrice, setCalcSupplierPrice] = useState('0');
+  const [calcShipping, setCalcShipping] = useState('0');
+  const [calcCustomsTaxRate, setCalcCustomsTaxRate] = useState('60');
+  const [calcIcmsRate, setCalcIcmsRate] = useState('17');
+  const [calcDomesticLogistics, setCalcDomesticLogistics] = useState('0');
+  const [calculatedRealCost, setCalculatedRealCost] = useState('0');
+
+  // Synchronize dynamic cost calculation with calculatedRealCost
+  useEffect(() => {
+    const supplier = parseFloat(calcSupplierPrice) || 0;
+    const shipping = parseFloat(calcShipping) || 0;
+    const baseValue = supplier + shipping;
+    const customsTax = baseValue * ((parseFloat(calcCustomsTaxRate) || 0) / 100);
+    const icmsTax = (baseValue + customsTax) * ((parseFloat(calcIcmsRate) || 0) / 100);
+    const domestic = parseFloat(calcDomesticLogistics) || 0;
+    
+    const totalCalculated = baseValue + customsTax + icmsTax + domestic;
+    setCalculatedRealCost(totalCalculated.toFixed(2));
+  }, [calcSupplierPrice, calcShipping, calcCustomsTaxRate, calcIcmsRate, calcDomesticLogistics]);
 
   useEffect(() => {
     if (isModalOpen || historyProduct || isSimulatorOpen || isLossModalOpen) {
@@ -374,6 +397,7 @@ export default function Products() {
 
   const openModal = (product?: Product, isDuplicate = false) => {
     setLastAddedId(null);
+    setIsCostCalcOpen(false);
     if (product) {
       setName(isDuplicate ? `${product.name} (Cópia)` : product.name);
       setCategory((product.category || '').toUpperCase().trim());
@@ -383,7 +407,14 @@ export default function Products() {
       setMinStock(product.minStock.toString());
       setIsDropshipping(!!product.isDropshipping);
       setVariations(product.variations);
+      setPhotoUrl(product.photoUrl || '');
       setEditingProduct(isDuplicate ? null : product);
+      
+      setCalcSupplierPrice(product.costPrice.toString());
+      setCalcShipping('0');
+      setCalcCustomsTaxRate('60');
+      setCalcIcmsRate('17');
+      setCalcDomesticLogistics('0');
     } else {
       setName('');
       setCategory('');
@@ -393,7 +424,14 @@ export default function Products() {
       setIsDropshipping(false);
       setVariations([]);
       setGender('Ambos');
+      setPhotoUrl('');
       setEditingProduct(null);
+      
+      setCalcSupplierPrice('0');
+      setCalcShipping('0');
+      setCalcCustomsTaxRate('60');
+      setCalcIcmsRate('17');
+      setCalcDomesticLogistics('0');
     }
     setIsModalOpen(true);
   };
@@ -551,6 +589,7 @@ export default function Products() {
         totalStock,
         minStock: mStock,
         isDropshipping,
+        photoUrl: photoUrl.trim(),
         updatedAt: serverTimestamp()
       };
 
@@ -1063,14 +1102,14 @@ export default function Products() {
                       <span className="px-2 py-0.5 bg-slate-900 text-amber-500 text-[10px] font-black rounded uppercase tracking-widest leading-none font-sans">{product.category}</span>
                     </td>
                     <td className="px-8 py-5 text-right font-sans">
-                      <div className="text-sm font-black text-slate-950 font-display tabular-nums tracking-tight italic">{formatCurrency(product.sellingPrice)}</div>
+                      <div className="text-sm font-black text-slate-950 font-display tabular-nums tracking-tight">{formatCurrency(product.sellingPrice)}</div>
                       <div className="text-[9px] text-slate-400 font-black uppercase tabular-nums tracking-widest mt-1">Custo: {formatCurrency(product.costPrice)}</div>
                     </td>
                     <td className="px-8 py-5 text-center">
                       <div className="flex flex-col items-center">
                         <div className="flex items-center gap-1.5 font-display tabular-nums leading-none">
                           <span className={cn(
-                            "text-lg font-black tracking-tighter italic",
+                            "text-lg font-black tracking-tight",
                             (product.totalStock || 0) <= (product.minStock || 0) ? "text-red-600" : "text-slate-950"
                           )}>
                             {product.totalStock}
@@ -1248,8 +1287,8 @@ export default function Products() {
                       </button>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-                      <div className="space-y-1.5">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
+                      <div className="space-y-1.5 sm:col-span-1">
                         <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Identificação</label>
                         <input 
                           required 
@@ -1260,22 +1299,34 @@ export default function Products() {
                           placeholder="Nome do produto"
                         />
                       </div>
-                      <div className="space-y-1.5">
+                      <div className="space-y-1.5 sm:col-span-1">
                         <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Segmento/Categoria</label>
                         <input 
                           required 
                           type="text" 
                           value={category} 
                           onChange={e => handleCategoryChange(e.target.value.toUpperCase())}
-                          className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-red-800 font-black text-sm transition-all uppercase animate-fade-in"
+                          className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-red-800 font-black text-sm transition-all uppercase"
                           placeholder="EX: TÊNIS"
+                        />
+                      </div>
+                      <div className="space-y-1.5 sm:col-span-1">
+                        <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider">URL da Imagem (Opcional)</label>
+                        <input 
+                          type="text" 
+                          value={photoUrl} 
+                          onChange={e => setPhotoUrl(e.target.value.trim())}
+                          className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-red-800 font-black text-sm transition-all placeholder:opacity-30"
+                          placeholder="https://suaimagem.com/foto.jpg"
                         />
                       </div>
                     </div>
 
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6">
                       <div className="space-y-1.5 col-span-1">
-                        <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Preço Custo</label>
+                        <div className="flex items-center justify-between">
+                          <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Preço Custo</label>
+                        </div>
                         <input 
                           required 
                           type="text" 
@@ -1333,6 +1384,165 @@ export default function Products() {
                           className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-red-800 font-black text-sm transition-all"
                         />
                       </div>
+                    </div>
+
+                    {/* Calculadora de Custo de Importação / Fluxo */}
+                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Calculator size={18} className="text-red-800" />
+                          <h4 className="text-[11px] font-black uppercase tracking-wider text-slate-700">Calculadora de Custo de Importação</h4>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsCostCalcOpen(!isCostCalcOpen);
+                            if (!isCostCalcOpen) {
+                              setCalcSupplierPrice(costPrice || '0');
+                            }
+                          }}
+                          className={cn(
+                            "px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all",
+                            isCostCalcOpen ? "bg-red-800 text-white" : "bg-slate-200 text-slate-600 hover:bg-slate-300"
+                          )}
+                        >
+                          {isCostCalcOpen ? 'Ativa' : 'Desativada'}
+                        </button>
+                      </div>
+
+                      {isCostCalcOpen && (
+                        <div className="space-y-4">
+                          <p className="text-[10px] font-bold text-slate-500 uppercase leading-relaxed">
+                            Ajuste os parâmetros abaixo para calcular o preço de custo real do produto considerando tributos de importação e custos logísticos.
+                          </p>
+
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-1">
+                              <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Preço do Fornecedor (FOB)</label>
+                              <div className="relative">
+                                <span className="absolute left-3 top-2.5 text-[10px] font-black text-slate-400">R$</span>
+                                <input
+                                  type="text"
+                                  inputMode="decimal"
+                                  className="w-full pl-8 pr-3 py-2 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-red-800 font-bold text-xs"
+                                  value={calcSupplierPrice}
+                                  onChange={e => {
+                                    const val = e.target.value.replace(/[^0-9,.]/g, '').replace(',', '.');
+                                    setCalcSupplierPrice(val);
+                                  }}
+                                />
+                              </div>
+                            </div>
+
+                            <div className="space-y-1">
+                              <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Frete Internacional /peça</label>
+                              <div className="relative">
+                                <span className="absolute left-3 top-2.5 text-[10px] font-black text-slate-400">R$</span>
+                                <input
+                                  type="text"
+                                  inputMode="decimal"
+                                  className="w-full pl-8 pr-3 py-2 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-red-800 font-bold text-xs"
+                                  value={calcShipping}
+                                  onChange={e => {
+                                    const val = e.target.value.replace(/[^0-9,.]/g, '').replace(',', '.');
+                                    setCalcShipping(val);
+                                  }}
+                                />
+                              </div>
+                            </div>
+
+                            <div className="space-y-1">
+                              <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Tarifa Alfandegária (%)</label>
+                              <div className="relative">
+                                <input
+                                  type="text"
+                                  inputMode="decimal"
+                                  className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-red-800 font-bold text-xs"
+                                  value={calcCustomsTaxRate}
+                                  onChange={e => {
+                                    const val = e.target.value.replace(/[^0-9,.]/g, '').replace(',', '.');
+                                    setCalcCustomsTaxRate(val);
+                                  }}
+                                />
+                              </div>
+                            </div>
+
+                            <div className="space-y-1">
+                              <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider">ICMS (%)</label>
+                              <div className="relative">
+                                <input
+                                  type="text"
+                                  inputMode="decimal"
+                                  className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-red-800 font-bold text-xs"
+                                  value={calcIcmsRate}
+                                  onChange={e => {
+                                    const val = e.target.value.replace(/[^0-9,.]/g, '').replace(',', '.');
+                                    setCalcIcmsRate(val);
+                                  }}
+                                />
+                              </div>
+                            </div>
+
+                            <div className="col-span-2 space-y-1">
+                              <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Logística Nacional / Embalagem / Extras (un.)</label>
+                              <div className="relative">
+                                <span className="absolute left-3 top-2.5 text-[10px] font-black text-slate-400">R$</span>
+                                <input
+                                  type="text"
+                                  inputMode="decimal"
+                                  className="w-full pl-8 pr-3 py-2 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-red-800 font-bold text-xs"
+                                  value={calcDomesticLogistics}
+                                  onChange={e => {
+                                    const val = e.target.value.replace(/[^0-9,.]/g, '').replace(',', '.');
+                                    setCalcDomesticLogistics(val);
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Segundo Quadro (Bloqueado) para entender o cálculo */}
+                          <div className="p-4 bg-slate-900 text-slate-100 border border-slate-800 rounded-xl space-y-2 relative overflow-hidden">
+                            <div className="absolute right-3 top-3 text-slate-700">
+                              <Lock size={16} />
+                            </div>
+                            <p className="text-[9px] font-black uppercase text-amber-500 tracking-widest flex items-center gap-1">
+                              <Lock size={10} /> Demonstrativo do Fluxo de Custo (Bloqueado)
+                            </p>
+                            
+                            <div className="divide-y divide-slate-800 text-[11px] font-mono space-y-1.5 pt-1">
+                              <div className="flex justify-between py-1 text-slate-300">
+                                <span className="text-slate-400">Custo Base (FOB + Frete):</span>
+                                <span className="font-bold">{formatCurrency((parseFloat(calcSupplierPrice) || 0) + (parseFloat(calcShipping) || 0))}</span>
+                              </div>
+                              <div className="flex justify-between py-1 text-slate-300">
+                                <span className="text-slate-400">Tarifa Aduaneira ({calcCustomsTaxRate}%):</span>
+                                <span className="font-bold text-red-400">+{formatCurrency(((parseFloat(calcSupplierPrice) || 0) + (parseFloat(calcShipping) || 0)) * ((parseFloat(calcCustomsTaxRate) || 0) / 100))}</span>
+                              </div>
+                              <div className="flex justify-between py-1 text-slate-300">
+                                <span className="text-slate-400">ICMS ({calcIcmsRate}% s/ Base + Tarifa):</span>
+                                <span className="font-bold text-red-400">+{formatCurrency((((parseFloat(calcSupplierPrice) || 0) + (parseFloat(calcShipping) || 0)) * (1 + (parseFloat(calcCustomsTaxRate) || 0) / 100)) * ((parseFloat(calcIcmsRate) || 0) / 100))}</span>
+                              </div>
+                              <div className="flex justify-between py-1 text-slate-300">
+                                <span className="text-slate-400">Logística Nacional & Extras:</span>
+                                <span className="font-bold text-red-400">+{formatCurrency(parseFloat(calcDomesticLogistics) || 0)}</span>
+                              </div>
+                              <div className="flex justify-between py-1.5 text-xs font-black border-t border-slate-700 text-emerald-400 pt-2">
+                                <span>Preço de Custo Real:</span>
+                                <span>{formatCurrency(parseFloat(calculatedRealCost) || 0)}</span>
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => setCostPrice(calculatedRealCost)}
+                              className="w-full mt-2 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-[10px] uppercase tracking-wider rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                            >
+                              🚀 Aplicar Preço de Custo Real (R$ {calculatedRealCost})
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     <div className="p-5 bg-slate-950 border border-slate-800 rounded-2xl shadow-xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 text-white font-sans">
@@ -1610,21 +1820,21 @@ export default function Products() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pb-1">
                     <div className="bg-slate-50 p-4 rounded-2xl border border-slate-150">
                       <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-2 leading-none">Unidades Vendidas</span>
-                      <span className="text-xl font-black text-slate-900 tracking-tight font-display italic leading-none tabular-nums">
+                      <span className="text-xl font-black text-slate-900 tracking-tight font-display leading-none tabular-nums">
                         {totalUnitsSold} <span className="text-xs opacity-40">UN</span>
                       </span>
                     </div>
 
                     <div className="bg-slate-50 p-4 rounded-2xl border border-slate-150">
                       <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-2 leading-none">Receita Total Bruta</span>
-                      <span className="text-xl font-black text-slate-900 tracking-tight font-display italic leading-none tabular-nums">
+                      <span className="text-xl font-black text-slate-900 tracking-tight font-display leading-none tabular-nums">
                         {formatCurrency(totalRevenue)}
                       </span>
                     </div>
 
                     <div className="bg-slate-50 p-4 rounded-2xl border border-slate-150">
                       <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-2 leading-none">Preço Médio Praticado</span>
-                      <span className="text-xl font-black text-slate-900 tracking-tight font-display italic leading-none tabular-nums">
+                      <span className="text-xl font-black text-slate-900 tracking-tight font-display leading-none tabular-nums">
                         {formatCurrency(avgPrice)}
                       </span>
                     </div>
@@ -1632,7 +1842,7 @@ export default function Products() {
                     <div className="bg-emerald-50/50 p-4 rounded-2xl border border-emerald-150">
                       <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest block mb-2 leading-none">Margem de Lucro Bruta</span>
                       <span className={cn(
-                        "text-xl font-black tracking-tight font-display italic leading-none tabular-nums",
+                        "text-xl font-black tracking-tight font-display leading-none tabular-nums",
                         profit >= 0 ? "text-emerald-700" : "text-rose-700"
                       )}>
                         {formatCurrency(profit)}
@@ -1672,7 +1882,7 @@ export default function Products() {
                         </div>
                         <div className="mt-4 pt-3 border-t border-slate-100 flex justify-between text-xs">
                           <span className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Estoque Local:</span>
-                          <span className="font-black text-slate-900 font-mono italic">{historyProduct.totalStock || 0} UN</span>
+                          <span className="font-black text-slate-900 font-mono">{historyProduct.totalStock || 0} UN</span>
                         </div>
                       </div>
                     </div>
@@ -1734,7 +1944,7 @@ export default function Products() {
                                           {cleanedVar || 'Grade Única'}
                                         </span>
                                       </td>
-                                      <td className="px-6 py-4 text-center font-black text-slate-900 font-mono italic tabular-nums">{item.quantity}</td>
+                                      <td className="px-6 py-4 text-center font-black text-slate-900 font-mono tabular-nums">{item.quantity}</td>
                                       <td className="px-6 py-4 text-right font-mono text-slate-500 tabular-nums">{formatCurrency(item.price || historyProduct.sellingPrice || 0)}</td>
                                       <td className="px-6 py-4 text-right font-bold text-slate-500 uppercase tracking-wide text-[10px]">{sale.paymentMethod || 'Outro'}</td>
                                       <td className="px-6 py-4 text-center">
@@ -1753,7 +1963,7 @@ export default function Products() {
                                           );
                                         })()}
                                       </td>
-                                      <td className="px-6 py-4 text-right font-black font-mono text-slate-900 tabular-nums italic">
+                                      <td className="px-6 py-4 text-right font-black font-mono text-slate-900 tabular-nums">
                                         {formatCurrency((item.price || historyProduct.sellingPrice || 0) * (item.quantity || 0))}
                                       </td>
                                     </tr>

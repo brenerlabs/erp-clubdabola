@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext, useMemo } from 'react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, query, onSnapshot, addDoc, updateDoc, doc, serverTimestamp, writeBatch, orderBy, deleteDoc } from 'firebase/firestore';
 import { Product, Customer, SaleItem, Variation, Sale, generatePixPayload, getCustomerLoyaltyTier } from '../types';
-import { Search, ShoppingCart, User, Plus, Minus, Trash2, CreditCard, Banknote, QrCode, ClipboardList, Send, X, CheckCircle2, MessageCircle, FileImage, Share2, Receipt, FileText, Sparkles, HelpCircle, Camera, TrendingUp, Truck } from 'lucide-react';
+import { Search, ShoppingCart, User, Plus, Minus, Trash2, CreditCard, Banknote, QrCode, ClipboardList, Send, X, CheckCircle2, MessageCircle, FileImage, Share2, Receipt, FileText, Sparkles, HelpCircle, Camera, TrendingUp, Truck, Grid, List, LayoutGrid } from 'lucide-react';
 import { formatCurrency, cn, cleanObject, cleanVariationName, cleanProductNameWithVariation, formatVariationWithGender, formatProductNameWithGender, smartSearchMatch } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { SidebarContext } from '../App';
@@ -225,6 +225,8 @@ export default function PDV() {
   const [activeTab, setActiveTab] = useState<'checkout' | 'prevendas'>('checkout');
   const [loadedPreSaleId, setLoadedPreSaleId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('TODAS');
+  const [catalogViewMode, setCatalogViewMode] = useState<'visual' | 'compact' | 'list'>('visual');
   const [cart, setCart] = useState<SaleItem[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [useCustomerBalance, setUseCustomerBalance] = useState<boolean>(false);
@@ -386,18 +388,57 @@ export default function PDV() {
       let addedCount = 0;
       // 1. Process items
       if (data.items && Array.isArray(data.items)) {
-        data.items.forEach((item: { productSearch: string, quantity: number }) => {
+        data.items.forEach((item: { productSearch: string, quantity: number, size?: string, color?: string }) => {
+          // Find matching product using smartSearchMatch
           const matchedProd = products.find(p => {
-            const cleanStr = (s: string) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
-            const prodName = cleanStr(p.name);
-            const searchTxt = cleanStr(item.productSearch);
-            return searchTxt && (prodName.includes(searchTxt) || searchTxt.includes(prodName));
+            const fieldsToSearch = [p.name, p.category, p.id];
+            return smartSearchMatch(fieldsToSearch, item.productSearch);
           });
+
           if (matchedProd) {
-            // Pick appropriate variation or default
-            const variation = matchedProd.variations && matchedProd.variations.length > 0
-              ? matchedProd.variations[0]
-              : { id: 'unica', size: 'ÚNICA', color: '', stock: matchedProd.totalStock || 0 };
+            let variation = null;
+
+            if (matchedProd.variations && matchedProd.variations.length > 0) {
+              const itemSize = (item.size || '').toUpperCase().trim();
+              const itemColor = (item.color || '').toUpperCase().trim();
+
+              if (itemSize || itemColor) {
+                variation = matchedProd.variations.find(v => {
+                  const vSize = (v.size || '').toUpperCase().trim();
+                  const vColor = (v.color || '').toUpperCase().trim();
+
+                  const matchesSize = !itemSize || vSize === itemSize || vSize.includes(itemSize);
+                  const matchesColor = !itemColor || vColor === itemColor || vColor.includes(itemColor);
+
+                  return matchesSize && matchesColor;
+                });
+              }
+
+              // Fallback: match only size
+              if (!variation && itemSize) {
+                variation = matchedProd.variations.find(v => {
+                  const vSize = (v.size || '').toUpperCase().trim();
+                  return vSize === itemSize || vSize.includes(itemSize);
+                });
+              }
+
+              // Fallback: match only color
+              if (!variation && itemColor) {
+                variation = matchedProd.variations.find(v => {
+                  const vColor = (v.color || '').toUpperCase().trim();
+                  return vColor === itemColor || vColor.includes(itemColor);
+                });
+              }
+
+              // Default fallback variation
+              if (!variation) {
+                variation = matchedProd.variations.find(v => v.stock > 0) || matchedProd.variations[0];
+              }
+            }
+
+            if (!variation) {
+              variation = { id: 'unica', size: 'ÚNICA', color: '', stock: matchedProd.totalStock || 0 };
+            }
             
             // Add items corresponding to quantity
             const qtyToAdd = item.quantity || 1;
@@ -983,8 +1024,20 @@ export default function PDV() {
   }, [products, shipments]);
 
   const filteredProducts = effectiveProducts.filter(p => {
-    return smartSearchMatch([p.name, p.category, p.id], search);
+    const matchesSearch = smartSearchMatch([p.name, p.category, p.id], search);
+    const matchesCategory = selectedCategory === 'TODAS' || (p.category || '').toUpperCase().trim() === selectedCategory;
+    return matchesSearch && matchesCategory;
   });
+
+  const categoriesList = useMemo(() => {
+    const cats = new Set<string>();
+    effectiveProducts.forEach(p => {
+      if (p.category) {
+        cats.add(p.category.toUpperCase().trim());
+      }
+    });
+    return ['TODAS', ...Array.from(cats).sort()];
+  }, [effectiveProducts]);
 
   const shareWhatsApp = (saleToShare?: any) => {
     const sale = saleToShare || lastSale;
@@ -1997,6 +2050,74 @@ export default function PDV() {
               />
             </div>
 
+            {/* Category Pills & View Mode */}
+            <div className="mt-3.5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-3.5 border-t border-slate-100">
+              {/* Category Pills Scrollbar */}
+              <div className="flex-1 overflow-x-auto no-scrollbar flex items-center gap-1.5 pb-1 sm:pb-0 scroll-smooth">
+                {categoriesList.map(cat => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setSelectedCategory(cat)}
+                    className={cn(
+                      "px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap active:scale-95 cursor-pointer border",
+                      selectedCategory === cat
+                        ? "bg-red-800 border-red-800 text-white shadow-sm shadow-red-800/10"
+                        : "bg-slate-50 hover:bg-slate-100 text-slate-500 border-slate-100 hover:text-slate-700"
+                    )}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+
+              {/* View Mode Toggle Button Group */}
+              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl self-end sm:self-auto shrink-0 select-none">
+                <button
+                  type="button"
+                  onClick={() => setCatalogViewMode('visual')}
+                  title="Grade Visual (com Fotos)"
+                  className={cn(
+                    "p-1.5 rounded-lg transition-all flex items-center gap-1 text-[9px] font-black uppercase tracking-wider active:scale-95 cursor-pointer",
+                    catalogViewMode === 'visual'
+                      ? "bg-white text-red-800 shadow-sm"
+                      : "text-slate-400 hover:text-slate-600"
+                  )}
+                >
+                  <LayoutGrid size={14} />
+                  <span>Visual</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCatalogViewMode('compact')}
+                  title="Grade Compacta (Sem Fotos)"
+                  className={cn(
+                    "p-1.5 rounded-lg transition-all flex items-center gap-1 text-[9px] font-black uppercase tracking-wider active:scale-95 cursor-pointer",
+                    catalogViewMode === 'compact'
+                      ? "bg-white text-red-800 shadow-sm"
+                      : "text-slate-400 hover:text-slate-600"
+                  )}
+                >
+                  <Grid size={14} />
+                  <span>Compacto</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCatalogViewMode('list')}
+                  title="Lista Detalhada"
+                  className={cn(
+                    "p-1.5 rounded-lg transition-all flex items-center gap-1 text-[9px] font-black uppercase tracking-wider active:scale-95 cursor-pointer",
+                    catalogViewMode === 'list'
+                      ? "bg-white text-red-800 shadow-sm"
+                      : "text-slate-400 hover:text-slate-600"
+                  )}
+                >
+                  <List size={14} />
+                  <span>Lista</span>
+                </button>
+              </div>
+            </div>
+
             {/* AI Copilot PDV */}
             <div className="mt-4 pt-4 border-t border-slate-100">
               <div className="flex items-center justify-between mb-2">
@@ -2038,97 +2159,400 @@ export default function PDV() {
           </div>
         </div>
 
-        <div className="flex-1 md:overflow-y-auto grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 pb-24 md:pb-4">
-          {filteredProducts.map(product => {
-            const isNoVar = !product.variations || product.variations.length === 0;
-            return (
-              <div 
-                key={product.id} 
-                onClick={() => {
-                  if (isNoVar) {
-                    if (!product.isDropshipping && (product.totalStock || 0) <= 0) return;
-                    setClickedProductId(product.id!);
-                    setTimeout(() => setClickedProductId(null), 600);
-                    addToCart(product, { id: 'unica', size: 'ÚNICA', color: '', stock: product.totalStock || 0 });
-                  }
-                }}
-                className={cn(
-                  "bg-white p-4 rounded-[24px] flex flex-col justify-between group hover:-translate-y-1 shadow-[0_4px_22px_rgba(15,23,42,0.015)] hover:shadow-xl hover:shadow-slate-100/80 border border-slate-100/50 transition-all duration-300 ease-out relative overflow-hidden min-h-[170px]",
-                  isNoVar ? "cursor-pointer" : "",
-                  clickedProductId === product.id 
-                    ? "ring-2 ring-emerald-500 border-emerald-500 scale-95 shadow-lg shadow-emerald-500/10" 
-                    : "hover:border-red-800/15"
-                )}
-              >
-                <div>
-                  <div className="flex items-center justify-between gap-2 mb-1.5">
-                    <span className="px-1.5 py-0.5 bg-slate-100 text-[8px] font-black text-slate-400 rounded uppercase tracking-wider">{product.category}</span>
-                    {product.gender && (
-                      <span className={cn(
-                        "px-1.5 py-0.5 text-[8px] font-black rounded uppercase tracking-wider",
-                        product.gender === 'Masculino' ? "bg-blue-50 text-blue-600" : 
-                        product.gender === 'Feminino' ? "bg-pink-50 text-pink-600" : 
-                        "bg-slate-50 text-slate-400"
-                      )}>
-                        {product.gender === 'Ambos' ? 'UNI' : product.gender.substring(0, 3)}
-                      </span>
-                    )}
-                  </div>
-                  <h4 className="font-sans font-black text-slate-900 line-clamp-2 leading-tight text-xs uppercase tracking-tight">{product.name}</h4>
+        {/* Catalog Container based on View Mode */}
+        {catalogViewMode === 'list' ? (
+          /* Detailed List View Mode */
+          <div className="flex-1 md:overflow-y-auto pb-24 md:pb-4">
+            <div className="bg-white rounded-3xl border border-slate-100 shadow-xl shadow-slate-200/50 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-100 text-[10px] uppercase font-black text-slate-400 tracking-wider">
+                      <th className="py-4 px-5">Produto</th>
+                      <th className="py-4 px-5">Categoria</th>
+                      <th className="py-4 px-5">Público</th>
+                      <th className="py-4 px-5 text-right">Preço</th>
+                      <th className="py-4 px-5">Tamanhos / Seleção</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredProducts.map(product => {
+                      const isNoVar = !product.variations || product.variations.length === 0;
+                      return (
+                        <tr 
+                          key={product.id}
+                          className={cn(
+                            "hover:bg-slate-50/50 transition-colors font-sans",
+                            clickedProductId === product.id && "bg-emerald-50/30"
+                          )}
+                        >
+                          <td className="py-4 px-5">
+                            <div className="flex items-center gap-3">
+                              {/* Small image or icon */}
+                              <div className="size-11 rounded-xl overflow-hidden border border-slate-100 shrink-0 bg-slate-50 flex items-center justify-center">
+                                {product.photoUrl ? (
+                                  <img src={product.photoUrl} alt="" className="size-full object-cover" referrerPolicy="no-referrer" />
+                                ) : (
+                                  <div className="size-full bg-slate-100 text-slate-400 font-black flex items-center justify-center text-[10px]">
+                                    {product.category.substring(0, 3)}
+                                  </div>
+                                )}
+                              </div>
+                              <div>
+                                <div className="font-black text-xs uppercase text-slate-900 leading-tight">{product.name}</div>
+                                <div className="text-[9px] text-slate-400 font-mono tracking-wider mt-1">Estoque: {product.isDropshipping ? 'Dropshipping' : `Total: ${product.totalStock}`}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-4 px-5">
+                            <span className="px-1.5 py-0.5 bg-slate-100 text-[8px] font-black text-slate-400 rounded uppercase tracking-wider">{product.category}</span>
+                          </td>
+                          <td className="py-4 px-5">
+                            {product.gender && (
+                              <span className={cn(
+                                "px-1.5 py-0.5 text-[8px] font-black rounded uppercase tracking-wider",
+                                product.gender === 'Masculino' ? "bg-blue-50 text-blue-600" : 
+                                product.gender === 'Feminino' ? "bg-pink-50 text-pink-600" : 
+                                "bg-slate-50 text-slate-400"
+                              )}>
+                                {product.gender === 'Ambos' ? 'UNI' : product.gender.substring(0, 3)}
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-4 px-5 text-right font-display font-black text-red-800 text-xs tabular-nums">
+                            {formatCurrency(product.sellingPrice)}
+                          </td>
+                          <td className="py-4 px-5">
+                            <div className="flex flex-wrap gap-1.5">
+                              {isNoVar ? (
+                                <button 
+                                  type="button"
+                                  disabled={!product.isDropshipping && (product.totalStock || 0) <= 0}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (!product.isDropshipping && (product.totalStock || 0) <= 0) return;
+                                    setClickedProductId(product.id!);
+                                    setTimeout(() => setClickedProductId(null), 600);
+                                    addToCart(product, { id: 'unica', size: 'ÚNICA', color: '', stock: product.totalStock || 0 });
+                                  }}
+                                  className={cn(
+                                    "text-[9px] px-2.5 py-1.5 border rounded-xl font-black transition-all uppercase cursor-pointer",
+                                    (!product.isDropshipping && (product.totalStock || 0) <= 0) 
+                                      ? "bg-gray-50 border-gray-100 text-gray-200 cursor-not-allowed opacity-40 shadow-none" 
+                                      : clickedProductId === product.id
+                                        ? "bg-emerald-500 border-emerald-500 text-white"
+                                        : "bg-white border-slate-200 text-slate-600 hover:border-red-800 hover:bg-red-50 hover:text-red-800 active:scale-95 shadow-sm"
+                                  )}
+                                >
+                                  {clickedProductId === product.id ? '✓' : 'Selecionar'}
+                                </button>
+                              ) : (
+                                product.variations.map(v => (
+                                  <button 
+                                    key={v.id}
+                                    disabled={!product.isDropshipping && v.stock <= 0}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      addToCart(product, v);
+                                    }}
+                                    className={cn(
+                                      "text-[9px] px-2.5 py-1.5 border rounded-xl font-black transition-all uppercase cursor-pointer",
+                                      (!product.isDropshipping && v.stock <= 0) 
+                                        ? "bg-gray-50 border-gray-100 text-gray-200 cursor-not-allowed opacity-40 shadow-none" 
+                                        : "bg-white border-slate-200 text-slate-600 hover:border-red-800 hover:bg-red-50 hover:text-red-800 active:scale-95 shadow-sm",
+                                      product.isDropshipping && "border-amber-100 text-amber-600 bg-amber-50/20"
+                                    )}
+                                  >
+                                    {[v.size, v.color].map(x => x?.trim()).filter(x => x && x !== '' && x.toUpperCase() !== 'N/A').join(' - ')} <span className="opacity-45">({product.isDropshipping ? 'DS' : v.stock})</span>
+                                  </button>
+                                ))
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              {filteredProducts.length === 0 && (
+                <div className="py-12 text-center text-slate-400 font-black uppercase text-xs tracking-wider">
+                  Nenhum produto correspondente encontrado
                 </div>
-                <div className="space-y-2 mt-3">
-                  <div className="text-xs md:text-sm font-black text-red-800 font-display tabular-nums leading-none">{formatCurrency(product.sellingPrice)}</div>
-                  <div className="flex flex-wrap gap-1 items-stretch justify-start">
-                    {isNoVar ? (
-                      <button 
-                        type="button"
-                        disabled={!product.isDropshipping && (product.totalStock || 0) <= 0}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (!product.isDropshipping && (product.totalStock || 0) <= 0) return;
-                          setClickedProductId(product.id!);
-                          setTimeout(() => setClickedProductId(null), 600);
-                          addToCart(product, { id: 'unica', size: 'ÚNICA', color: '', stock: product.totalStock || 0 });
-                        }}
-                        className={cn(
-                          "text-[9px] px-2 py-1.5 border rounded font-black transition-all truncate uppercase relative flex-1 min-w-[45%] text-center",
-                          (!product.isDropshipping && (product.totalStock || 0) <= 0) 
-                            ? "bg-gray-50 border-gray-100 text-gray-200 cursor-not-allowed opacity-40 shadow-none scale-100" 
-                            : clickedProductId === product.id
-                              ? "bg-emerald-500 border-emerald-500 text-white shadow-none scale-95"
-                              : "bg-white border-slate-200 text-slate-600 hover:border-red-800 hover:bg-red-50 hover:text-red-800 active:scale-95 shadow-sm",
-                          product.isDropshipping && "border-amber-100 text-amber-600 bg-amber-50/20"
-                        )}
-                      >
-                        {clickedProductId === product.id ? 'Adicionado! ✓' : 'Selecionar'} <span className="opacity-40">{product.isDropshipping ? 'DS' : (product.totalStock || 0)}</span>
-                      </button>
+              )}
+            </div>
+          </div>
+        ) : catalogViewMode === 'visual' ? (
+          /* Visual Bento Grid Mode with Beautiful Photo/Mockup Cards */
+          <div className="flex-1 md:overflow-y-auto grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pb-24 md:pb-4">
+            {filteredProducts.map(product => {
+              const isNoVar = !product.variations || product.variations.length === 0;
+              const isShirt = (product.category || '').toUpperCase().includes('CAMISA');
+              const nameLower = (product.name || '').toLowerCase();
+              
+              // Helper to generate dynamic gradients based on keywords
+              const getGradient = () => {
+                if (nameLower.includes('flamengo') || nameLower.includes('milan') || nameLower.includes('parana') || nameLower.includes('atlético') || nameLower.includes('athletico') || nameLower.includes('belgica')) {
+                  return "from-red-600 via-slate-900 to-red-700";
+                }
+                if (nameLower.includes('brasil') || nameLower.includes('amarela') || nameLower.includes('canarinho')) {
+                  return "from-yellow-400 via-green-600 to-yellow-500";
+                }
+                if (nameLower.includes('argentina') || nameLower.includes('gremio') || nameLower.includes('cruzeiro') || nameLower.includes('italia') || nameLower.includes('city') || nameLower.includes('azul') || nameLower.includes('uruguai')) {
+                  return "from-sky-400 via-sky-100 to-sky-500";
+                }
+                if (nameLower.includes('corinthians') || nameLower.includes('vasco') || nameLower.includes('santos') || nameLower.includes('alemanha') || nameLower.includes('real madrid') || nameLower.includes('branca') || nameLower.includes('branco')) {
+                  return "from-slate-100 via-slate-200 to-slate-300";
+                }
+                if (nameLower.includes('barcelona') || nameLower.includes('psg') || nameLower.includes('boca') || nameLower.includes('bayern')) {
+                  return "from-blue-700 via-red-600 to-blue-900";
+                }
+                if (nameLower.includes('palmeiras') || nameLower.includes('celtic') || nameLower.includes('betis') || nameLower.includes('verde')) {
+                  return "from-emerald-600 via-green-800 to-emerald-700";
+                }
+                if (nameLower.includes('roma') || nameLower.includes('fluminense') || nameLower.includes('portugal') || nameLower.includes('vinho')) {
+                  return "from-red-850 via-emerald-800 to-amber-700";
+                }
+                if (nameLower.includes('cabo') || nameLower.includes('eletronico') || nameLower.includes('carregador')) {
+                  return "from-indigo-600 via-purple-600 to-indigo-700";
+                }
+                if (nameLower.includes('tenis') || nameLower.includes('chuteira')) {
+                  return "from-amber-500 via-orange-600 to-amber-600";
+                }
+                return "from-slate-700 via-slate-800 to-slate-900";
+              };
+
+              return (
+                <div 
+                  key={product.id} 
+                  onClick={() => {
+                    if (isNoVar) {
+                      if (!product.isDropshipping && (product.totalStock || 0) <= 0) return;
+                      setClickedProductId(product.id!);
+                      setTimeout(() => setClickedProductId(null), 600);
+                      addToCart(product, { id: 'unica', size: 'ÚNICA', color: '', stock: product.totalStock || 0 });
+                    }
+                  }}
+                  className={cn(
+                    "bg-white rounded-[28px] flex flex-col justify-between group hover:-translate-y-1 shadow-[0_4px_25px_rgba(15,23,42,0.02)] hover:shadow-2xl hover:shadow-slate-100/80 border border-slate-100 transition-all duration-300 ease-out relative overflow-hidden min-h-[300px]",
+                    isNoVar ? "cursor-pointer" : "",
+                    clickedProductId === product.id 
+                      ? "ring-2 ring-emerald-500 border-emerald-500 scale-95 shadow-lg shadow-emerald-500/10" 
+                      : "hover:border-red-800/15"
+                  )}
+                >
+                  {/* Top Image / Pattern Area */}
+                  <div className="h-[140px] w-full bg-slate-50 relative overflow-hidden p-3 flex items-center justify-center border-b border-slate-100/50">
+                    {product.photoUrl ? (
+                      <img 
+                        src={product.photoUrl} 
+                        alt={product.name} 
+                        className="size-full object-cover rounded-xl group-hover:scale-105 transition-transform duration-500"
+                        referrerPolicy="no-referrer"
+                      />
                     ) : (
-                      product.variations.map(v => (
+                      <div className={cn("size-full rounded-2xl bg-gradient-to-br flex flex-col items-center justify-center text-white/30 relative overflow-hidden shadow-inner", getGradient())}>
+                        {/* Dynamic background patterns */}
+                        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-white via-transparent to-transparent pointer-events-none" />
+                        
+                        {isShirt ? (
+                          <div className="flex flex-col items-center relative z-10 text-white/95 drop-shadow">
+                            <svg className="size-16 opacity-85 group-hover:scale-110 transition-transform duration-300" viewBox="0 0 100 100" fill="currentColor">
+                              <path d="M 30,20 L 70,20 L 70,22 C 70,25 65,30 50,30 C 35,30 30,25 30,22 Z" fill="#222" opacity="0.3" />
+                              <path d="M 30,20 L 42,12 C 45,14 48,15 50,15 C 52,15 55,14 58,12 L 70,20 L 82,30 L 74,40 L 68,34 L 68,90 L 32,90 L 32,34 L 26,40 L 18,30 Z" fill="currentColor" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5" />
+                              <path d="M 42,12 Q 50,22 58,12" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2.5" />
+                              <line x1="40" y1="25" x2="40" y2="85" stroke="rgba(255,255,255,0.15)" strokeWidth="4" />
+                              <line x1="50" y1="25" x2="50" y2="85" stroke="rgba(255,255,255,0.15)" strokeWidth="4" />
+                              <line x1="60" y1="25" x2="60" y2="85" stroke="rgba(255,255,255,0.15)" strokeWidth="4" />
+                            </svg>
+                            <span className="text-[9px] font-black tracking-widest mt-1 opacity-75 uppercase text-center">MANTO OFICIAL</span>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center relative z-10 text-white/95 drop-shadow">
+                            <svg className="size-12 opacity-80" viewBox="0 0 100 100" fill="none" stroke="currentColor" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round">
+                              <rect x="25" y="25" width="50" height="50" rx="8" />
+                              <circle cx="50" cy="50" r="10" />
+                              <line x1="50" y1="15" x2="50" y2="25" />
+                              <line x1="50" y1="75" x2="50" y2="85" />
+                              <line x1="15" y1="50" x2="25" y2="50" />
+                              <line x1="75" y1="50" x2="85" y2="50" />
+                            </svg>
+                            <span className="text-[9px] font-black tracking-widest mt-1 opacity-75 uppercase text-center">{product.category}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    
+                    {/* Corner Category Badges inside Card Image Area */}
+                    <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none">
+                      <span className="px-1.5 py-0.5 bg-white/90 backdrop-blur-md text-[7.5px] font-black text-slate-800 rounded-md shadow-sm uppercase tracking-wider border border-white/50">{product.category}</span>
+                      {product.gender && (
+                        <span className={cn(
+                          "px-1.5 py-0.5 text-[7.5px] font-black rounded-md shadow-sm uppercase tracking-wider border",
+                          product.gender === 'Masculino' ? "bg-blue-600/90 text-white border-blue-500/20" : 
+                          product.gender === 'Feminino' ? "bg-pink-600/90 text-white border-pink-500/20" : 
+                          "bg-slate-800/90 text-white border-slate-700/20"
+                        )}>
+                          {product.gender === 'Ambos' ? 'UNI' : product.gender.substring(0, 3)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Body Info */}
+                  <div className="p-4 flex-1 flex flex-col justify-between">
+                    <div>
+                      <h4 className="font-sans font-black text-slate-900 line-clamp-2 leading-tight text-xs uppercase tracking-tight">{product.name}</h4>
+                    </div>
+                    
+                    <div className="space-y-2.5 mt-3">
+                      <div className="text-sm md:text-base font-black text-red-800 font-display tabular-nums leading-none">{formatCurrency(product.sellingPrice)}</div>
+                      <div className="flex flex-wrap gap-1 items-stretch justify-start">
+                        {isNoVar ? (
+                          <button 
+                            type="button"
+                            disabled={!product.isDropshipping && (product.totalStock || 0) <= 0}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (!product.isDropshipping && (product.totalStock || 0) <= 0) return;
+                              setClickedProductId(product.id!);
+                              setTimeout(() => setClickedProductId(null), 600);
+                              addToCart(product, { id: 'unica', size: 'ÚNICA', color: '', stock: product.totalStock || 0 });
+                            }}
+                            className={cn(
+                              "text-[9px] px-2 py-1.5 border rounded-xl font-black transition-all truncate uppercase relative flex-1 min-w-[45%] text-center cursor-pointer",
+                              (!product.isDropshipping && (product.totalStock || 0) <= 0) 
+                                ? "bg-gray-50 border-gray-100 text-gray-200 cursor-not-allowed opacity-40 shadow-none scale-100" 
+                                : clickedProductId === product.id
+                                  ? "bg-emerald-500 border-emerald-500 text-white shadow-none scale-95"
+                                  : "bg-white border-slate-100 text-slate-600 hover:border-red-800 hover:bg-red-50 hover:text-red-800 active:scale-95 shadow-sm",
+                              product.isDropshipping && "border-amber-100 text-amber-600 bg-amber-50/20"
+                            )}
+                          >
+                            {clickedProductId === product.id ? 'Adicionado! ✓' : 'Selecionar'} <span className="opacity-40">{product.isDropshipping ? 'DS' : (product.totalStock || 0)}</span>
+                          </button>
+                        ) : (
+                          product.variations.map(v => (
+                            <button 
+                              key={v.id}
+                              disabled={!product.isDropshipping && v.stock <= 0}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                addToCart(product, v);
+                              }}
+                              className={cn(
+                                "text-[9.5px] px-2 py-1.5 border rounded-xl font-black transition-all truncate uppercase relative flex-1 min-w-[45%] text-center cursor-pointer",
+                                (!product.isDropshipping && v.stock <= 0) 
+                                  ? "bg-gray-50 border-gray-100 text-gray-200 cursor-not-allowed opacity-40 shadow-none scale-100" 
+                                  : "bg-white border-slate-100 text-slate-600 hover:border-red-800 hover:bg-red-50 hover:text-red-800 active:scale-95 shadow-sm",
+                                product.isDropshipping && "border-amber-100 text-amber-600 bg-amber-50/20"
+                              )}
+                            >
+                              {[v.size, v.color].map(x => x?.trim()).filter(x => x && x !== '' && x.toUpperCase() !== 'N/A').join(' - ')} <span className="opacity-40">{product.isDropshipping ? 'DS' : v.stock}</span>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          /* Compact View Mode (original layout style but with cursor-pointer indicator) */
+          <div className="flex-1 md:overflow-y-auto grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 pb-24 md:pb-4">
+            {filteredProducts.map(product => {
+              const isNoVar = !product.variations || product.variations.length === 0;
+              return (
+                <div 
+                  key={product.id} 
+                  onClick={() => {
+                    if (isNoVar) {
+                      if (!product.isDropshipping && (product.totalStock || 0) <= 0) return;
+                      setClickedProductId(product.id!);
+                      setTimeout(() => setClickedProductId(null), 600);
+                      addToCart(product, { id: 'unica', size: 'ÚNICA', color: '', stock: product.totalStock || 0 });
+                    }
+                  }}
+                  className={cn(
+                    "bg-white p-4 rounded-[24px] flex flex-col justify-between group hover:-translate-y-1 shadow-[0_4px_22px_rgba(15,23,42,0.015)] hover:shadow-xl hover:shadow-slate-100/80 border border-slate-100/50 transition-all duration-300 ease-out relative overflow-hidden min-h-[170px]",
+                    isNoVar ? "cursor-pointer" : "",
+                    clickedProductId === product.id 
+                      ? "ring-2 ring-emerald-500 border-emerald-500 scale-95 shadow-lg shadow-emerald-500/10" 
+                      : "hover:border-red-800/15"
+                  )}
+                >
+                  <div>
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <span className="px-1.5 py-0.5 bg-slate-100 text-[8px] font-black text-slate-400 rounded uppercase tracking-wider">{product.category}</span>
+                      {product.gender && (
+                        <span className={cn(
+                          "px-1.5 py-0.5 text-[8px] font-black rounded uppercase tracking-wider",
+                          product.gender === 'Masculino' ? "bg-blue-50 text-blue-600" : 
+                          product.gender === 'Feminino' ? "bg-pink-50 text-pink-600" : 
+                          "bg-slate-50 text-slate-400"
+                        )}>
+                          {product.gender === 'Ambos' ? 'UNI' : product.gender.substring(0, 3)}
+                        </span>
+                      )}
+                    </div>
+                    <h4 className="font-sans font-black text-slate-900 line-clamp-2 leading-tight text-xs uppercase tracking-tight">{product.name}</h4>
+                  </div>
+                  <div className="space-y-2 mt-3">
+                    <div className="text-xs md:text-sm font-black text-red-800 font-display tabular-nums leading-none">{formatCurrency(product.sellingPrice)}</div>
+                    <div className="flex flex-wrap gap-1 items-stretch justify-start">
+                      {isNoVar ? (
                         <button 
-                          key={v.id}
-                          disabled={!product.isDropshipping && v.stock <= 0}
+                          type="button"
+                          disabled={!product.isDropshipping && (product.totalStock || 0) <= 0}
                           onClick={(e) => {
                             e.stopPropagation();
-                            addToCart(product, v);
+                            if (!product.isDropshipping && (product.totalStock || 0) <= 0) return;
+                            setClickedProductId(product.id!);
+                            setTimeout(() => setClickedProductId(null), 600);
+                            addToCart(product, { id: 'unica', size: 'ÚNICA', color: '', stock: product.totalStock || 0 });
                           }}
                           className={cn(
-                            "text-[9px] px-2 py-1.5 border rounded font-black transition-all truncate uppercase relative flex-1 min-w-[45%] text-center",
-                            (!product.isDropshipping && v.stock <= 0) 
+                            "text-[9px] px-2 py-1.5 border rounded font-black transition-all truncate uppercase relative flex-1 min-w-[45%] text-center cursor-pointer",
+                            (!product.isDropshipping && (product.totalStock || 0) <= 0) 
                               ? "bg-gray-50 border-gray-100 text-gray-200 cursor-not-allowed opacity-40 shadow-none scale-100" 
-                              : "bg-white border-slate-200 text-slate-600 hover:border-red-800 hover:bg-red-50 hover:text-red-800 active:scale-95 shadow-sm",
+                              : clickedProductId === product.id
+                                ? "bg-emerald-500 border-emerald-500 text-white shadow-none scale-95"
+                                : "bg-white border-slate-200 text-slate-600 hover:border-red-800 hover:bg-red-50 hover:text-red-800 active:scale-95 shadow-sm",
                             product.isDropshipping && "border-amber-100 text-amber-600 bg-amber-50/20"
                           )}
                         >
-                          {[v.size, v.color].map(x => x?.trim()).filter(x => x && x !== '' && x.toUpperCase() !== 'N/A').join(' - ')} <span className="opacity-40">{product.isDropshipping ? 'DS' : v.stock}</span>
+                          {clickedProductId === product.id ? 'Adicionado! ✓' : 'Selecionar'} <span className="opacity-40">{product.isDropshipping ? 'DS' : (product.totalStock || 0)}</span>
                         </button>
-                      ))
-                    )}
+                      ) : (
+                        product.variations.map(v => (
+                          <button 
+                            key={v.id}
+                            disabled={!product.isDropshipping && v.stock <= 0}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              addToCart(product, v);
+                            }}
+                            className={cn(
+                              "text-[9px] px-2 py-1.5 border rounded font-black transition-all truncate uppercase relative flex-1 min-w-[45%] text-center cursor-pointer",
+                              (!product.isDropshipping && v.stock <= 0) 
+                                ? "bg-gray-50 border-gray-100 text-gray-200 cursor-not-allowed opacity-40 shadow-none scale-100" 
+                                : "bg-white border-slate-200 text-slate-600 hover:border-red-800 hover:bg-red-50 hover:text-red-800 active:scale-95 shadow-sm",
+                              product.isDropshipping && "border-amber-100 text-amber-600 bg-amber-50/20"
+                            )}
+                          >
+                            {[v.size, v.color].map(x => x?.trim()).filter(x => x && x !== '' && x.toUpperCase() !== 'N/A').join(' - ')} <span className="opacity-40">{product.isDropshipping ? 'DS' : v.stock}</span>
+                          </button>
+                        ))
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Cart & Checkout */}

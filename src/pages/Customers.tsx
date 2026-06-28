@@ -1199,7 +1199,7 @@ export default function Customers() {
                                 {currentBalance >= 0 ? 'Saldo Disponível' : 'Dívida Acumulada'}
                               </p>
                               <p className={cn(
-                                "text-3xl font-black italic tracking-tighter",
+                                "text-3xl font-black tracking-tight",
                                 currentBalance >= 0 ? "text-emerald-400" : "text-red-500"
                               )}>
                                 <RollingCounter value={`${currentBalance >= 0 ? '+' : ''}${formatCurrency(currentBalance)}`} />
@@ -1508,7 +1508,7 @@ export default function Customers() {
                               </p>
                             </div>
                             <div className="text-right">
-                               <p className="text-lg font-black text-slate-900 italic tracking-tighter">{formatCurrency(sale.total)}</p>
+                               <p className="text-lg font-black text-slate-900 tracking-tight">{formatCurrency(sale.total)}</p>
                                <div className="flex items-center gap-1.5 justify-end mt-0.5">
                                  <span className={cn(
                                    "text-[9px] font-black uppercase rounded-[6px] px-1.5 py-0.5 tracking-wider",

@@ -19,6 +19,7 @@ export interface Product {
   minStock: number;
   isDropshipping?: boolean;
   updatedAt: any;
+  photoUrl?: string;
 }
 
 export interface Customer {
