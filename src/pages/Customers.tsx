@@ -53,13 +53,48 @@ export default function Customers() {
   const [selectedBirthdayMonth, setSelectedBirthdayMonth] = useState<number>(new Date().getMonth()); // 0-11
   const [selectedBirthdayDay, setSelectedBirthdayDay] = useState<number | null>(null);
 
+  // CRM Whatsapp state
+  const [crmCustomer, setCrmCustomer] = useState<Customer | null>(null);
+  const [isCrmModalOpen, setIsCrmModalOpen] = useState(false);
+  const [customCrmMessage, setCustomCrmMessage] = useState('');
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('agradecimento');
+
+  const handleCrmTemplateChange = (templateId: string, customer: Customer) => {
+    setSelectedTemplateId(templateId);
+    const customerSales = sales.filter(s => s.customerId === customer.id).sort((a,b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+    const latestSale = customerSales[0];
+    const productsStr = latestSale ? latestSale.items.map(item => `${item.quantity}x ${item.name}`).join(', ') : 'seu produto';
+    
+    let msg = '';
+    if (templateId === 'agradecimento') {
+      msg = `Olá *${customer.name}*, muito obrigado pela sua compra! Seu pedido foi registrado com sucesso. É um imenso prazer ter você como cliente do Club da Bola! ⚽`;
+    } else if (templateId === 'envio') {
+      msg = `Olá *${customer.name}*, seu pedido de *${productsStr}* foi enviado! Acompanhe por aqui com a gente e qualquer dúvida estamos à disposição. Abraços! ⚽`;
+    } else if (templateId === 'mural') {
+      msg = `E aí *${customer.name}*, o que achou do seu novo produto? Poste uma foto bem bacana no nosso Mural de Clientes e garanta Cashback especial para a sua próxima compra! 📸⚽`;
+    }
+    setCustomCrmMessage(msg);
+  };
+
+  const sendCrmMessage = () => {
+    if (!crmCustomer) return;
+    const phone = crmCustomer.contact ? crmCustomer.contact.replace(/\D/g, '') : '';
+    let finalPhone = phone;
+    if (phone && phone.length <= 11) {
+      finalPhone = '55' + phone;
+    }
+    const encoded = encodeURIComponent(customCrmMessage);
+    window.open(`https://wa.me/${finalPhone}?text=${encoded}`, '_blank');
+    setIsCrmModalOpen(false);
+  };
+
   useEffect(() => {
-    if (isModalOpen || isHistoryOpen || isBirthdayCalendarOpen) {
+    if (isModalOpen || isHistoryOpen || isBirthdayCalendarOpen || isCrmModalOpen) {
       setIsSidebarOpen(false);
     } else {
       setIsSidebarOpen(true);
     }
-  }, [isModalOpen, isHistoryOpen, isBirthdayCalendarOpen, setIsSidebarOpen]);
+  }, [isModalOpen, isHistoryOpen, isBirthdayCalendarOpen, isCrmModalOpen, setIsSidebarOpen]);
 
   useEffect(() => {
     const q = query(collection(db, 'customers'), orderBy('name', 'asc'));
@@ -891,6 +926,13 @@ export default function Customers() {
                   </td>
                   <td className="px-8 py-5">
                     <div className="flex items-center justify-end gap-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => {
+                        setCrmCustomer(customer);
+                        handleCrmTemplateChange('agradecimento', customer);
+                        setIsCrmModalOpen(true);
+                      }} className="p-2.5 hover:bg-emerald-600 hover:text-white text-emerald-600 rounded-xl transition-all shadow-sm bg-white border border-slate-100" title="CRM Mensagens WhatsApp">
+                        <MessageCircle size={16} />
+                      </button>
                       <button onClick={() => openHistory(customer)} className="p-2.5 hover:bg-red-800 hover:text-white text-slate-900 rounded-xl transition-all shadow-sm bg-white border border-slate-100" title="Histórico / Pagamento">
                         <Wallet size={16} />
                       </button>
@@ -952,7 +994,14 @@ export default function Customers() {
                 <div className="flex items-center justify-between pt-2 border-t border-slate-50">
                   <div className="flex gap-2">
                     <button onClick={() => openHistory(customer)} className="px-3 py-1.5 bg-amber-500/10 text-amber-700 rounded-lg text-[9px] font-black uppercase tracking-widest flex items-center gap-1 border border-amber-500/20">
-                      <Wallet size={12} /> Pagar / Extrato
+                      <Wallet size={12} /> Pagar
+                    </button>
+                    <button onClick={() => {
+                      setCrmCustomer(customer);
+                      handleCrmTemplateChange('agradecimento', customer);
+                      setIsCrmModalOpen(true);
+                    }} className="px-3 py-1.5 bg-emerald-500/10 text-emerald-700 rounded-lg text-[9px] font-black uppercase tracking-widest flex items-center gap-1 border border-emerald-500/20">
+                      <MessageCircle size={12} /> CRM
                     </button>
                   </div>
                   <div className="flex gap-2">
@@ -1148,6 +1197,132 @@ export default function Customers() {
                     </div>
                   </div>
                 )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* CRM Whatsapp Modal */}
+      <AnimatePresence>
+        {isCrmModalOpen && crmCustomer && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15, ease: "easeOut" }}
+              onClick={() => setIsCrmModalOpen(false)}
+              className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" 
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.93, y: 15 }} 
+              animate={{ opacity: 1, scale: 1, y: 0 }} 
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ type: "spring", damping: 25, stiffness: 350 }}
+              className="bg-white rounded-3xl shadow-2xl relative z-10 w-full max-w-lg overflow-hidden border border-slate-200 font-sans"
+            >
+              <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                    <MessageCircle className="text-emerald-600 size-5" />
+                    Central CRM WhatsApp
+                  </h3>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Disparar mensagem rápida pós-venda</p>
+                </div>
+                <button type="button" onClick={() => setIsCrmModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-2 hover:bg-slate-200 rounded-lg transition-colors">
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-6">
+                {/* Customer Header Info */}
+                <div className="bg-slate-50 border border-slate-200/60 p-4 rounded-2xl flex items-center gap-3">
+                  <div className="size-10 bg-emerald-500/10 text-emerald-700 rounded-xl flex items-center justify-center font-black text-lg">
+                    {crmCustomer.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-slate-900 text-sm leading-tight">{crmCustomer.name}</h4>
+                    <p className="text-[10px] text-slate-500 font-medium tracking-tight mt-0.5">{crmCustomer.contact || 'Sem contato cadastrado'}</p>
+                  </div>
+                </div>
+
+                {/* Template Selector Cards */}
+                <div className="space-y-2">
+                  <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Selecione o Modelo de Mensagem</label>
+                  <div className="grid grid-cols-1 gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => handleCrmTemplateChange('agradecimento', crmCustomer)}
+                      className={cn(
+                        "text-left p-4 rounded-2xl border transition-all flex flex-col gap-1 w-full",
+                        selectedTemplateId === 'agradecimento' 
+                          ? "border-emerald-500 bg-emerald-50/15 ring-2 ring-emerald-500/10" 
+                          : "border-slate-200 hover:border-slate-300 bg-white"
+                      )}
+                    >
+                      <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700">⚽ 1. Agradecimento e Boas-Vindas</span>
+                      <span className="text-xs text-slate-500 line-clamp-1">Agradece pela preferência de forma calorosa.</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleCrmTemplateChange('envio', crmCustomer)}
+                      className={cn(
+                        "text-left p-4 rounded-2xl border transition-all flex flex-col gap-1 w-full",
+                        selectedTemplateId === 'envio' 
+                          ? "border-emerald-500 bg-emerald-50/15 ring-2 ring-emerald-500/10" 
+                          : "border-slate-200 hover:border-slate-300 bg-white"
+                      )}
+                    >
+                      <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700">📦 2. Envio e Rastreamento</span>
+                      <span className="text-xs text-slate-500 line-clamp-1">Informa que o pedido foi enviado com os produtos listados.</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleCrmTemplateChange('mural', crmCustomer)}
+                      className={cn(
+                        "text-left p-4 rounded-2xl border transition-all flex flex-col gap-1 w-full",
+                        selectedTemplateId === 'mural' 
+                          ? "border-emerald-500 bg-emerald-50/15 ring-2 ring-emerald-500/10" 
+                          : "border-slate-200 hover:border-slate-300 bg-white"
+                      )}
+                    >
+                      <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700">📸 3. Convite Mural & Cashback</span>
+                      <span className="text-xs text-slate-500 line-clamp-1">Convida para postar foto no mural e ganhar cashback.</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Preview Message */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Pré-visualização e Edição da Mensagem</label>
+                  <textarea
+                    value={customCrmMessage}
+                    onChange={(e) => setCustomCrmMessage(e.target.value)}
+                    rows={4}
+                    className="w-full px-4 py-3 border border-slate-200 rounded-2xl outline-none focus:ring-1 focus:ring-emerald-500 font-medium text-xs transition-all bg-slate-50 text-slate-700 leading-relaxed resize-none custom-scrollbar"
+                  />
+                </div>
+              </div>
+
+              <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
+                <button 
+                  type="button" 
+                  onClick={() => setIsCrmModalOpen(false)} 
+                  className="px-6 py-2.5 text-[11px] font-black uppercase text-slate-400 hover:text-slate-600 transition-all tracking-widest"
+                >
+                  Descartar
+                </button>
+                <button 
+                  type="button" 
+                  onClick={sendCrmMessage}
+                  className="px-10 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-black uppercase rounded-xl transition-all shadow-lg shadow-emerald-700/25 tracking-widest flex items-center gap-2"
+                >
+                  <MessageCircle size={14} />
+                  Enviar no WhatsApp
+                </button>
               </div>
             </motion.div>
           </div>

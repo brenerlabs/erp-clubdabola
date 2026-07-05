@@ -1,11 +1,30 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import { getFirestore, doc, getDocFromServer, enableMultiTabIndexedDbPersistence } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+
+// Ativar persistência offline multi-abas para suportar quedas de conexão e funcionamento do PDV
+if (typeof window !== 'undefined') {
+  enableMultiTabIndexedDbPersistence(db)
+    .then(() => {
+      console.log('Persistência offline do Firestore ativada com sucesso!');
+    })
+    .catch((err) => {
+      if (err.code === 'failed-precondition') {
+        // Múltiplas abas abertas, a persistência já está ativa em outra aba.
+        console.warn('Persistência do Firestore: Outra aba já está aberta com persistência ativa.');
+      } else if (err.code === 'unimplemented') {
+        // O navegador não oferece suporte aos recursos necessários
+        console.warn('Persistência do Firestore: Navegador atual não suporta IndexedDB.');
+      } else {
+        console.error('Erro ao ativar persistência offline do Firestore:', err);
+      }
+    });
+}
 
 export enum OperationType {
   CREATE = 'create',

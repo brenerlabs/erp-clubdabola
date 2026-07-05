@@ -57,6 +57,20 @@ export default function App() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string>('');
   const [logoScale, setLogoScale] = useState<number>(1.0);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   // Check URL suffix for public receipt landing page bypass
   const queryParams = new URLSearchParams(window.location.search);
@@ -378,6 +392,18 @@ export default function App() {
 
           </div>
           <div className="flex items-center gap-3 md:gap-6">
+            {isOnline ? (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-full text-[9px] font-black uppercase tracking-wider shadow-sm">
+                <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="hidden sm:inline">Conectado</span>
+                <span className="sm:hidden">Online</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 text-amber-700 border border-amber-100 rounded-full text-[9px] font-black uppercase tracking-wider shadow-sm">
+                <span className="size-1.5 rounded-full bg-amber-500 animate-pulse" />
+                <span>Modo Offline</span>
+              </div>
+            )}
             <button className="hidden md:flex items-center gap-2 bg-slate-900 text-white px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-widest shadow-xl shadow-slate-200 hover:bg-black transition-all">
               <Send size={14} />
               Protocolo Ativo
