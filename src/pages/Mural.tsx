@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, query, onSnapshot, addDoc, deleteDoc, doc, updateDoc, setDoc, getDoc, orderBy } from 'firebase/firestore';
-import { Customer, Sale, CustomerPhoto } from '../types';
-import { Plus, Search, Trash2, Camera, Upload, Image as ImageIcon, Sparkles, X, Settings, Check, HelpCircle, FileImage, Copy, Lightbulb, TrendingUp, Contrast, Instagram, Share2, Download, Grid, RotateCcw } from 'lucide-react';
+import { Customer, Sale, CustomerPhoto, Coupon } from '../types';
+import { Plus, Search, Trash2, Camera, Upload, Image as ImageIcon, Sparkles, X, Settings, Check, HelpCircle, FileImage, Copy, Lightbulb, TrendingUp, Contrast, Instagram, Share2, Download, Grid, RotateCcw, Tag, Percent, Calendar, Gift } from 'lucide-react';
 import { formatCurrency, cn, smartSearchMatch } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { SidebarContext } from '../App';
@@ -65,13 +65,23 @@ export function resizeImage(file: File, maxWidth: number, maxHeight: number): Pr
 
 export default function Mural() {
   const { setIsSidebarOpen } = useContext(SidebarContext);
-  const [activeSubTab, setActiveSubTab] = useState<'photos' | 'logo'>('photos');
+  const [activeSubTab, setActiveSubTab] = useState<'photos' | 'logo' | 'coupons'>('photos');
 
   // Customer Photos state
   const [photos, setPhotos] = useState<CustomerPhoto[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Coupons state
+  const [coupons, setCoupons] = useState<Coupon[]>([]);
+  const [isCouponModalOpen, setIsCouponModalOpen] = useState(false);
+  const [couponCode, setCouponCode] = useState('');
+  const [couponType, setCouponType] = useState<'percentage' | 'fixed'>('percentage');
+  const [couponValue, setCouponValue] = useState('');
+  const [couponMinPurchase, setCouponMinPurchase] = useState('');
+  const [couponExpiresAt, setCouponExpiresAt] = useState('');
+  const [isSavingCoupon, setIsSavingCoupon] = useState(false);
 
   // New photo modal state
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
@@ -88,6 +98,7 @@ export default function Mural() {
   const [selectedSaleId, setSelectedSaleId] = useState('');
   const [photoDescription, setPhotoDescription] = useState('');
   const [customerSearchQuery, setCustomerSearchQuery] = useState('');
+  const [showInCatalog, setShowInCatalog] = useState<boolean>(true);
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
 
   // Stories Generator state
@@ -96,7 +107,7 @@ export default function Mural() {
   const [storiesText, setStoriesText] = useState('Cliente satisfeito vestindo o manto sagrado! ⚽🔥');
   const [storiesProduct, setStoriesProduct] = useState('');
   const [storiesImpactPhrase, setStoriesImpactPhrase] = useState('Qualidade premium e caimento indiscutível! 🔥');
-  const [storiesTheme, setStoriesTheme] = useState<'red' | 'black' | 'green' | 'gold'>('red');
+  const [storiesTheme, setStoriesTheme] = useState<'red' | 'black' | 'green' | 'gold' | 'champions' | 'brasil' | 'cyberpunk'>('red');
   const [storiesShowLogo, setStoriesShowLogo] = useState(true);
   const [storiesFormat, setStoriesFormat] = useState<'story' | 'feed'>('story');
   const [storiesSticker, setStoriesSticker] = useState<'none' | 'vip' | 'original' | 'sagrado' | 'limitada'>('none');
@@ -166,6 +177,12 @@ export default function Mural() {
       setSales(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Sale)));
     });
 
+    // Read coupons
+    const qCoupons = query(collection(db, 'coupons'), orderBy('createdAt', 'desc'));
+    const unsubCoupons = onSnapshot(qCoupons, (snapshot) => {
+      setCoupons(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Coupon)));
+    });
+
     // Read saved logo
     const getLogo = async () => {
       try {
@@ -185,6 +202,7 @@ export default function Mural() {
       unsubPhotos();
       unsubCust();
       unsubSales();
+      unsubCoupons();
     };
   }, []);
 
@@ -218,6 +236,63 @@ export default function Mural() {
     setCustomerSearchQuery(customer.name);
     setShowCustomerDropdown(false);
     setSelectedSaleId(''); // Reset sale selection
+  };
+
+  const handleSaveCoupon = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!couponCode || !couponValue) return;
+
+    setIsSavingCoupon(true);
+    try {
+      const codeUpper = couponCode.trim().toUpperCase();
+      const valNum = parseFloat(couponValue);
+      const minNum = couponMinPurchase ? parseFloat(couponMinPurchase) : 0;
+
+      const newCoupon: Coupon = {
+        code: codeUpper,
+        type: couponType,
+        value: valNum,
+        minPurchase: minNum,
+        isActive: true,
+        expiresAt: couponExpiresAt || undefined,
+        createdAt: new Date().toISOString()
+      };
+
+      await addDoc(collection(db, 'coupons'), newCoupon);
+
+      // Reset fields
+      setCouponCode('');
+      setCouponType('percentage');
+      setCouponValue('');
+      setCouponMinPurchase('');
+      setCouponExpiresAt('');
+      setIsCouponModalOpen(false);
+    } catch (err) {
+      console.error("Erro ao salvar cupom:", err);
+      handleFirestoreError(err, OperationType.WRITE, 'coupons');
+    } finally {
+      setIsSavingCoupon(false);
+    }
+  };
+
+  const handleDeleteCoupon = async (id: string) => {
+    if (!window.confirm("Deseja realmente excluir este cupom de desconto?")) return;
+    try {
+      await deleteDoc(doc(db, 'coupons', id));
+    } catch (err) {
+      console.error("Erro ao excluir cupom:", err);
+    }
+  };
+
+  const handleToggleCouponActive = async (coupon: Coupon) => {
+    if (!coupon.id) return;
+    try {
+      await updateDoc(doc(db, 'coupons', coupon.id), {
+        isActive: !coupon.isActive
+      });
+    } catch (err) {
+      console.error("Erro ao alterar status do cupom:", err);
+    }
   };
 
   const handlePhotoUploadChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -280,6 +355,7 @@ export default function Mural() {
           offsetX: photoOffsetX,
           offsetY: photoOffsetY,
           mantoType: mantoType || 'Manto I (Home)',
+          showInCatalog: showInCatalog,
         });
         alert("Publicação atualizada com sucesso!");
       } else {
@@ -296,6 +372,7 @@ export default function Mural() {
           offsetX: photoOffsetX,
           offsetY: photoOffsetY,
           mantoType: mantoType || 'Manto I (Home)',
+          showInCatalog: showInCatalog,
           createdAt: new Date(), // Local fallback or standard ServerTimestamp mock
         });
         alert("Nova foto guardada com sucesso no mural!");
@@ -312,6 +389,7 @@ export default function Mural() {
       setPhotoOffsetX(0);
       setPhotoOffsetY(0);
       setMantoType('Manto I (Home)');
+      setShowInCatalog(true);
       setEditingPhotoId(null);
       setIsPhotoModalOpen(false);
 
@@ -360,13 +438,77 @@ export default function Mural() {
         grad.addColorStop(0, '#064e3b');
         grad.addColorStop(0.5, '#022c22');
         grad.addColorStop(1, '#021e17');
-      } else { // gold
+      } else if (storiesTheme === 'gold') {
         grad.addColorStop(0, '#78350f');
         grad.addColorStop(0.5, '#451a03');
         grad.addColorStop(1, '#1c0a00');
+      } else if (storiesTheme === 'champions') {
+        grad.addColorStop(0, '#050b14');
+        grad.addColorStop(0.5, '#0d1b3e');
+        grad.addColorStop(1, '#172f69');
+      } else if (storiesTheme === 'brasil') {
+        grad.addColorStop(0, '#006a3f');
+        grad.addColorStop(0.5, '#009639');
+        grad.addColorStop(1, '#ffdf00');
+      } else if (storiesTheme === 'cyberpunk') {
+        grad.addColorStop(0, '#090514');
+        grad.addColorStop(0.5, '#1c0e2d');
+        grad.addColorStop(1, '#3b0764');
       }
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, 1080, isFeed ? 1080 : 1920);
+
+      // Custom canvas decorations based on selected theme
+      if (storiesTheme === 'champions') {
+        ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
+        const stars = [
+          { x: 100, y: 150 }, { x: 300, y: 80 }, { x: 900, y: 120 }, { x: 800, y: 250 },
+          { x: 150, y: 1000 }, { x: 950, y: 900 }, { x: 850, y: 1100 }, { x: 200, y: 1050 }
+        ];
+        stars.forEach(s => {
+          if (isFeed && s.y > 1080) return;
+          ctx.beginPath();
+          ctx.arc(s.x, s.y, 3.5, 0, Math.PI * 2);
+          ctx.fill();
+        });
+
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.04)";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(540, isFeed ? 540 : 960, 380, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(540, isFeed ? 540 : 960, 580, 0, Math.PI * 2);
+        ctx.stroke();
+      } else if (storiesTheme === 'brasil') {
+        ctx.strokeStyle = "rgba(255, 223, 0, 0.12)";
+        ctx.lineWidth = 35;
+        ctx.beginPath();
+        ctx.moveTo(-100, isFeed ? 200 : 300);
+        ctx.bezierCurveTo(300, 100, 700, isFeed ? 900 : 1200, 1180, isFeed ? 800 : 1500);
+        ctx.stroke();
+
+        ctx.strokeStyle = "rgba(0, 150, 57, 0.15)";
+        ctx.lineWidth = 45;
+        ctx.beginPath();
+        ctx.moveTo(-100, isFeed ? 800 : 1500);
+        ctx.bezierCurveTo(400, isFeed ? 500 : 1000, 600, 200, 1180, isFeed ? 300 : 400);
+        ctx.stroke();
+      } else if (storiesTheme === 'cyberpunk') {
+        ctx.strokeStyle = "rgba(244, 63, 94, 0.3)";
+        ctx.lineWidth = 8;
+        ctx.beginPath();
+        ctx.moveTo(80, 60);
+        ctx.lineTo(1000, 60);
+        ctx.stroke();
+
+        ctx.strokeStyle = "rgba(217, 70, 239, 0.3)";
+        ctx.lineWidth = 8;
+        ctx.beginPath();
+        ctx.moveTo(60, 80);
+        ctx.lineTo(60, isFeed ? 1000 : 1840);
+        ctx.stroke();
+      }
 
       // Helper to draw rounded rectangle clip
       const drawRoundedRect = (cx: number, cy: number, w: number, h: number, r: number) => {
@@ -582,7 +724,7 @@ export default function Mural() {
       // Draw wrapped marketing caption text
       const words = storiesText.split(' ');
       let line = '';
-      let textY = isFeed ? 210 : 1465;
+      let textY = isFeed ? Math.max(210, 90 + (storiesShowLogo ? 100 * logoScale : 0) + 35) : 1465;
       const maxLineWidth = isFeed ? 420 : 850;
       const lineHeight = isFeed ? 42 : 50;
 
@@ -965,7 +1107,8 @@ export default function Mural() {
           )}>
             {[
               { key: 'photos', label: 'Mural de Clientes', icon: <Camera size={14} /> },
-              { key: 'logo', label: 'Logo e Capa (Favicon)', icon: <Settings size={14} /> }
+              { key: 'logo', label: 'Logo e Capa (Favicon)', icon: <Settings size={14} /> },
+              { key: 'coupons', label: 'Cupons de Desconto', icon: <Tag size={14} /> }
             ].map(tab => {
               const isActive = activeSubTab === tab.key;
               return (
@@ -1625,6 +1768,23 @@ export default function Mural() {
                         </p>
                       )}
 
+                      {/* Status no Catálogo */}
+                      <div className="mt-1.5">
+                        <span className={cn(
+                          "inline-flex items-center gap-1 text-[7.5px] font-black uppercase tracking-wider px-2 py-0.5 rounded border",
+                          item.showInCatalog !== false
+                            ? highContrast 
+                              ? "bg-yellow-450 text-black border-yellow-450" 
+                              : "bg-emerald-50 text-emerald-800 border-emerald-150"
+                            : highContrast
+                              ? "bg-zinc-800 text-zinc-400 border-zinc-700"
+                              : "bg-slate-100 text-slate-400 border-slate-200"
+                        )}>
+                          <span className={cn("size-1 rounded-full animate-pulse", item.showInCatalog !== false ? "bg-emerald-500" : "bg-slate-400")} />
+                          {item.showInCatalog !== false ? "Exibido no Catálogo" : "Oculto no Catálogo"}
+                        </span>
+                      </div>
+
                       {item.saleItemsSummary && (
                         <p className={cn(
                           "text-[9px] mt-1 break-words font-semibold leading-relaxed",
@@ -1707,6 +1867,7 @@ export default function Mural() {
                           setPhotoOffsetX(item.offsetX || 0);
                           setPhotoOffsetY(item.offsetY || 0);
                           setMantoType(item.mantoType || 'Manto I (Home)');
+                          setShowInCatalog(item.showInCatalog !== false);
                           setIsPhotoModalOpen(true);
                         }}
                         className={cn(
@@ -1966,6 +2127,449 @@ export default function Mural() {
               )}
             </AnimatePresence>
           </div>
+        </div>
+      )}
+
+      {activeSubTab === 'coupons' && (
+        <div className="space-y-6">
+          {/* Action Header */}
+          <div className={cn(
+            "flex flex-col sm:flex-row items-center justify-between gap-4 rounded-[24px] p-4 border transition-all duration-200",
+            highContrast 
+              ? "bg-black border-white border-4 text-white shadow-[4px_4px_0px_rgba(255,255,255,1)]" 
+              : "bg-white border-slate-200 shadow-sm"
+          )}>
+            <div>
+              <h2 className={cn(
+                "text-xs font-black uppercase tracking-widest flex items-center gap-2",
+                highContrast ? "text-yellow-400" : "text-slate-850"
+              )}>
+                <Gift size={16} className="text-amber-500 animate-pulse" /> Cupons de Desconto Cadastrados ({coupons.length})
+              </h2>
+              <p className={cn(
+                "text-[9px] font-bold uppercase tracking-wider mt-1 block",
+                highContrast ? "text-zinc-400" : "text-slate-400"
+              )}>Crie códigos promocionais para os seus clientes aplicarem no catálogo público</p>
+            </div>
+
+            <button 
+              onClick={() => {
+                setCouponCode('');
+                setCouponType('percentage');
+                setCouponValue('');
+                setCouponMinPurchase('');
+                setCouponExpiresAt('');
+                setIsCouponModalOpen(true);
+              }}
+              className={cn(
+                "w-full sm:w-auto px-6 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2",
+                highContrast
+                  ? "bg-yellow-400 hover:bg-yellow-300 text-black border-black border-2 font-black shadow-[3px_3px_0px_rgba(255,255,255,1)]"
+                  : "bg-red-800 hover:bg-slate-950 text-white shadow-md hover:scale-[1.01]"
+              )}
+            >
+              <Plus size={14} /> Criar Novo Cupom
+            </button>
+          </div>
+
+          {/* Coupons list */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {coupons.length === 0 ? (
+              <div className={cn(
+                "col-span-full rounded-[32px] p-16 border flex flex-col items-center justify-center text-center transition-all duration-200",
+                highContrast 
+                  ? "bg-black border-white border-4 text-white" 
+                  : "bg-white border-slate-200 shadow-sm"
+              )}>
+                <div className={cn(
+                  "size-16 rounded-3xl flex items-center justify-center mb-4",
+                  highContrast ? "bg-zinc-900 text-yellow-400 border border-zinc-850" : "bg-slate-50 text-slate-300 border border-slate-100"
+                )}>
+                  <Tag size={28} />
+                </div>
+                <h3 className={cn(
+                  "text-sm font-black uppercase tracking-wider mb-2",
+                  highContrast ? "text-yellow-400" : "text-slate-700"
+                )}>Nenhum cupom ativo</h3>
+                <p className={cn(
+                  "text-xs max-w-sm mb-6 leading-relaxed",
+                  highContrast ? "text-zinc-300 font-bold" : "text-slate-400"
+                )}>Crie cupons com desconto em porcentagem (%) ou valor fixo (R$) para incentivar novas compras e impulsionar suas campanhas de marketing.</p>
+                <button 
+                  onClick={() => setIsCouponModalOpen(true)}
+                  className={cn(
+                    "px-6 py-3 rounded-xl text-[10px] uppercase font-black tracking-widest transition-all font-sans",
+                    highContrast
+                      ? "bg-yellow-400 text-black border-black border-2 shadow-[3px_3px_0px_rgba(255,255,255,1)] hover:bg-yellow-300"
+                      : "bg-red-800 text-white hover:bg-slate-900"
+                  )}
+                >
+                  Cadastrar Primeiro Cupom
+                </button>
+              </div>
+            ) : (
+              coupons.map((coupon) => {
+                const isExpired = coupon.expiresAt && new Date(coupon.expiresAt) < new Date(new Date().setHours(0,0,0,0));
+                return (
+                  <div 
+                    key={coupon.id}
+                    className={cn(
+                      "rounded-[24px] p-5 border flex flex-col justify-between gap-4 transition-all relative overflow-hidden",
+                      highContrast 
+                        ? coupon.isActive && !isExpired ? "bg-black border-white border-2 text-white" : "bg-zinc-950 border-zinc-800 text-zinc-500"
+                        : coupon.isActive && !isExpired
+                          ? "bg-white border-slate-200 shadow-sm hover:shadow-md" 
+                          : "bg-slate-50/75 border-slate-200 text-slate-400"
+                    )}
+                  >
+                    {/* Visual ticket notch effects */}
+                    <div className={cn(
+                      "absolute top-1/2 -left-3 size-6 rounded-full border transition-all",
+                      highContrast ? "bg-zinc-950 border-white" : "bg-slate-100 border-slate-200"
+                    )} style={{ transform: 'translateY(-50%)' }} />
+                    <div className={cn(
+                      "absolute top-1/2 -right-3 size-6 rounded-full border transition-all",
+                      highContrast ? "bg-zinc-950 border-white" : "bg-slate-100 border-slate-200"
+                    )} style={{ transform: 'translateY(-50%)' }} />
+
+                    {/* Header: Code & Type badge */}
+                    <div className="flex items-start justify-between px-2">
+                      <div className="space-y-1">
+                        <span className={cn(
+                          "text-base font-black tracking-wider uppercase font-mono block",
+                          highContrast
+                            ? coupon.isActive && !isExpired ? "text-yellow-400" : "text-zinc-600"
+                            : coupon.isActive && !isExpired ? "text-red-800" : "text-slate-500"
+                        )}>
+                          {coupon.code}
+                        </span>
+                        <span className="text-[8.5px] uppercase font-black tracking-widest block text-slate-450">
+                          {coupon.type === 'percentage' ? 'Desconto Percentual' : 'Desconto Fixo'}
+                        </span>
+                      </div>
+
+                      <span className={cn(
+                        "px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border",
+                        coupon.isActive && !isExpired
+                          ? highContrast
+                            ? "bg-yellow-400 text-black border-black"
+                            : "bg-red-50 text-red-800 border-red-100"
+                          : "bg-slate-200 text-slate-500 border-slate-300"
+                      )}>
+                        {coupon.type === 'percentage' ? `${coupon.value}% OFF` : `R$ ${coupon.value.toFixed(2)} OFF`}
+                      </span>
+                    </div>
+
+                    {/* Middle details */}
+                    <div className="border-t border-dashed border-slate-200/80 pt-3 space-y-2 px-2 text-[9.5px] font-bold">
+                      <div className="flex justify-between items-center">
+                        <span className="uppercase text-slate-450">Compra Mínima:</span>
+                        <span className={cn(
+                          "font-mono font-black",
+                          highContrast ? "text-white" : "text-slate-800"
+                        )}>
+                          {coupon.minPurchase && coupon.minPurchase > 0 ? formatCurrency(coupon.minPurchase) : 'Sem mínimo'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="uppercase text-slate-455">Validade:</span>
+                        <span className={cn(
+                          "font-black flex items-center gap-1",
+                          isExpired 
+                            ? "text-rose-600 font-extrabold uppercase" 
+                            : highContrast ? "text-white" : "text-slate-800"
+                        )}>
+                          <Calendar size={10} />
+                          {coupon.expiresAt 
+                            ? new Date(coupon.expiresAt).toLocaleDateString('pt-BR') 
+                            : 'Ilimitada'}
+                          {isExpired && " (EXPIRADO)"}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Footer toggles & Actions */}
+                    <div className="flex items-center justify-between border-t border-slate-100 pt-3 px-2 shrink-0">
+                      <button
+                        onClick={() => handleToggleCouponActive(coupon)}
+                        disabled={isExpired}
+                        className={cn(
+                          "px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all border flex items-center gap-1",
+                          coupon.isActive && !isExpired
+                            ? "bg-emerald-600 border-emerald-500 text-white hover:bg-emerald-500"
+                            : "bg-zinc-850 border-zinc-700 text-slate-400 hover:text-white"
+                        )}
+                      >
+                        {coupon.isActive && !isExpired ? '✓ Ativo' : 'Inativo'}
+                      </button>
+
+                      <button
+                        onClick={() => coupon.id && handleDeleteCoupon(coupon.id)}
+                        className={cn(
+                          "p-1.5 rounded-lg border transition-all text-red-500",
+                          highContrast 
+                            ? "bg-red-950 border-red-900 text-red-200 hover:bg-red-900" 
+                            : "border-rose-100 bg-rose-50/40 hover:bg-rose-50 hover:border-rose-200"
+                        )}
+                        title="Deletar Cupom"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Create Coupon Modal */}
+          <AnimatePresence>
+            {isCouponModalOpen && (
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                className="fixed inset-0 bg-slate-950/70 backdrop-blur-md z-[100] flex items-center justify-center p-4 overflow-y-auto"
+              >
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.93, y: 15 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                  transition={{ type: "spring", damping: 25, stiffness: 350 }}
+                  className={cn(
+                    "rounded-[32px] max-w-md w-full flex flex-col shadow-2xl overflow-hidden relative max-h-[85vh] transition-all duration-200 border my-auto",
+                    highContrast 
+                      ? "bg-black border-white border-4 text-white" 
+                      : "bg-white border-slate-100"
+                  )}
+                >
+                  {/* Modal Header */}
+                  <div className={cn(
+                    "p-6 flex items-center justify-between border-b shrink-0 transition-all duration-200",
+                    highContrast ? "bg-zinc-950 border-zinc-800 text-white" : "bg-slate-900 border-slate-800 text-white"
+                  )}>
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        "size-10 rounded-2xl flex items-center justify-center",
+                        highContrast ? "bg-yellow-400 text-black font-black" : "bg-red-800 text-white shadow-md"
+                      )}>
+                        <Tag size={18} />
+                      </div>
+                      <div>
+                        <h3 className="text-xs font-black uppercase tracking-widest text-white">Criar Cupom de Desconto</h3>
+                        <p className="text-[8px] uppercase tracking-wider text-slate-400 font-bold mt-0.5">Novo código promocional ativo</p>
+                      </div>
+                    </div>
+                    <button 
+                      type="button"
+                      onClick={() => setIsCouponModalOpen(false)}
+                      className="p-2 hover:bg-white/10 rounded-xl transition-all text-white"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+
+                  {/* Modal Body / Form */}
+                  <form onSubmit={handleSaveCoupon} className="p-6 overflow-y-auto custom-scrollbar space-y-4">
+                    {/* Code Input */}
+                    <div className="space-y-2">
+                      <label className={cn(
+                        "text-[10px] uppercase font-black tracking-wider block",
+                        highContrast ? "text-yellow-400" : "text-slate-400"
+                      )}>Código do Cupom <span className="text-rose-500">*</span></label>
+                      <input 
+                        required
+                        type="text"
+                        className={cn(
+                          "w-full px-4 py-3 border rounded-xl outline-none font-mono text-sm font-black uppercase transition-all",
+                          highContrast
+                            ? "bg-zinc-900 border-zinc-700 text-white focus:ring-1 focus:ring-yellow-450 focus:border-yellow-450"
+                            : "bg-white border-slate-200 text-slate-800 focus:ring-1 focus:ring-red-800 focus:border-red-800"
+                        )}
+                        placeholder="Ex: BOLA10, BLACKFRIDAY"
+                        value={couponCode}
+                        onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                      />
+                    </div>
+
+                    {/* Coupon Type buttons */}
+                    <div className="space-y-2">
+                      <label className={cn(
+                        "text-[10px] uppercase font-black tracking-wider block",
+                        highContrast ? "text-yellow-400" : "text-slate-400"
+                      )}>Tipo de Desconto <span className="text-rose-500">*</span></label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setCouponType('percentage')}
+                          className={cn(
+                            "py-2.5 rounded-xl border text-[9px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2",
+                            couponType === 'percentage'
+                              ? highContrast
+                                ? "bg-yellow-400 text-black border-black font-black"
+                                : "bg-red-800 text-white border-red-800 shadow-sm font-black"
+                              : highContrast
+                                ? "bg-zinc-900 text-zinc-400 border-zinc-850 hover:bg-zinc-800 hover:text-white"
+                                : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 hover:text-slate-800"
+                          )}
+                        >
+                          <Percent size={12} />
+                          <span>Porcentagem (%)</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCouponType('fixed')}
+                          className={cn(
+                            "py-2.5 rounded-xl border text-[9px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2",
+                            couponType === 'fixed'
+                              ? highContrast
+                                ? "bg-yellow-400 text-black border-black font-black"
+                                : "bg-red-800 text-white border-red-800 shadow-sm font-black"
+                              : highContrast
+                                ? "bg-zinc-900 text-zinc-400 border-zinc-850 hover:bg-zinc-800 hover:text-white"
+                                : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 hover:text-slate-800"
+                          )}
+                        >
+                          <Gift size={12} />
+                          <span>Valor Fixo (R$)</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Value and Minimum purchase */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {/* Discount Value */}
+                      <div className="space-y-2">
+                        <label className={cn(
+                          "text-[10px] uppercase font-black tracking-wider block",
+                          highContrast ? "text-yellow-400" : "text-slate-400"
+                        )}>Valor do Desconto <span className="text-rose-500">*</span></label>
+                        <div className="relative">
+                          <input 
+                            required
+                            type="number"
+                            min="0"
+                            step="any"
+                            className={cn(
+                              "w-full px-4 py-3 border rounded-xl outline-none font-sans text-sm font-semibold transition-all",
+                              couponType === 'fixed' ? "pl-9" : "pr-9",
+                              highContrast
+                                ? "bg-zinc-900 border-zinc-700 text-white focus:ring-1 focus:ring-yellow-450 focus:border-yellow-450"
+                                : "bg-white border-slate-200 text-slate-800 focus:ring-1 focus:ring-red-800 focus:border-red-800"
+                            )}
+                            placeholder={couponType === 'percentage' ? "Ex: 10" : "Ex: 15,00"}
+                            value={couponValue}
+                            onChange={(e) => setCouponValue(e.target.value)}
+                          />
+                          <div className={cn(
+                            "absolute top-1/2 -translate-y-1/2 text-[10px] font-black",
+                            couponType === 'percentage' ? "right-4" : "left-4",
+                            highContrast ? "text-yellow-400" : "text-slate-400"
+                          )}>
+                            {couponType === 'percentage' ? '%' : 'R$'}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Minimum Purchase */}
+                      <div className="space-y-2">
+                        <label className={cn(
+                          "text-[10px] uppercase font-black tracking-wider block",
+                          highContrast ? "text-yellow-400" : "text-slate-400"
+                        )}>Compra Mínima <span className="text-[8px] font-normal lowercase">(opcional)</span></label>
+                        <div className="relative">
+                          <input 
+                            type="number"
+                            min="0"
+                            step="any"
+                            className={cn(
+                              "w-full pl-9 pr-4 py-3 border rounded-xl outline-none font-sans text-sm font-semibold transition-all",
+                              highContrast
+                                ? "bg-zinc-900 border-zinc-700 text-white focus:ring-1 focus:ring-yellow-450 focus:border-yellow-450"
+                                : "bg-white border-slate-200 text-slate-800 focus:ring-1 focus:ring-red-800 focus:border-red-800"
+                            )}
+                            placeholder="Ex: 100,00"
+                            value={couponMinPurchase}
+                            onChange={(e) => setCouponMinPurchase(e.target.value)}
+                          />
+                          <div className={cn(
+                            "absolute left-4 top-1/2 -translate-y-1/2 text-[10px] font-black",
+                            highContrast ? "text-yellow-400" : "text-slate-400"
+                          )}>
+                            R$
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Expiration Date */}
+                    <div className="space-y-2">
+                      <label className={cn(
+                        "text-[10px] uppercase font-black tracking-wider block",
+                        highContrast ? "text-yellow-400" : "text-slate-400"
+                      )}>Data de Expiração <span className="text-[8px] font-normal lowercase">(opcional)</span></label>
+                      <input 
+                        type="date"
+                        className={cn(
+                          "w-full px-4 py-3 border rounded-xl outline-none font-sans text-sm font-semibold transition-all",
+                          highContrast
+                            ? "bg-zinc-900 border-zinc-700 text-white focus:ring-1 focus:ring-yellow-450 focus:border-yellow-450"
+                            : "bg-white border-slate-200 text-slate-800 focus:ring-1 focus:ring-red-800 focus:border-red-800"
+                        )}
+                        value={couponExpiresAt}
+                        onChange={(e) => setCouponExpiresAt(e.target.value)}
+                      />
+                    </div>
+
+                    {/* Modal Actions */}
+                    <div className={cn(
+                      "border-t -mx-6 -mb-6 p-6 flex justify-end gap-3 mt-8 transition-all duration-200",
+                      highContrast 
+                        ? "bg-zinc-950 border-zinc-800" 
+                        : "bg-slate-50 border-slate-100"
+                    )}>
+                      <button 
+                        type="button" 
+                        onClick={() => setIsCouponModalOpen(false)}
+                        className={cn(
+                          "px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border",
+                          highContrast 
+                            ? "bg-zinc-900 border-zinc-700 hover:border-white text-white" 
+                            : "bg-white border-slate-200 hover:bg-slate-50 text-slate-700"
+                        )}
+                      >
+                        Cancelar
+                      </button>
+
+                      <button 
+                        type="submit" 
+                        disabled={isSavingCoupon}
+                        className={cn(
+                          "px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2",
+                          isSavingCoupon
+                            ? "bg-slate-400 cursor-not-allowed"
+                            : highContrast
+                              ? "bg-yellow-400 hover:bg-yellow-300 text-black border-2 border-black font-black shadow-[3px_3px_0px_rgba(255,255,255,1)]"
+                              : "bg-red-800 hover:bg-slate-950 text-white shadow-md hover:scale-[1.01]"
+                        )}
+                      >
+                        {isSavingCoupon ? (
+                          <>
+                            <div className="size-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Salvando...
+                          </>
+                        ) : (
+                          <>
+                            <Check size={14} /> Salvar Cupom
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </form>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       )}
 
@@ -2346,6 +2950,50 @@ export default function Mural() {
                   />
                 </div>
 
+                {/* Exibir no Catálogo Público como Depoimento */}
+                <div className={cn(
+                  "p-4 rounded-2xl border transition-all flex items-start gap-3.5 cursor-pointer select-none",
+                  showInCatalog 
+                    ? highContrast 
+                      ? "bg-zinc-900 border-yellow-400" 
+                      : "bg-emerald-50/50 border-emerald-200" 
+                    : highContrast 
+                      ? "bg-zinc-950 border-zinc-800" 
+                      : "bg-slate-50/50 border-slate-200"
+                )} onClick={() => setShowInCatalog(!showInCatalog)}>
+                  <input 
+                    type="checkbox"
+                    checked={showInCatalog}
+                    onChange={(e) => setShowInCatalog(e.target.checked)}
+                    onClick={(e) => e.stopPropagation()}
+                    className={cn(
+                      "size-4 mt-0.5 cursor-pointer accent-emerald-600 transition-all focus:ring-0",
+                      highContrast ? "accent-yellow-400" : ""
+                    )}
+                  />
+                  <div className="space-y-1">
+                    <span className="flex items-center gap-1.5">
+                      <span className={cn(
+                        "text-[10px] uppercase font-black tracking-wider",
+                        highContrast 
+                          ? showInCatalog ? "text-yellow-400" : "text-zinc-400"
+                          : showInCatalog ? "text-emerald-800" : "text-slate-600"
+                      )}>Exibir no Catálogo Público</span>
+                      {showInCatalog && (
+                        <span className="bg-emerald-100 text-emerald-800 text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded border border-emerald-200 shrink-0">
+                          ⭐ DEPOIMENTO ATIVO
+                        </span>
+                      )}
+                    </span>
+                    <p className={cn(
+                      "text-[9px] font-medium leading-relaxed",
+                      highContrast ? "text-zinc-400" : "text-slate-500"
+                    )}>
+                      Mostrar esta foto com a legenda no mural de depoimentos e galeria de 'Clientes Satisfeitos' para gerar prova social aos novos compradores.
+                    </p>
+                  </div>
+                </div>
+
                 {/* Form submit buttons */}
                 <div className={cn(
                   "border-t -mx-8 -mb-8 p-6 flex justify-end gap-3 mt-8 transition-all duration-200",
@@ -2487,7 +3135,10 @@ export default function Mural() {
                         { id: 'red', name: 'Vermelho Club', class: 'from-rose-950 via-red-900 to-amber-900' },
                         { id: 'black', name: 'Preto Nobre', class: 'from-zinc-950 via-zinc-900 to-zinc-800' },
                         { id: 'green', name: 'Verde Campo', class: 'from-emerald-950 via-teal-900 to-zinc-900' },
-                        { id: 'gold', name: 'Ouro Premium', class: 'from-amber-950 via-yellow-950 to-stone-900' }
+                        { id: 'gold', name: 'Ouro Premium', class: 'from-amber-950 via-yellow-950 to-stone-900' },
+                        { id: 'champions', name: '★ Champions ★', class: 'from-blue-950 via-slate-900 to-indigo-950' },
+                        { id: 'brasil', name: '⚽ Copa Brasil', class: 'from-emerald-700 via-green-600 to-yellow-500' },
+                        { id: 'cyberpunk', name: '⚡ Neon Cyber', class: 'from-violet-950 via-fuchsia-950 to-zinc-950' }
                       ].map(t => (
                         <button
                           key={t.id}
@@ -2759,9 +3410,35 @@ export default function Mural() {
                     storiesTheme === 'red' && "bg-gradient-to-tr from-rose-950 via-red-900 to-amber-950",
                     storiesTheme === 'black' && "bg-gradient-to-tr from-zinc-950 via-zinc-900 to-zinc-850",
                     storiesTheme === 'green' && "bg-gradient-to-tr from-emerald-950 via-teal-900 to-zinc-950",
-                    storiesTheme === 'gold' && "bg-gradient-to-tr from-amber-950 via-yellow-950 to-stone-900"
+                    storiesTheme === 'gold' && "bg-gradient-to-tr from-amber-950 via-yellow-950 to-stone-900",
+                    storiesTheme === 'champions' && "bg-gradient-to-tr from-[#050B14] via-[#0D1B3E] to-[#172F69] border-[#22459c]/30 shadow-[#0D1B3E]/30",
+                    storiesTheme === 'brasil' && "bg-gradient-to-tr from-[#006A3F] via-[#009639] to-[#FFDF00]",
+                    storiesTheme === 'cyberpunk' && "bg-gradient-to-tr from-[#090514] via-[#1C0E2D] to-[#3B0764] border-fuchsia-500/30 shadow-[0_0_15px_rgba(217,70,239,0.15)]"
                   )}
                 >
+                  {/* Visual Children Overlays for Premium Themes */}
+                  {storiesTheme === 'champions' && (
+                    <div className="absolute inset-0 opacity-20 pointer-events-none overflow-hidden bg-[radial-gradient(circle_at_center,_#2563eb_0%,_transparent_100%)]">
+                      <div className="absolute top-4 left-6 text-[8px] text-white">★</div>
+                      <div className="absolute top-12 right-8 text-[6px] text-white">★</div>
+                      <div className="absolute bottom-20 left-10 text-[6px] text-white">★</div>
+                      <div className="absolute bottom-10 right-12 text-[8px] text-white">★</div>
+                      <div className="absolute inset-0 border border-white/5 rounded-[24px]" />
+                    </div>
+                  )}
+                  {storiesTheme === 'brasil' && (
+                    <div className="absolute inset-0 opacity-10 pointer-events-none overflow-hidden">
+                      <div className="absolute -top-10 -left-10 w-24 h-24 rounded-full bg-yellow-400 blur-xl" />
+                      <div className="absolute -bottom-10 -right-10 w-32 h-32 rounded-full bg-emerald-500 blur-2xl" />
+                    </div>
+                  )}
+                  {storiesTheme === 'cyberpunk' && (
+                    <div className="absolute inset-0 opacity-15 pointer-events-none overflow-hidden">
+                      <div className="absolute top-0 left-0 w-full h-[2px] bg-rose-500 shadow-[0_0_8px_#f43f5e]" />
+                      <div className="absolute bottom-0 left-0 w-full h-[2px] bg-fuchsia-500 shadow-[0_0_8px_#d946ef]" />
+                    </div>
+                  )}
+
                   {storiesFormat === 'feed' ? (
                     <>
                       {/* Left: Polaroid card */}
@@ -2802,13 +3479,16 @@ export default function Mural() {
                       <div className="flex-1 h-full flex flex-col justify-between py-1">
                         {/* Right Top Logo */}
                         {storiesShowLogo && (
-                          <div className="h-8 flex items-center justify-center gap-1 opacity-90 shrink-0">
+                          <div 
+                            className="flex items-center justify-center gap-1 opacity-90 shrink-0"
+                            style={{ height: `${32 * Math.max(0.5, logoScale * 0.8)}px` }}
+                          >
                             {logoFile ? (
                               <img 
                                 src={logoFile} 
                                 alt="Logo" 
-                                className="h-6 object-contain" 
-                                style={{ transform: `scale(${logoScale * 0.8})` }}
+                                className="object-contain" 
+                                style={{ height: `${24 * Math.max(0.5, logoScale * 0.8)}px` }}
                               />
                             ) : (
                               <span className="text-[8px] font-black tracking-widest text-white">
@@ -2843,13 +3523,16 @@ export default function Mural() {
                     <>
                       {/* Top Branding */}
                       {storiesShowLogo && (
-                        <div className="h-10 flex items-center justify-center gap-1 opacity-90">
+                        <div 
+                          className="flex items-center justify-center gap-1 opacity-90 shrink-0"
+                          style={{ height: `${40 * Math.max(0.5, logoScale)}px` }}
+                        >
                           {logoFile ? (
                             <img 
                               src={logoFile} 
                               alt="Logo" 
-                              className="h-8 object-contain" 
-                              style={{ transform: `scale(${logoScale})` }}
+                              className="object-contain" 
+                              style={{ height: `${32 * Math.max(0.5, logoScale)}px` }}
                             />
                           ) : (
                             <span className="text-[10px] font-black tracking-widest text-white flex items-center gap-1">

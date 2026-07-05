@@ -29,6 +29,7 @@ export interface Customer {
   totalDebt: number;
   balance?: number;
   updatedAt: any;
+  birthDate?: string;
 }
 
 export interface SaleItem {
@@ -154,6 +155,7 @@ export interface CustomerPhoto {
   offsetX?: number;
   offsetY?: number;
   mantoType?: string | null;
+  showInCatalog?: boolean;
   createdAt: any;
 }
 
@@ -250,4 +252,16 @@ export const getCustomerLoyaltyTier = (totalPurchased: number) => {
     colorName: 'text-amber-800'
   };
 };
+
+export interface Coupon {
+  id?: string;
+  code: string;
+  type: 'percentage' | 'fixed';
+  value: number;
+  minPurchase?: number;
+  isActive: boolean;
+  expiresAt?: string;
+  createdAt: any;
+}
+
 

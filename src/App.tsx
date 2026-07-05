@@ -32,6 +32,7 @@ import Shipments from './pages/Shipments';
 import Mural from './pages/Mural';
 import Reports from './pages/Reports';
 import PublicReceipt from './pages/PublicReceipt';
+import PublicCatalog from './pages/PublicCatalog';
 
 type Page = 'dashboard' | 'pdv' | 'products' | 'customers' | 'finance' | 'compensations' | 'shipments' | 'mural' | 'reports';
 
@@ -60,6 +61,7 @@ export default function App() {
   // Check URL suffix for public receipt landing page bypass
   const queryParams = new URLSearchParams(window.location.search);
   const receiptId = queryParams.get('receipt') || queryParams.get('comprovante');
+  const isCatalogBypass = queryParams.get('catalogo') !== null || queryParams.get('catalog') !== null || queryParams.get('vitrine') !== null;
 
   // Sync Global Settings & Logo
   useEffect(() => {
@@ -167,6 +169,10 @@ export default function App() {
 
   if (receiptId) {
     return <PublicReceipt receiptId={receiptId} />;
+  }
+
+  if (isCatalogBypass) {
+    return <PublicCatalog />;
   }
 
   if (loading) return (

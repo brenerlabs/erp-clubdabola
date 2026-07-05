@@ -70,7 +70,7 @@ service cloud.firestore {
 
     // Collections
     match /products/{productId} {
-      allow read: if isSignedIn();
+      allow read: if true;
       allow write: if isAdmin();
     }
 
@@ -110,7 +110,12 @@ service cloud.firestore {
     }
 
     match /customer_photos/{photoId} {
-      allow read: if isSignedIn();
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /coupons/{couponId} {
+      allow read: if true;
       allow write: if isAdmin();
     }
   }

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, where, orderBy, writeBatch } from 'firebase/firestore';
 import { Customer, Transaction, Sale, Product, generatePixPayload, getCustomerLoyaltyTier } from '../types';
-import { Plus, Search, Edit2, Trash2, Copy, User, Phone, Wallet, History, ArrowDownCircle, ArrowUpCircle, X, ShoppingBag, Star, FileText, Sparkles, MessageCircle } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Copy, User, Phone, Wallet, History, ArrowDownCircle, ArrowUpCircle, X, ShoppingBag, Star, FileText, Sparkles, MessageCircle, Calendar, Cake, ChevronLeft, ChevronRight } from 'lucide-react';
 import { formatCurrency, cn, cleanVariationName, cleanProductNameWithVariation, formatVariationWithGender, formatProductNameWithGender, smartSearchMatch } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { RollingCounter } from '../components/RollingCounter';
@@ -44,17 +44,22 @@ export default function Customers() {
   const [name, setName] = useState('');
   const [contact, setContact] = useState('');
   const [balance, setBalance] = useState<string>('0');
+  const [birthDate, setBirthDate] = useState('');
   const [isImporting, setIsImporting] = useState(false);
   const [activeTab, setActiveTab] = useState<'perfil' | 'history'>('perfil');
   const [historyTab, setHistoryTab] = useState<'transacoes' | 'pedidos' | 'favoritos'>('transacoes');
 
+  const [isBirthdayCalendarOpen, setIsBirthdayCalendarOpen] = useState(false);
+  const [selectedBirthdayMonth, setSelectedBirthdayMonth] = useState<number>(new Date().getMonth()); // 0-11
+  const [selectedBirthdayDay, setSelectedBirthdayDay] = useState<number | null>(null);
+
   useEffect(() => {
-    if (isModalOpen || isHistoryOpen) {
+    if (isModalOpen || isHistoryOpen || isBirthdayCalendarOpen) {
       setIsSidebarOpen(false);
     } else {
       setIsSidebarOpen(true);
     }
-  }, [isModalOpen, isHistoryOpen, setIsSidebarOpen]);
+  }, [isModalOpen, isHistoryOpen, isBirthdayCalendarOpen, setIsSidebarOpen]);
 
   useEffect(() => {
     const q = query(collection(db, 'customers'), orderBy('name', 'asc'));
@@ -77,6 +82,7 @@ export default function Customers() {
     if (customer) {
       setName(isDuplicate ? `${customer.name} (Cópia)` : customer.name);
       setContact(customer.contact);
+      setBirthDate(customer.birthDate || '');
       setEditingCustomer(isDuplicate ? null : customer);
       setActiveTab('perfil');
       const currentBalance = customer.balance !== undefined ? customer.balance : -(customer.totalDebt || 0);
@@ -84,6 +90,7 @@ export default function Customers() {
     } else {
       setName('');
       setContact('');
+      setBirthDate('');
       setEditingCustomer(null);
       setActiveTab('perfil');
       setBalance('0');
@@ -640,7 +647,8 @@ export default function Customers() {
         contact: formattedContact,
         balance: numericBalance,
         totalDebt: computedDebt,
-        updatedAt: serverTimestamp()
+        updatedAt: serverTimestamp(),
+        birthDate: birthDate || ''
       };
 
       if (editingCustomer) {
@@ -746,6 +754,16 @@ export default function Customers() {
             {isImporting ? 'Importando...' : 'Importar Clientes'}
             <input type="file" accept=".csv" className="hidden" onChange={handleCSVImport} disabled={isImporting} />
           </label>
+          <button 
+            onClick={() => {
+              setSelectedBirthdayMonth(new Date().getMonth());
+              setSelectedBirthdayDay(new Date().getDate());
+              setIsBirthdayCalendarOpen(true);
+            }}
+            className="bg-amber-400 hover:bg-amber-500 text-slate-900 font-black py-3 px-6 rounded-xl transition-all shadow-lg shadow-amber-500/10 flex items-center gap-2 active:scale-95 uppercase tracking-widest text-[10px] font-sans"
+          >
+            <Calendar size={18} className="text-slate-900" /> Aniversariantes
+          </button>
           <button 
             onClick={() => openModal()}
             className="bg-red-800 hover:bg-black text-white font-black py-3 px-6 rounded-xl transition-all shadow-lg shadow-red-900/20 flex items-center gap-2 active:scale-95 uppercase tracking-widest text-[10px] font-sans"
@@ -1016,6 +1034,13 @@ export default function Customers() {
                           required type="text" value={contact} onChange={e => setContact(e.target.value)}
                           className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-red-800 font-black text-sm transition-all"
                           placeholder="(99) 99999-9999"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider">Data de Nascimento (Opcional)</label>
+                        <input 
+                          type="date" value={birthDate} onChange={e => setBirthDate(e.target.value)}
+                          className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-red-800 font-black text-sm transition-all"
                         />
                       </div>
                       <div className="space-y-1.5">
@@ -1600,6 +1625,278 @@ export default function Customers() {
             </motion.div>
           </div>
         )})()}
+      </AnimatePresence>
+
+      {/* Monthly Birthday Calendar Modal */}
+      <AnimatePresence>
+        {isBirthdayCalendarOpen && (() => {
+          const MONTHS_PT = [
+            'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+            'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+          ];
+          const WEEKDAYS = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];
+
+          const parseBirthday = (dateStr?: string) => {
+            if (!dateStr) return null;
+            if (dateStr.includes('-')) {
+              const parts = dateStr.split('-');
+              if (parts.length >= 3) {
+                return { 
+                  year: parts[0] ? parseInt(parts[0], 10) : null, 
+                  month: parseInt(parts[1], 10) - 1, 
+                  day: parseInt(parts[2], 10) 
+                };
+              }
+            }
+            if (dateStr.includes('/')) {
+              const parts = dateStr.split('/');
+              if (parts.length >= 3) {
+                return { 
+                  year: parts[2] ? parseInt(parts[2], 10) : null, 
+                  month: parseInt(parts[1], 10) - 1, 
+                  day: parseInt(parts[0], 10) 
+                };
+              }
+            }
+            return null;
+          };
+
+          // Filter and map all customers celebrating in the selected month
+          const selectedMonthBirthdays = customers
+            .map(cust => {
+              const parsed = parseBirthday(cust.birthDate);
+              return parsed ? { customer: cust, ...parsed } : null;
+            })
+            .filter((item): item is { customer: Customer; year: number | null; month: number; day: number } => 
+              item !== null && item.month === selectedBirthdayMonth
+            )
+            .sort((a, b) => a.day - b.day);
+
+          // Build calendar cells for the selected month
+          const currentYear = new Date().getFullYear();
+          const daysInMonth = new Date(currentYear, selectedBirthdayMonth + 1, 0).getDate();
+          const firstDayIndex = new Date(currentYear, selectedBirthdayMonth, 1).getDay(); // 0 to 6
+          
+          const calendarCells: (number | null)[] = [];
+          for (let i = 0; i < firstDayIndex; i++) {
+            calendarCells.push(null);
+          }
+          for (let d = 1; d <= daysInMonth; d++) {
+            calendarCells.push(d);
+          }
+
+          // Filter celebrations for the specific clicked day
+          const daySelectedBirthdays = selectedBirthdayDay 
+            ? selectedMonthBirthdays.filter(b => b.day === selectedBirthdayDay)
+            : [];
+
+          const handleWhatsAppGreeting = (cust: Customer, birthYear: number | null) => {
+            const cleanPhone = cust.contact ? cust.contact.replace(/\D/g, '') : '';
+            if (!cleanPhone) {
+              alert('Este cliente não possui telefone de contato cadastrado!');
+              return;
+            }
+            const finalPhone = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
+            const age = birthYear ? (new Date().getFullYear() - birthYear) : null;
+            
+            const greeting = `Olá, ${cust.name}! 🎉🎈 Passando para te desejar um excelente aniversário! ${age ? `Parabéns pelos seus ${age} anos de idade!` : 'Parabéns pelo seu dia!'} Que Deus te abençoe com muita saúde, paz e conquistas na vida! Grande abraço da equipe do Club da Bola! 🎂⚽`;
+            const url = `https://api.whatsapp.com/send?phone=${finalPhone}&text=${encodeURIComponent(greeting)}`;
+            window.open(url, '_blank');
+          };
+
+          return (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setIsBirthdayCalendarOpen(false)}
+                className="absolute inset-0 bg-slate-950/60 backdrop-blur-xs"
+              />
+              
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                className="relative w-full max-w-4xl bg-white rounded-[32px] shadow-2xl border border-slate-150 overflow-hidden z-10 flex flex-col md:flex-row max-h-[90vh] font-sans"
+              >
+                {/* Left side: Calendar Grid */}
+                <div className="flex-1 p-6 md:p-8 flex flex-col justify-between border-r border-slate-100">
+                  <div className="space-y-6">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="size-9 rounded-xl bg-amber-100 flex items-center justify-center text-amber-700 font-bold text-base">🎂</div>
+                        <div>
+                          <h3 className="font-black text-sm uppercase text-slate-900 tracking-wider">
+                            Aniversariantes do Mês
+                          </h3>
+                          <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest leading-none mt-1">Navegação e Engajamento</p>
+                        </div>
+                      </div>
+                      
+                      {/* Month Swappper */}
+                      <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl border border-slate-200">
+                        <button
+                          onClick={() => {
+                            setSelectedBirthdayMonth(prev => prev === 0 ? 11 : prev - 1);
+                            setSelectedBirthdayDay(null);
+                          }}
+                          className="p-1.5 rounded-lg hover:bg-white text-slate-600 hover:text-slate-900 transition-all active:scale-90"
+                        >
+                          <ChevronLeft size={16} />
+                        </button>
+                        <span className="text-[10px] font-black uppercase tracking-wider text-slate-800 min-w-[75px] text-center">
+                          {MONTHS_PT[selectedBirthdayMonth]}
+                        </span>
+                        <button
+                          onClick={() => {
+                            setSelectedBirthdayMonth(prev => prev === 11 ? 0 : prev + 1);
+                            setSelectedBirthdayDay(null);
+                          }}
+                          className="p-1.5 rounded-lg hover:bg-white text-slate-600 hover:text-slate-900 transition-all active:scale-90"
+                        >
+                          <ChevronRight size={16} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Weekday Labels */}
+                    <div className="grid grid-cols-7 gap-1 text-center font-bold text-[9px] text-slate-400 tracking-wider">
+                      {WEEKDAYS.map(day => (
+                        <div key={day} className="py-1">{day}</div>
+                      ))}
+                    </div>
+
+                    {/* Days Grid */}
+                    <div className="grid grid-cols-7 gap-1.5">
+                      {calendarCells.map((day, idx) => {
+                        if (day === null) {
+                          return <div key={`empty-${idx}`} className="aspect-square rounded-xl bg-slate-50/40" />;
+                        }
+
+                        const dayCelebs = selectedMonthBirthdays.filter(b => b.day === day);
+                        const hasCelebs = dayCelebs.length > 0;
+                        const isSelected = selectedBirthdayDay === day;
+
+                        return (
+                          <button
+                            key={`day-${day}`}
+                            onClick={() => setSelectedBirthdayDay(day)}
+                            className={cn(
+                              "aspect-square rounded-xl flex flex-col items-center justify-center relative transition-all active:scale-90 text-[11px] font-black border cursor-pointer",
+                              isSelected 
+                                ? "bg-red-800 border-red-800 text-white shadow-md shadow-red-900/10 scale-102"
+                                : hasCelebs
+                                  ? "bg-amber-100 border-amber-200 text-amber-900 hover:bg-amber-200"
+                                  : "bg-white border-slate-100 hover:border-slate-300 text-slate-700"
+                            )}
+                          >
+                            <span>{day}</span>
+                            {hasCelebs && !isSelected && (
+                              <span className="absolute bottom-1 size-1 bg-amber-500 rounded-full animate-pulse" />
+                            )}
+                            {hasCelebs && isSelected && (
+                              <span className="absolute bottom-1 size-1 bg-white rounded-full" />
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="pt-6 border-t border-slate-100 flex items-center justify-between text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    <span>Total de Aniversariantes do Mês:</span>
+                    <span className="font-black text-slate-900 text-xs font-mono">{selectedMonthBirthdays.length} Clientes</span>
+                  </div>
+                </div>
+
+                {/* Right side: Birthday list panel */}
+                <div className="w-full md:w-[360px] bg-slate-50 p-6 md:p-8 flex flex-col justify-between max-h-full">
+                  <div className="space-y-4 flex-1 flex flex-col min-h-0">
+                    <div className="flex items-center justify-between shrink-0">
+                      <h4 className="font-black text-[10px] uppercase text-slate-400 tracking-wider">
+                        {selectedBirthdayDay 
+                          ? `Aniversário em ${selectedBirthdayDay} de ${MONTHS_PT[selectedBirthdayMonth]}`
+                          : `Timeline de ${MONTHS_PT[selectedBirthdayMonth]}`
+                        }
+                      </h4>
+                      {selectedBirthdayDay && (
+                        <button 
+                          onClick={() => setSelectedBirthdayDay(null)}
+                          className="text-[9px] font-bold text-red-800 hover:underline cursor-pointer uppercase"
+                        >
+                          Ver Todos do Mês
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Timeline celebration items */}
+                    <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2 pr-1 min-h-0">
+                      {((selectedBirthdayDay ? daySelectedBirthdays : selectedMonthBirthdays).length === 0) ? (
+                        <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-2">
+                          <span className="text-3xl">🎈</span>
+                          <h5 className="font-bold text-xs text-slate-400 uppercase tracking-wide">Sem aniversariantes</h5>
+                          <p className="text-[10px] text-slate-400">Nenhum cliente cadastrado faz aniversário {selectedBirthdayDay ? 'neste dia' : 'neste mês'}.</p>
+                        </div>
+                      ) : (
+                        (selectedBirthdayDay ? daySelectedBirthdays : selectedMonthBirthdays).map((item) => {
+                          const age = item.year ? (new Date().getFullYear() - item.year) : null;
+                          const totalPurchased = sales
+                            .filter(s => s.customerId === item.customer.id && s.status !== 'Cancelada')
+                            .reduce((sum, s) => sum + s.total, 0);
+                          const tier = getCustomerLoyaltyTier(totalPurchased);
+
+                          return (
+                            <div 
+                              key={item.customer.id}
+                              className="bg-white p-3.5 rounded-2xl border border-slate-200/80 hover:border-slate-300 transition-all flex items-center justify-between gap-3 shadow-xs"
+                            >
+                              <div className="space-y-1 min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="px-1.5 py-0.5 bg-amber-50 text-amber-800 text-[8px] font-black rounded uppercase tracking-wider">
+                                    Dia {item.day}
+                                  </span>
+                                  <span className={cn("px-1.5 py-0.5 text-[7px] font-black rounded uppercase tracking-wider", tier.badgeClass)}>
+                                    {tier.name}
+                                  </span>
+                                </div>
+                                <h5 className="font-bold text-xs text-slate-900 leading-tight truncate">{item.customer.name}</h5>
+                                <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider font-mono">
+                                  {item.customer.contact || 'Sem Telefone'}
+                                  {age && ` • ${age} Anos`}
+                                </p>
+                              </div>
+
+                              {item.customer.contact && (
+                                <button
+                                  onClick={() => handleWhatsAppGreeting(item.customer, item.year)}
+                                  className="size-8 rounded-xl bg-green-50 text-green-600 hover:bg-green-600 hover:text-white flex items-center justify-center transition-all cursor-pointer active:scale-90 border border-green-200 hover:border-green-600"
+                                  title="Enviar Parabéns no WhatsApp"
+                                >
+                                  <MessageCircle size={15} />
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="pt-6 border-t border-slate-200 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setIsBirthdayCalendarOpen(false)}
+                      className="w-full py-3 bg-slate-900 hover:bg-black text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all shadow-md active:scale-95"
+                    >
+                      Fechar Calendário
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          );
+        })()}
       </AnimatePresence>
     </motion.div>
   );

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, orderBy, writeBatch } from 'firebase/firestore';
 import { Product, Variation, Sale, Transaction } from '../types';
-import { Plus, Search, Edit2, Trash2, Copy, Package, Box, X, Eye, FileText, Download, TrendingUp, ShoppingBag, Users, Calendar, Calculator, DollarSign, Percent, ChevronDown, ChevronRight, ShieldAlert, Lock } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Copy, Package, Box, X, Eye, FileText, Download, TrendingUp, ShoppingBag, Users, Calendar, Calculator, DollarSign, Percent, ChevronDown, ChevronRight, ShieldAlert, Lock, Share2, Smartphone, ExternalLink, Globe, Sparkles, Check } from 'lucide-react';
 import { formatCurrency, calculateMargin, calculateMarkup, cn, cleanVariationName, smartSearchMatch } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { SidebarContext } from '../App';
@@ -82,13 +82,28 @@ export default function Products() {
     setCalculatedRealCost(totalCalculated.toFixed(2));
   }, [calcSupplierPrice, calcShipping, calcCustomsTaxRate, calcIcmsRate, calcDomesticLogistics]);
 
+  const [isShareCatalogOpen, setIsShareCatalogOpen] = useState(false);
+  const [catalogWhatsapp, setCatalogWhatsapp] = useState('');
+  const [isCopying, setIsCopying] = useState(false);
+
   useEffect(() => {
-    if (isModalOpen || historyProduct || isSimulatorOpen || isLossModalOpen) {
+    if (isModalOpen || historyProduct || isSimulatorOpen || isLossModalOpen || isShareCatalogOpen) {
       setIsSidebarOpen(false);
     } else {
       setIsSidebarOpen(true);
     }
-  }, [isModalOpen, historyProduct, isSimulatorOpen, isLossModalOpen, setIsSidebarOpen]);
+  }, [isModalOpen, historyProduct, isSimulatorOpen, isLossModalOpen, isShareCatalogOpen, setIsSidebarOpen]);
+
+  useEffect(() => {
+    const settingsRef = doc(db, 'settings', 'appearance');
+    const unsubscribe = onSnapshot(settingsRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setCatalogWhatsapp(data.catalogWhatsapp || data.whatsapp || '');
+      }
+    });
+    return unsubscribe;
+  }, []);
 
   useEffect(() => {
     const q = query(collection(db, 'products'), orderBy('name', 'asc'));
@@ -775,6 +790,13 @@ export default function Products() {
             className="bg-rose-50 hover:bg-rose-100 text-rose-800 font-black py-2.5 px-3 md:py-3 md:px-5 rounded-xl transition-all border border-rose-200 shadow-sm flex items-center justify-center gap-1.5 active:scale-95 text-[10px] md:text-xs uppercase tracking-widest cursor-pointer flex-1 sm:flex-initial"
           >
             <ShieldAlert size={14} className="text-rose-850 animate-pulse" /> Perdas/Consumo
+          </button>
+          <button 
+            type="button"
+            onClick={() => setIsShareCatalogOpen(true)}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-black py-2.5 px-3 md:py-3 md:px-5 rounded-xl transition-all shadow-lg shadow-emerald-500/10 flex items-center justify-center gap-1.5 active:scale-95 text-[10px] md:text-xs uppercase tracking-widest cursor-pointer flex-1 sm:flex-initial"
+          >
+            <Share2 size={14} className="text-white" /> Compartilhar Catálogo
           </button>
           <label className={cn(
             "flex items-center justify-center gap-1.5 px-3 py-2.5 md:px-5 md:py-3 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl cursor-pointer transition-all active:scale-95 text-[10px] md:text-xs uppercase tracking-widest border border-slate-200 shadow-sm flex-1 sm:flex-initial text-center select-none",
@@ -2751,6 +2773,134 @@ export default function Products() {
             onClose={() => setIsLossModalOpen(false)} 
             products={products} 
           />
+        )}
+      </AnimatePresence>
+
+      {/* Catalog Sharing and Whatsapp Config Modal */}
+      <AnimatePresence>
+        {isShareCatalogOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsShareCatalogOpen(false)}
+              className="absolute inset-0 bg-slate-950/60 backdrop-blur-xs"
+            />
+            
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-lg bg-white rounded-[32px] shadow-2xl border border-slate-150 overflow-hidden z-10 font-sans"
+            >
+              <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                <div className="flex items-center gap-2">
+                  <div className="size-8 rounded-lg bg-emerald-600 flex items-center justify-center text-white font-black text-sm">🔗</div>
+                  <div>
+                    <h3 className="font-black text-xs uppercase text-slate-800 tracking-wider">
+                      Compartilhar Catálogo Online
+                    </h3>
+                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest leading-none mt-1">Integração Direta WhatsApp</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setIsShareCatalogOpen(false)}
+                  className="p-1 rounded-lg bg-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-300 transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="p-8 space-y-6">
+                <div className="bg-emerald-50 border border-emerald-150 p-4 rounded-2xl text-emerald-800 space-y-1.5 text-xs">
+                  <div className="flex items-center gap-1.5 font-bold uppercase tracking-wider text-[10px]">
+                    <Sparkles size={14} className="text-emerald-600 animate-pulse" /> Como funciona o catálogo?
+                  </div>
+                  <p className="leading-relaxed">
+                    Seu catálogo ativo está disponível publicamente através de um link exclusivo. Seus clientes podem acessar de qualquer dispositivo, escolher os produtos e tamanhos em estoque, e ao finalizar o carrinho, o sistema envia o pedido formatado direto para o seu WhatsApp!
+                  </p>
+                </div>
+
+                {/* WhatsApp Config */}
+                <div className="space-y-2">
+                  <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider flex items-center gap-1">
+                    <Smartphone size={12} className="text-emerald-600" /> WhatsApp do Vendedor (DDD + Número, apenas números)
+                  </label>
+                  <div className="flex gap-2">
+                    <input 
+                      type="text" 
+                      value={catalogWhatsapp} 
+                      onChange={e => setCatalogWhatsapp(e.target.value.replace(/\D/g, ''))}
+                      placeholder="Ex: 5591993249580"
+                      className="flex-1 px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-red-800 font-black text-sm transition-all placeholder:opacity-30"
+                    />
+                    <button
+                      onClick={() => {
+                        if (!catalogWhatsapp) {
+                          alert('Informe o número de WhatsApp!');
+                          return;
+                        }
+                        const settingsRef = doc(db, 'settings', 'appearance');
+                        updateDoc(settingsRef, { catalogWhatsapp }).then(() => {
+                          alert('WhatsApp configurado com sucesso!');
+                        }).catch(err => {
+                          handleFirestoreError(err, OperationType.UPDATE, 'settings/appearance');
+                        });
+                      }}
+                      className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95 cursor-pointer"
+                    >
+                      Salvar
+                    </button>
+                  </div>
+                  <p className="text-[8px] text-slate-400 font-bold uppercase">Sempre inicie com o código do país (55 para Brasil). Ex: 5591993249580</p>
+                </div>
+
+                {/* Sharing Link */}
+                <div className="space-y-2 pt-2 border-t border-slate-100">
+                  <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider flex items-center gap-1">
+                    <Globe size={12} className="text-red-800" /> Link do Seu Catálogo
+                  </label>
+                  <div className="flex gap-2 items-center p-3 bg-slate-50 border rounded-2xl">
+                    <span className="flex-1 text-[11px] font-mono font-bold text-slate-600 overflow-x-auto whitespace-nowrap scrollbar-none py-1">
+                      {`${window.location.origin}${window.location.pathname}?catalogo=true`}
+                    </span>
+                    <button
+                      onClick={() => {
+                        const link = `${window.location.origin}${window.location.pathname}?catalogo=true`;
+                        navigator.clipboard.writeText(link);
+                        setIsCopying(true);
+                        setTimeout(() => setIsCopying(false), 2000);
+                      }}
+                      className="p-2.5 bg-white border hover:bg-slate-100 text-slate-700 rounded-xl transition-all active:scale-95 cursor-pointer relative"
+                      title="Copiar Link"
+                    >
+                      {isCopying ? <Check size={14} className="text-green-600" /> : <Copy size={14} />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-6 bg-slate-50 border-t border-slate-100 flex gap-3">
+                <button 
+                  type="button" 
+                  onClick={() => setIsShareCatalogOpen(false)}
+                  className="flex-1 py-3 text-[10px] font-black uppercase border border-slate-200 text-slate-400 hover:text-slate-600 rounded-xl transition-all tracking-widest text-center cursor-pointer"
+                >
+                  Fechar
+                </button>
+                <a 
+                  href={`?catalogo=true`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black uppercase rounded-xl transition-all shadow-lg shadow-emerald-500/15 tracking-widest text-center flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer"
+                >
+                  <ExternalLink size={14} />
+                  <span>Testar Vitrine</span>
+                </a>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </motion.div>

@@ -92,6 +92,21 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["description", "amount", "category"]
+    },
+    "Coupon": {
+      "title": "Cupom de Desconto",
+      "description": "Cupons de desconto para o catálogo público.",
+      "type": "object",
+      "properties": {
+        "code": { "type": "string", "description": "Código do cupom" },
+        "type": { "type": "string", "enum": ["percentage", "fixed"], "description": "Tipo de desconto" },
+        "value": { "type": "number", "description": "Valor do desconto (R$ ou %)" },
+        "minPurchase": { "type": "number", "description": "Compra mínima exigida" },
+        "isActive": { "type": "boolean", "description": "Se o cupom está ativo" },
+        "expiresAt": { "type": "string", "description": "Data de validade YYYY-MM-DD" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Data de criação" }
+      },
+      "required": ["code", "type", "value", "isActive"]
     }
   },
   "firestore": {
@@ -118,6 +133,10 @@
     "/expenses/{expenseId}": {
       "schema": "Expense",
       "description": "Despesas operacionais e custos fixos"
+    },
+    "/coupons/{couponId}": {
+      "schema": "Coupon",
+      "description": "Cupons de desconto promocionais"
     }
   }
 }
