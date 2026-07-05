@@ -28,8 +28,20 @@
   --color-emerald-600: #059669;
 }
 
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
   @apply font-sans antialiased text-slate-800 bg-[#f8fafc] selection:bg-rose-500/10 selection:text-red-700;
+}
+
+/* Safari responsive inputs and layout fixes */
+@media screen and (max-width: 768px) {
+  /* Prevent iOS Safari from auto-zooming/shifting when tapping inputs with fonts under 16px */
+  input, select, textarea {
+    font-size: 16px !important;
+  }
 }
 
 /* Global Font Overrides for High-Fidelity Swiss Design Feel */

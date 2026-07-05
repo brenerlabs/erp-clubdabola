@@ -11,6 +11,12 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { shareWhatsAppReceipt } from '../lib/whatsappReceipt';
 
+const MONTHS_PT = [
+  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+];
+const WEEKDAYS = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];
+
 export default function Customers() {
   const { setIsSidebarOpen } = useContext(SidebarContext);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -49,9 +55,35 @@ export default function Customers() {
   const [activeTab, setActiveTab] = useState<'perfil' | 'history'>('perfil');
   const [historyTab, setHistoryTab] = useState<'transacoes' | 'pedidos' | 'favoritos'>('transacoes');
 
+  const [customersView, setCustomersView] = useState<'lista' | 'calendario'>('lista');
   const [isBirthdayCalendarOpen, setIsBirthdayCalendarOpen] = useState(false);
   const [selectedBirthdayMonth, setSelectedBirthdayMonth] = useState<number>(new Date().getMonth()); // 0-11
   const [selectedBirthdayDay, setSelectedBirthdayDay] = useState<number | null>(null);
+
+  const parseBirthday = (dateStr?: string) => {
+    if (!dateStr) return null;
+    if (dateStr.includes('-')) {
+      const parts = dateStr.split('-');
+      if (parts.length >= 3) {
+        return { 
+          year: parts[0] ? parseInt(parts[0], 10) : null, 
+          month: parseInt(parts[1], 10) - 1, 
+          day: parseInt(parts[2], 10) 
+        };
+      }
+    }
+    if (dateStr.includes('/')) {
+      const parts = dateStr.split('/');
+      if (parts.length >= 3) {
+        return { 
+          year: parts[2] ? parseInt(parts[2], 10) : null, 
+          month: parseInt(parts[1], 10) - 1, 
+          day: parseInt(parts[0], 10) 
+        };
+      }
+    }
+    return null;
+  };
 
   // CRM Whatsapp state
   const [crmCustomer, setCrmCustomer] = useState<Customer | null>(null);
@@ -112,6 +144,47 @@ export default function Customers() {
 
     return () => { unsubscribe(); unsubSales(); unsubProd(); };
   }, []);
+
+  // Pre-calculate Calendar variables
+  const selectedMonthBirthdays = customers
+    .map(cust => {
+      const parsed = parseBirthday(cust.birthDate);
+      return parsed ? { customer: cust, ...parsed } : null;
+    })
+    .filter((item): item is { customer: Customer; year: number | null; month: number; day: number } => 
+      item !== null && item.month === selectedBirthdayMonth
+    )
+    .sort((a, b) => a.day - b.day);
+
+  const currentYear = new Date().getFullYear();
+  const daysInMonth = new Date(currentYear, selectedBirthdayMonth + 1, 0).getDate();
+  const firstDayIndex = new Date(currentYear, selectedBirthdayMonth, 1).getDay(); // 0 to 6
+  
+  const calendarCells: (number | null)[] = [];
+  for (let i = 0; i < firstDayIndex; i++) {
+    calendarCells.push(null);
+  }
+  for (let d = 1; d <= daysInMonth; d++) {
+    calendarCells.push(d);
+  }
+
+  const daySelectedBirthdays = selectedBirthdayDay 
+    ? selectedMonthBirthdays.filter(b => b.day === selectedBirthdayDay)
+    : [];
+
+  const handleWhatsAppGreeting = (cust: Customer, birthYear: number | null) => {
+    const cleanPhone = cust.contact ? cust.contact.replace(/\D/g, '') : '';
+    if (!cleanPhone) {
+      alert('Este cliente não possui telefone de contato cadastrado!');
+      return;
+    }
+    const finalPhone = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
+    const age = birthYear ? (new Date().getFullYear() - birthYear) : null;
+    
+    const greeting = `Olá, ${cust.name}! 🎉🎈 Passando para te desejar um excelente aniversário! ${age ? `Parabéns pelos seus ${age} anos de idade!` : 'Parabéns pelo seu dia!'} Que Deus te abençoe com muita saúde, paz e conquistas na vida! Grande abraço da equipe do Club da Bola! 🎂⚽`;
+    const url = `https://api.whatsapp.com/send?phone=${finalPhone}&text=${encodeURIComponent(greeting)}`;
+    window.open(url, '_blank');
+  };
 
   const openModal = (customer?: Customer, isDuplicate = false) => {
     if (customer) {
@@ -780,7 +853,39 @@ export default function Customers() {
           </h2>
           <p className="text-[10px] font-bold text-slate-500 uppercase tracking-[0.3em] font-sans mt-2">Base Global de Clientes e Créditos</p>
         </div>
-        <div className="flex items-center justify-center md:justify-end gap-2 w-full md:w-auto">
+        <div className="flex flex-wrap items-center justify-center md:justify-end gap-2 w-full md:w-auto">
+          {/* Segmented Switcher */}
+          <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 shadow-xs mr-1">
+            <button
+              onClick={() => setCustomersView('lista')}
+              className={cn(
+                "px-3.5 py-2 text-[9px] font-black uppercase tracking-wider rounded-lg transition-all flex items-center gap-1.5",
+                customersView === 'lista'
+                  ? "bg-white text-slate-900 shadow-xs border border-slate-200/50"
+                  : "text-slate-400 hover:text-slate-600"
+              )}
+            >
+              <User size={13} />
+              Lista
+            </button>
+            <button
+              onClick={() => {
+                setSelectedBirthdayMonth(new Date().getMonth());
+                setSelectedBirthdayDay(null);
+                setCustomersView('calendario');
+              }}
+              className={cn(
+                "px-3.5 py-2 text-[9px] font-black uppercase tracking-wider rounded-lg transition-all flex items-center gap-1.5",
+                customersView === 'calendario'
+                  ? "bg-white text-slate-900 shadow-xs border border-slate-200/50"
+                  : "text-slate-400 hover:text-slate-600"
+              )}
+            >
+              <Calendar size={13} />
+              Calendário
+            </button>
+          </div>
+
           <label className={cn(
             "flex items-center gap-2 px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-800 font-black rounded-xl cursor-pointer transition-all active:scale-95 uppercase tracking-widest text-[10px] font-sans border border-slate-200 shadow-sm",
             isImporting && "opacity-50 pointer-events-none"
@@ -792,8 +897,8 @@ export default function Customers() {
           <button 
             onClick={() => {
               setSelectedBirthdayMonth(new Date().getMonth());
-              setSelectedBirthdayDay(new Date().getDate());
-              setIsBirthdayCalendarOpen(true);
+              setSelectedBirthdayDay(null);
+              setCustomersView('calendario');
             }}
             className="bg-amber-400 hover:bg-amber-500 text-slate-900 font-black py-3 px-6 rounded-xl transition-all shadow-lg shadow-amber-500/10 flex items-center gap-2 active:scale-95 uppercase tracking-widest text-[10px] font-sans"
           >
@@ -808,7 +913,9 @@ export default function Customers() {
         </div>
       </div>
 
-      <div className="flex flex-col lg:flex-row items-center justify-between gap-4 p-6 bg-white/40 backdrop-blur-md rounded-[32px] border border-white/60 shadow-xl shadow-slate-200/50 mb-6 font-sans">
+      {customersView === 'lista' ? (
+        <>
+          <div className="flex flex-col lg:flex-row items-center justify-between gap-4 p-6 bg-white/40 backdrop-blur-md rounded-[32px] border border-white/60 shadow-xl shadow-slate-200/50 mb-6 font-sans">
         <div className="flex flex-col sm:flex-row items-center gap-4 flex-1 w-full max-w-2xl">
           <div className="flex-1 relative group w-full">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 size-5 group-focus-within:text-red-800 transition-colors" />
@@ -1014,6 +1121,179 @@ export default function Customers() {
           })}
         </div>
       </div>
+      </>
+      ) : (
+        <motion.div
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 15 }}
+          className="grid grid-cols-1 lg:grid-cols-3 gap-8 font-sans"
+        >
+          {/* Left / Middle: Calendar card */}
+          <div className="lg:col-span-2 bg-white rounded-[32px] border border-slate-200 p-6 md:p-8 shadow-sm flex flex-col justify-between">
+            <div className="space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="size-10 rounded-2xl bg-amber-100 flex items-center justify-center text-xl shadow-sm">🎂</div>
+                  <div>
+                    <h3 className="font-black text-sm uppercase text-slate-900 tracking-wider">
+                      Painel de Aniversariantes
+                    </h3>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1 leading-none">Acompanhe e felicite seus clientes</p>
+                  </div>
+                </div>
+
+                {/* Month Selector */}
+                <div className="flex items-center gap-2 p-1 bg-slate-100 border border-slate-200/60 rounded-xl w-fit self-start sm:self-auto">
+                  <button
+                    onClick={() => {
+                      setSelectedBirthdayMonth(prev => prev === 0 ? 11 : prev - 1);
+                      setSelectedBirthdayDay(null);
+                    }}
+                    className="p-1.5 rounded-lg hover:bg-white text-slate-600 hover:text-slate-900 transition-all active:scale-90"
+                  >
+                    <ChevronLeft size={16} />
+                  </button>
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-800 min-w-[85px] text-center">
+                    {MONTHS_PT[selectedBirthdayMonth]}
+                  </span>
+                  <button
+                    onClick={() => {
+                      setSelectedBirthdayMonth(prev => prev === 11 ? 0 : prev + 1);
+                      setSelectedBirthdayDay(null);
+                    }}
+                    className="p-1.5 rounded-lg hover:bg-white text-slate-600 hover:text-slate-900 transition-all active:scale-90"
+                  >
+                    <ChevronRight size={16} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Weekday Labels */}
+              <div className="grid grid-cols-7 gap-1 text-center font-bold text-[9px] text-slate-400 tracking-wider">
+                {WEEKDAYS.map(day => (
+                  <div key={day} className="py-2">{day}</div>
+                ))}
+              </div>
+
+              {/* Days Grid */}
+              <div className="grid grid-cols-7 gap-2">
+                {calendarCells.map((day, idx) => {
+                  if (day === null) {
+                    return <div key={`inline-empty-${idx}`} className="aspect-square rounded-2xl bg-slate-50/40 border border-transparent" />;
+                  }
+
+                  const dayCelebs = selectedMonthBirthdays.filter(b => b.day === day);
+                  const hasCelebs = dayCelebs.length > 0;
+                  const isSelected = selectedBirthdayDay === day;
+
+                  return (
+                    <button
+                      key={`inline-day-${day}`}
+                      onClick={() => setSelectedBirthdayDay(isSelected ? null : day)}
+                      className={cn(
+                        "aspect-square rounded-2xl flex flex-col items-center justify-center relative transition-all active:scale-95 text-xs font-black border cursor-pointer",
+                        isSelected
+                          ? "bg-red-800 border-red-800 text-white shadow-lg shadow-red-900/10 scale-102"
+                          : hasCelebs
+                            ? "bg-amber-100 border-amber-200 text-amber-900 hover:bg-amber-200"
+                            : "bg-white border-slate-100 hover:border-slate-200 text-slate-700"
+                      )}
+                    >
+                      <span className="text-sm">{day}</span>
+                      {hasCelebs && !isSelected && (
+                        <span className="absolute bottom-1.5 size-1.5 bg-amber-500 rounded-full animate-pulse" />
+                      )}
+                      {hasCelebs && isSelected && (
+                        <span className="absolute bottom-1.5 size-1.5 bg-white rounded-full" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="pt-6 border-t border-slate-100 flex items-center justify-between text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-8">
+              <span>Total de Aniversariantes do Mês:</span>
+              <span className="font-black text-slate-900 text-xs font-mono bg-slate-100 px-3 py-1 rounded-lg border border-slate-200">{selectedMonthBirthdays.length} Clientes</span>
+            </div>
+          </div>
+
+          {/* Right side: Birthday list panel */}
+          <div className="bg-slate-50 border border-slate-200 rounded-[32px] p-6 md:p-8 flex flex-col justify-between max-h-[600px] shadow-sm">
+            <div className="space-y-4 flex-1 flex flex-col min-h-0">
+              <div className="flex items-center justify-between shrink-0 pb-2 border-b border-slate-200">
+                <h4 className="font-black text-[10px] uppercase text-slate-400 tracking-wider">
+                  {selectedBirthdayDay
+                    ? `Aniversário em ${selectedBirthdayDay} de ${MONTHS_PT[selectedBirthdayMonth]}`
+                    : `Timeline de ${MONTHS_PT[selectedBirthdayMonth]}`
+                  }
+                </h4>
+                {selectedBirthdayDay && (
+                  <button
+                    onClick={() => setSelectedBirthdayDay(null)}
+                    className="text-[9px] font-black text-red-800 hover:underline cursor-pointer uppercase tracking-wider"
+                  >
+                    Ver Todos
+                  </button>
+                )}
+              </div>
+
+              {/* Timeline celebration items */}
+              <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2.5 pr-1 min-h-0">
+                {((selectedBirthdayDay ? daySelectedBirthdays : selectedMonthBirthdays).length === 0) ? (
+                  <div className="h-full flex flex-col items-center justify-center text-center p-6 py-12 space-y-3 bg-white border border-slate-200/60 rounded-3xl">
+                    <span className="text-4xl">🎈</span>
+                    <h5 className="font-bold text-xs text-slate-400 uppercase tracking-wide">Sem aniversariantes</h5>
+                    <p className="text-[10px] text-slate-400 leading-normal">Nenhum cliente cadastrado faz aniversário {selectedBirthdayDay ? 'neste dia' : 'neste mês'}.</p>
+                  </div>
+                ) : (
+                  (selectedBirthdayDay ? daySelectedBirthdays : selectedMonthBirthdays).map((item) => {
+                    const age = item.year ? (new Date().getFullYear() - item.year) : null;
+                    const totalPurchased = sales
+                      .filter(s => s.customerId === item.customer.id && s.status !== 'Cancelada')
+                      .reduce((sum, s) => sum + s.total, 0);
+                    const tier = getCustomerLoyaltyTier(totalPurchased);
+
+                    return (
+                      <div
+                        key={item.customer.id}
+                        className="bg-white p-4 rounded-2xl border border-slate-200/80 hover:border-slate-300 transition-all flex items-center justify-between gap-3 shadow-xs"
+                      >
+                        <div className="space-y-1.5 min-w-0">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="px-1.5 py-0.5 bg-amber-50 text-amber-800 text-[8px] font-black rounded uppercase tracking-wider border border-amber-100">
+                              Dia {item.day}
+                            </span>
+                            <span className={cn("px-1.5 py-0.5 text-[7px] font-black rounded uppercase tracking-wider border", tier.badgeClass)}>
+                              {tier.name}
+                            </span>
+                          </div>
+                          <h5 className="font-bold text-xs text-slate-900 leading-tight truncate">{item.customer.name}</h5>
+                          <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider font-mono">
+                            {item.customer.contact || 'Sem Telefone'}
+                            {age && ` • ${age} Anos`}
+                          </p>
+                        </div>
+
+                        {item.customer.contact && (
+                          <button
+                            onClick={() => handleWhatsAppGreeting(item.customer, item.year)}
+                            className="size-9 rounded-xl bg-green-50 text-green-600 hover:bg-green-600 hover:text-white flex items-center justify-center transition-all cursor-pointer active:scale-90 border border-green-200 hover:border-green-600 shrink-0 shadow-sm"
+                            title="Parabenizar no WhatsApp"
+                          >
+                            <MessageCircle size={16} />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      )}
 
       {/* Customer Modal */}
       <AnimatePresence>
