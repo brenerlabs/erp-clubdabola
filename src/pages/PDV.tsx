@@ -691,8 +691,11 @@ export default function PDV() {
             }
 
             if (debtAmount > 0) {
+              const currentBalance = customer.balance !== undefined ? customer.balance : -(customer.totalDebt || 0);
+              const nextBalance = currentBalance - debtAmount;
               batch.update(doc(db, 'customers', preSale.customerId), cleanObject({
                 totalDebt: Math.max(0, (customer.totalDebt || 0) + debtAmount),
+                balance: nextBalance,
                 updatedAt: serverTimestamp()
               }));
 

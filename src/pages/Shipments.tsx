@@ -2070,7 +2070,7 @@ export default function Shipments() {
                           <div className="p-1.5 px-2 mb-1 border-b border-slate-100">
                             <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest leading-none">Alterar Status</p>
                           </div>
-                          <div className="space-y-0.5">
+                          <div className="space-y-0.5 max-h-[220px] overflow-y-auto custom-scrollbar pr-1">
                             {SHIPMENT_STATUSES.map(s => {
                               const config = getStatusConfig(s);
                               const isCurrent = shipment.status === s;
@@ -2597,11 +2597,15 @@ export default function Shipments() {
               <AnimatePresence initial={false}>
                 {!isCollapsed && (
                   <motion.div
-                    initial={{ height: 0, opacity: 0, marginTop: 0 }}
-                    animate={{ height: "auto", opacity: 1, marginTop: 16 }}
-                    exit={{ height: 0, opacity: 0, marginTop: 0 }}
+                    initial={{ height: 0, opacity: 0, marginTop: 0, overflow: "hidden" }}
+                    animate={{ 
+                      height: "auto", 
+                      opacity: 1, 
+                      marginTop: 16,
+                      transitionEnd: { overflow: "visible" }
+                    }}
+                    exit={{ height: 0, opacity: 0, marginTop: 0, overflow: "hidden" }}
                     transition={{ type: "spring", stiffness: 180, damping: 22, mass: 1 }}
-                    className="overflow-hidden"
                   >
                     <motion.div 
                       variants={{
@@ -3457,10 +3461,13 @@ export default function Shipments() {
                   <AnimatePresence>
                     {showDeliveredSection && (
                       <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: 'auto' }}
-                        exit={{ opacity: 0, height: 0 }}
-                        className="overflow-hidden"
+                        initial={{ opacity: 0, height: 0, overflow: "hidden" }}
+                        animate={{ 
+                          opacity: 1, 
+                          height: 'auto',
+                          transitionEnd: { overflow: "visible" }
+                        }}
+                        exit={{ opacity: 0, height: 0, overflow: "hidden" }}
                       >
                         <div className="pt-4">
                           {renderShipmentGroups(deliveredFiltered)}

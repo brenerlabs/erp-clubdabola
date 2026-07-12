@@ -417,15 +417,17 @@ export default function Dashboard() {
           });
         }
 
-        // Update Customer Debt
+        // Update Customer Debt and Balance
         const custRef = doc(db, 'customers', customerId);
         const custSnap = await getDoc(custRef);
         if (custSnap.exists()) {
-          const currentDebt = custSnap.data().totalDebt || 0;
+          const currentBalance = custSnap.data().balance !== undefined ? custSnap.data().balance : -(custSnap.data().totalDebt || 0);
+          const newBalance = currentBalance + amount;
           clientName = custSnap.data().name || '';
           clientContact = custSnap.data().contact || '';
-          clientRemainingDebt = Math.max(0, currentDebt - amount);
+          clientRemainingDebt = newBalance < 0 ? Math.abs(newBalance) : 0;
           batch.update(custRef, {
+            balance: newBalance,
             totalDebt: clientRemainingDebt,
             updatedAt: serverTimestamp()
           });
@@ -442,16 +444,18 @@ export default function Dashboard() {
           createdAt: serverTimestamp()
         });
 
-        // Update Customer Debt
+        // Update Customer Debt and Balance
         if (selectedSale.customerId) {
           const custRef = doc(db, 'customers', selectedSale.customerId);
           const custSnap = await getDoc(custRef);
           if (custSnap.exists()) {
-            const currentDebt = custSnap.data().totalDebt || 0;
+            const currentBalance = custSnap.data().balance !== undefined ? custSnap.data().balance : -(custSnap.data().totalDebt || 0);
+            const newBalance = currentBalance + amount;
             clientName = custSnap.data().name || '';
             clientContact = custSnap.data().contact || '';
-            clientRemainingDebt = Math.max(0, currentDebt - amount);
+            clientRemainingDebt = newBalance < 0 ? Math.abs(newBalance) : 0;
             batch.update(custRef, {
+              balance: newBalance,
               totalDebt: clientRemainingDebt,
               updatedAt: serverTimestamp()
             });

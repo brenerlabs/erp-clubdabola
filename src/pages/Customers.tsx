@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, where, orderBy, writeBatch } from 'firebase/firestore';
 import { Customer, Transaction, Sale, Product, generatePixPayload, getCustomerLoyaltyTier } from '../types';
-import { Plus, Search, Edit2, Trash2, Copy, User, Phone, Wallet, History, ArrowDownCircle, ArrowUpCircle, X, ShoppingBag, Star, FileText, Sparkles, MessageCircle, Calendar, Cake, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Copy, User, Phone, Wallet, History, ArrowDownCircle, ArrowUpCircle, X, ShoppingBag, Star, FileText, Sparkles, MessageCircle, Calendar, Cake, ChevronLeft, ChevronRight, AlertTriangle, RefreshCw } from 'lucide-react';
 import { formatCurrency, cn, cleanVariationName, cleanProductNameWithVariation, formatVariationWithGender, formatProductNameWithGender, smartSearchMatch } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { RollingCounter } from '../components/RollingCounter';
@@ -383,6 +383,8 @@ export default function Customers() {
 
       await batch.commit();
 
+      setSelectedCustomer(prev => prev ? { ...prev, balance: newBalance, totalDebt: remainingDebt } : null);
+
       const compAmount = amount;
       setPaymentAmount('');
       alert('Amortização processada com sucesso!');
@@ -495,7 +497,7 @@ export default function Customers() {
 
     doc.setFontSize(9);
     doc.setTextColor(239, 68, 68); // Soft Red text
-    doc.text('ERP SYSTEM • HISTÓRICO FINANCEIRO CONSOLIDADO', 14, 25);
+    doc.text('ERP SYSTEM • EXTRATO FINANCEIRO UNIFICADO', 14, 25);
 
     const customLogoUrl = localStorage.getItem('erp-custom-logo');
     let hasLogo = false;
@@ -519,7 +521,7 @@ export default function Customers() {
     doc.setFont('Helvetica', 'normal');
     doc.setFontSize(10);
     doc.setTextColor(203, 213, 225); // slate-300
-    doc.text(`EXTRATO DE AUDITORIA E COMPRAS`, 14, 32);
+    doc.text(`EXTRATO DE CONTA-CORRENTE`, 14, 32);
     doc.text(`Gerado em: ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR')} | Produzido por: Brener Gomes`, hasLogo ? 65 : 100, 32);
 
     // Customer Identity Section
@@ -558,107 +560,144 @@ export default function Customers() {
     doc.setTextColor(15, 23, 42);
     doc.text(selectedCustomer.id || 'N/A', 60, 80);
 
+    // Recalculate customer metrics using the bulletproof formula
+    const custSales = sales.filter(s => s.customerId === selectedCustomer.id && s.status !== 'Cancelada' && s.status !== 'Pré-venda');
+    const fiadoSales = custSales.filter(s => s.paymentMethod === 'Fiado');
+    
+    const validPayments = transactions.filter(t => {
+      if (t.customerId !== selectedCustomer.id || t.type !== 'payment') return false;
+      if (!t.saleId) return true;
+      const sale = sales.find(s => s.id === t.saleId);
+      return sale ? sale.paymentMethod === 'Fiado' : false;
+    });
+
+    const totalDebtCreated = fiadoSales.reduce((acc, s) => acc + s.total, 0);
+    const totalPaymentsMade = validPayments.reduce((acc, t) => acc + t.amount, 0);
+
+    const expectedDebt = Math.max(0, totalDebtCreated - totalPaymentsMade);
+    const expectedBalance = totalPaymentsMade - totalDebtCreated;
+
     // Financial Status nested box on the right of Identity
-    doc.setFillColor(254, 242, 242); // red-50
-    doc.setDrawColor(248, 113, 113); // red-450
-    doc.roundedRect(125, 65, 65, 20, 3, 3, 'FD');
+    if (expectedBalance >= 0) {
+      doc.setFillColor(240, 253, 244); // green-50
+      doc.setDrawColor(74, 222, 128); // green-400
+      doc.roundedRect(125, 65, 65, 20, 3, 3, 'FD');
 
-    doc.setFont('Helvetica', 'bold');
-    doc.setFontSize(8);
-    doc.setTextColor(153, 27, 27); // red-800
-    doc.text('SALDO DEVEDOR ATUAL', 129, 71);
+      doc.setFont('Helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(22, 101, 52); // green-800
+      doc.text('SALDO CREDOR ATUAL', 129, 71);
 
-    doc.setFontSize(11);
-    doc.setTextColor(153, 27, 27);
-    doc.text(formatCurrency(selectedCustomer.totalDebt || 0), 129, 79);
+      doc.setFontSize(11);
+      doc.setTextColor(22, 101, 52);
+      doc.text(formatCurrency(expectedBalance), 129, 79);
+    } else {
+      doc.setFillColor(254, 242, 242); // red-50
+      doc.setDrawColor(248, 113, 113); // red-400
+      doc.roundedRect(125, 65, 65, 20, 3, 3, 'FD');
+
+      doc.setFont('Helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(153, 27, 27); // red-800
+      doc.text('SALDO DEVEDOR ATUAL', 129, 71);
+
+      doc.setFontSize(11);
+      doc.setTextColor(153, 27, 27);
+      doc.text(formatCurrency(Math.abs(expectedBalance)), 129, 79);
+    }
 
     // Secondary KPI Row under basic info
     doc.setDrawColor(226, 232, 240); // slate-200
     doc.setFillColor(255, 255, 255);
     doc.roundedRect(14, 94, 182, 32, 4, 4, 'FD');
 
-    // Calculate customer metrics
-    const totalPurchased = customerSales.reduce((acc, s) => acc + s.total, 0);
-    const totalPayments = transactions.filter(t => t.type === 'payment').reduce((acc, t) => acc + t.amount, 0);
-    const totalOrdersCount = customerSales.length;
-
     doc.setFont('Helvetica', 'bold');
     doc.setFontSize(9);
     doc.setTextColor(100, 116, 139); // slate-500
-    doc.text('TOTAL DE PEDIDOS', 20, 103);
+    doc.text('COMPRAS REALIZADAS', 20, 103);
     doc.setFontSize(13);
     doc.setTextColor(15, 23, 42);
-    doc.text(`${totalOrdersCount}`, 20, 113);
+    doc.text(`${custSales.length}`, 20, 113);
 
     doc.setFont('Helvetica', 'bold');
     doc.setFontSize(9);
     doc.setTextColor(100, 116, 139);
-    doc.text('MONTANTE COMPRADO', 70, 103);
+    doc.text('COMPRADO NO FIADO', 70, 103);
     doc.setFontSize(13);
     doc.setTextColor(15, 23, 42);
-    doc.text(formatCurrency(totalPurchased), 70, 113);
+    doc.text(formatCurrency(totalDebtCreated), 70, 113);
 
     doc.setFont('Helvetica', 'bold');
     doc.setFontSize(9);
     doc.setTextColor(100, 116, 139);
-    doc.text('MONTANTE LIQUIDADO', 135, 103);
+    doc.text('TOTAL AMORTIZADO', 135, 103);
     doc.setFontSize(13);
     doc.setTextColor(5, 150, 105); // emerald-600
-    doc.text(formatCurrency(totalPayments), 135, 113);
+    doc.text(formatCurrency(totalPaymentsMade), 135, 113);
 
-    // List of Orders Table Header
+    // List of Transactions Table Header
     doc.setFont('Helvetica', 'bold');
     doc.setFontSize(11);
     doc.setTextColor(15, 23, 42);
-    doc.text('HISTÓRICO CRONOLÓGICO DE PEDIDOS', 14, 138);
+    doc.text('EXTRATO DE MOVIMENTAÇÕES (CONTA-CORRENTE)', 14, 138);
 
-    const formatItemsColumn = (items: any[]) => {
-      return items.map(i => {
-        const iGender = i.gender || products.find(p => p.id === i.productId)?.gender || 'Ambos';
-        return `${i.quantity}x ${formatProductNameWithGender(i.name, iGender)}`;
-      }).join(', ');
-    };
+    // Create Chronological Entries
+    const statementEntries: any[] = [];
 
-    const getSaleBalance = (sale: Sale) => {
-      if (sale.paymentMethod !== 'Fiado') return 0;
-      if (sale.status === 'Cancelada') return 0;
-      const paymentsForSale = transactions
-        .filter(t => t.saleId === sale.id && t.type === 'payment')
-        .reduce((acc, t) => acc + t.amount, 0);
-      return Math.max(0, sale.total - paymentsForSale);
-    };
+    fiadoSales.forEach(sale => {
+      const sDate = sale.createdAt?.seconds 
+        ? new Date(sale.createdAt.seconds * 1000) 
+        : (sale.createdAt instanceof Date ? sale.createdAt : new Date());
+      statementEntries.push({
+        date: sDate,
+        description: `Compra no Fiado (Pedido #${sale.id?.slice(-6).toUpperCase()})`,
+        method: 'Fiado',
+        debit: sale.total,
+        credit: 0
+      });
+    });
 
-    const getSaleStatus = (sale: Sale) => {
-      if (sale.status === 'Cancelada') return 'Cancelada';
-      if (sale.status === 'Pré-venda') return 'Pré-venda';
-      if (sale.paymentMethod === 'Fiado') {
-        return getSaleBalance(sale) === 0 ? 'Concluída' : 'Pendente';
-      }
-      return sale.status || 'Concluída';
-    };
+    validPayments.forEach(t => {
+      const pDate = t.createdAt?.seconds 
+        ? new Date(t.createdAt.seconds * 1000) 
+        : (t.createdAt instanceof Date ? t.createdAt : new Date());
+      statementEntries.push({
+        date: pDate,
+        description: t.saleId 
+          ? `Abatimento Pedido #${t.saleId.slice(-6).toUpperCase()}` 
+          : 'Amortização / Crédito Avulso',
+        method: t.paymentMethod || 'Dinheiro',
+        debit: 0,
+        credit: t.amount
+      });
+    });
 
-    const ordersTableData = customerSales.map(s => {
-      const sDateObj = s.createdAt?.seconds 
-        ? new Date(s.createdAt.seconds * 1000) 
-        : (s.createdAt instanceof Date ? s.createdAt : new Date());
-      
-      const dateStr = sDateObj.toLocaleDateString('pt-BR');
-      const orderRef = `#${s.id?.slice(-6).toUpperCase()}`;
-      const itemsList = formatItemsColumn(s.items);
-      const method = s.paymentMethod || 'Outro';
-      
-      const rawStatus = getSaleStatus(s);
-      const statusStr = rawStatus === 'Concluída' && s.paymentMethod === 'Fiado' ? 'Fiado Pago' : rawStatus;
-      
-      const totalStr = formatCurrency(s.total);
+    // Sort ascending (oldest first) so running balance flows correctly
+    statementEntries.sort((a, b) => a.date.getTime() - b.date.getTime());
 
-      return [dateStr, orderRef, itemsList, method, statusStr, totalStr];
+    let rBalance = 0;
+    const tableData = statementEntries.map(entry => {
+      rBalance = rBalance - entry.debit + entry.credit;
+
+      const dateStr = `${entry.date.toLocaleDateString('pt-BR')} ${entry.date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+      const debitStr = entry.debit > 0 ? formatCurrency(entry.debit) : '-';
+      const creditStr = entry.credit > 0 ? formatCurrency(entry.credit) : '-';
+      const balStr = formatCurrency(rBalance);
+
+      return [
+        dateStr,
+        entry.description,
+        entry.method,
+        debitStr,
+        creditStr,
+        balStr
+      ];
     });
 
     autoTable(doc, {
       startY: 143,
-      head: [['Data', 'Ref Pedido', 'Produtos Adquiridos', 'Método', 'Status', 'Valor Total']],
-      body: ordersTableData.length > 0 ? ordersTableData : [['S/D', '-', 'Nenhum pedido cadastrado no histórico.', '-', '-', 'R$ 0,00']],
+      head: [['Data e Horário', 'Histórico / Operação', 'Meio de Pgto', 'Débito (+)', 'Crédito (-)', 'Saldo Acumulado']],
+      body: tableData.length > 0 ? tableData : [['S/D', 'Sem movimentações financeiras no histórico.', '-', '-', '-', 'R$ 0,00']],
       theme: 'grid',
       headStyles: {
         fillColor: [15, 23, 42], // slate-900 (executive theme)
@@ -671,66 +710,15 @@ export default function Customers() {
         font: 'Helvetica'
       },
       columnStyles: {
-        2: { cellWidth: 70 }, // Wide cell for products list
+        1: { cellWidth: 70 }, // Wide cell for description
+        3: { halign: 'right', textColor: [153, 27, 27] }, // Red for debits
+        4: { halign: 'right', textColor: [5, 150, 105] }, // Green for credits
         5: { halign: 'right', fontStyle: 'bold' }
       }
     });
 
-    // Let's add Payments Table lower down or on next page if we need
-    const finalY = (doc as any).lastAutoTable.finalY + 10;
-    
-    // Check if we need to render transactions/payments
-    const customerPayments = transactions.filter(t => t.type === 'payment');
-    
-    doc.setFont('Helvetica', 'bold');
-    doc.setFontSize(11);
-    doc.setTextColor(15, 23, 42);
-    
-    // If it goes off page bounds, let's render appropriately
-    let startYPayments = finalY;
-    if (startYPayments > 230) {
-      doc.addPage();
-      startYPayments = 20;
-    }
-    
-    doc.text('HISTÓRICO DE COMPENSAÇÕES E PAGAMENTOS (AMORTIZAÇÕES)', 14, startYPayments);
-
-    const paymentsTableData = customerPayments.map(t => {
-      const pDateObj = t.createdAt?.seconds 
-        ? new Date(t.createdAt.seconds * 1000) 
-        : (t.createdAt instanceof Date ? t.createdAt : new Date());
-      const dateStr = `${pDateObj.toLocaleDateString('pt-BR')} ${pDateObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
-      const typeStr = 'Compensação de Saldo';
-      const detailStr = t.saleId ? `Abatimento do Pedido #${t.saleId.slice(-6).toUpperCase()}` : 'Crédito Avulso / Amortização Geral';
-      const methodStr = t.paymentMethod || 'Dinheiro';
-      const amountStr = `- ${formatCurrency(t.amount)}`;
-
-      return [dateStr, typeStr, detailStr, methodStr, amountStr];
-    });
-
-    autoTable(doc, {
-      startY: startYPayments + 5,
-      head: [['Data e Horário', 'Tipo de Operação', 'Destinação de Recursos', 'Método', 'Valor Pago']],
-      body: paymentsTableData.length > 0 ? paymentsTableData : [['S/D', '-', 'Nenhum pagamento registrado ainda.', '-', 'R$ 0,00']],
-      theme: 'grid',
-      headStyles: {
-        fillColor: [153, 27, 27], // brand red-800
-        textColor: [255, 255, 255],
-        fontSize: 8,
-        fontStyle: 'bold'
-      },
-      styles: {
-        fontSize: 7.5,
-        font: 'Helvetica'
-      },
-      columnStyles: {
-        2: { cellWidth: 70 },
-        4: { halign: 'right', fontStyle: 'bold', textColor: [5, 150, 105] } // Green text for payouts
-      }
-    });
-
     const fileSlug = selectedCustomer.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-    doc.save(`historico-vendas-${fileSlug}.pdf`);
+    doc.save(`extrato-${fileSlug}.pdf`);
   };
 
   const formatPhoneNumber = (value: string) => {
@@ -1617,6 +1605,24 @@ export default function Customers() {
             .reduce((acc, s) => acc + s.total, 0);
           const loyalty = getCustomerLoyaltyTier(totalPurchased);
           const numericPaymentAmount = parseFloat(paymentAmount) || 0;
+          
+          const custSales = sales.filter(s => s.customerId === selectedCustomer.id && s.status !== 'Cancelada' && s.status !== 'Pré-venda');
+          const fiadoSales = custSales.filter(s => s.paymentMethod === 'Fiado');
+          const totalDebtCreated = fiadoSales.reduce((acc, s) => acc + s.total, 0);
+
+          const validPayments = transactions.filter(t => {
+            if (t.customerId !== selectedCustomer.id || t.type !== 'payment') return false;
+            if (!t.saleId) return true;
+            const sale = sales.find(s => s.id === t.saleId);
+            return sale ? sale.paymentMethod === 'Fiado' : false;
+          });
+          const totalPaymentsMade = validPayments.reduce((acc, t) => acc + t.amount, 0);
+
+          const expectedDebt = Math.max(0, totalDebtCreated - totalPaymentsMade);
+          const expectedBalance = totalPaymentsMade - totalDebtCreated;
+          const currentBalance = selectedCustomer.balance !== undefined ? selectedCustomer.balance : -(selectedCustomer.totalDebt || 0);
+          const isSyncIssue = Math.abs(currentBalance - expectedBalance) > 0.05;
+
           return (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
               <motion.div 
@@ -1816,6 +1822,43 @@ export default function Customers() {
                 </div>
                 
                 <div className="flex-1 overflow-y-auto bg-slate-50">
+                  {isSyncIssue && (
+                    <div className="m-4 mb-2 p-4 bg-amber-50 border border-amber-200 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-3 text-slate-900">
+                      <div className="flex items-center gap-2.5">
+                        <AlertTriangle className="text-amber-600 shrink-0" size={18} />
+                        <div>
+                          <p className="text-[10px] font-black uppercase tracking-wider text-amber-800">Divergência de Saldo Detectada</p>
+                          <p className="text-[10px] font-bold text-slate-700 mt-0.5 leading-tight">
+                            O saldo atual (<strong>{formatCurrency(currentBalance)}</strong>) diverge dos lançamentos reais de compras e pagamentos (<strong>{formatCurrency(expectedBalance)}</strong>).
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={async () => {
+                          try {
+                            const custRef = doc(db, 'customers', selectedCustomer.id!);
+                            await updateDoc(custRef, {
+                              balance: expectedBalance,
+                              totalDebt: expectedDebt,
+                              updatedAt: serverTimestamp()
+                            });
+                            // Update local state instantly
+                            setSelectedCustomer(prev => prev ? { ...prev, balance: expectedBalance, totalDebt: expectedDebt } : null);
+                            setCustomers(prev => prev.map(c => c.id === selectedCustomer.id ? { ...c, balance: expectedBalance, totalDebt: expectedDebt } : c));
+                            alert(`✅ Saldo de ${selectedCustomer.name} sincronizado com sucesso!`);
+                          } catch (err) {
+                            console.error(err);
+                            alert("Erro ao sincronizar saldo.");
+                          }
+                        }}
+                        className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-[9px] font-black uppercase tracking-widest transition-all active:scale-95 shrink-0 shadow-sm flex items-center gap-1 cursor-pointer"
+                      >
+                        <RefreshCw size={11} />
+                        Sincronizar Saldo
+                      </button>
+                    </div>
+                  )}
+
                   <div className="flex bg-white border-b border-slate-200">
                     <button 
                       onClick={() => setHistoryTab('transacoes')}

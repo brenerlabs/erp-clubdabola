@@ -416,9 +416,18 @@ export default function Finance() {
 
     // 4. New Insight: Customer Debt Ledger vs Saved Debt Divergence (Category E)
     customers.forEach(c => {
-      const custSales = sales.filter(s => s.customerId === c.id && s.paymentMethod === 'Fiado' && s.status !== 'Cancelada' && s.status !== 'Pré-venda');
-      const totalDebtCreated = custSales.reduce((acc, s) => acc + (s.debtAmount !== undefined ? s.debtAmount : s.total), 0);
-      const totalPaymentsMade = transactions.filter(t => t.customerId === c.id && t.type === 'payment' && t.paymentMethod !== 'Fiado').reduce((acc, t) => acc + t.amount, 0);
+      const custSales = sales.filter(s => s.customerId === c.id && s.status !== 'Cancelada' && s.status !== 'Pré-venda');
+      const fiadoSales = custSales.filter(s => s.paymentMethod === 'Fiado');
+      const totalDebtCreated = fiadoSales.reduce((acc, s) => acc + s.total, 0);
+
+      const validPayments = transactions.filter(t => {
+        if (t.customerId !== c.id || t.type !== 'payment') return false;
+        if (!t.saleId) return true;
+        const sale = sales.find(s => s.id === t.saleId);
+        return sale ? sale.paymentMethod === 'Fiado' : false;
+      });
+      const totalPaymentsMade = validPayments.reduce((acc, t) => acc + t.amount, 0);
+
       const expectedDebt = Math.max(0, totalDebtCreated - totalPaymentsMade);
       const savedDebt = c.totalDebt || 0;
       if (Math.abs(savedDebt - expectedDebt) > 0.5) {
@@ -528,6 +537,7 @@ export default function Finance() {
     try {
       await updateDoc(doc(db, 'customers', customerId), {
         totalDebt: expectedDebt,
+        balance: -expectedDebt,
         updatedAt: serverTimestamp()
       });
       showAlert("✅ Saldo Ajustado!", "O saldo devedor do cliente foi recalculado e perfeitamente sincronizado com o histórico de compras e amortizações.", "success");
@@ -600,6 +610,90 @@ export default function Finance() {
         }
       });
     }
+  };
+
+  const handleConvertExcessToCredit = (sale: Sale, expected: number, found: number, relatedTrans: Transaction[]) => {
+    const excess = found - expected;
+    if (excess <= 0.01) return;
+
+    if (!sale.customerId) {
+      showAlert("⚠️ Erro", "Essa venda não possui um cliente associado cadastrado para acumular crédito.", "error");
+      return;
+    }
+
+    const customer = customers.find(c => c.id === sale.customerId);
+    if (!customer) {
+      showAlert("⚠️ Erro", "Cliente associado a esta venda não foi localizado no banco de dados.", "error");
+      return;
+    }
+
+    showConfirm({
+      title: "💰 CONVERTER EXCESSO EM CRÉDITO",
+      description: `Deseja converter o valor pago a mais de R$ ${excess.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} em crédito para o cliente ${customer.name}? 
+
+Este processo ajustará os lançamentos vinculados ao pedido para somarem exatamente R$ ${expected.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (resolvendo a inconsistência de valores) e criará um novo crédito avulso de R$ ${excess.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} na conta do cliente.`,
+      confirmText: "Sim, Converter",
+      cancelText: "Cancelar",
+      type: "success",
+      onConfirm: async () => {
+        try {
+          const batch = writeBatch(db);
+
+          // 1. Calculate new balance and remaining debt for the customer
+          const currentBalance = customer.balance !== undefined ? customer.balance : -(customer.totalDebt || 0);
+          const newBalance = currentBalance + excess;
+          const remainingDebt = newBalance < 0 ? Math.abs(newBalance) : 0;
+
+          const custRef = doc(db, 'customers', customer.id!);
+          batch.update(custRef, {
+            balance: newBalance,
+            totalDebt: remainingDebt,
+            updatedAt: serverTimestamp()
+          });
+
+          // 2. Adjust linked transactions to equal expected amount
+          let remainingExcess = excess;
+          for (const t of relatedTrans) {
+            if (remainingExcess <= 0) break;
+            if (t.amount > 0) {
+              const toSubtract = Math.min(t.amount, remainingExcess);
+              const newAmount = Number((t.amount - toSubtract).toFixed(2));
+              
+              const transRef = doc(db, 'transactions', t.id!);
+              if (newAmount <= 0.01) {
+                batch.update(transRef, {
+                  saleId: null
+                });
+              } else {
+                batch.update(transRef, {
+                  amount: newAmount
+                });
+              }
+              remainingExcess -= toSubtract;
+            }
+          }
+
+          // 3. Create a new transaction representing the standalone prepayment/credit
+          const newTransRef = doc(collection(db, 'transactions'));
+          const originalMethod = relatedTrans[0]?.paymentMethod || 'Pix';
+          batch.set(newTransRef, {
+            customerId: customer.id,
+            amount: excess,
+            type: 'payment',
+            paymentMethod: originalMethod,
+            saleId: null, // standalone credit
+            notes: `Excedente de pagamento do Pedido #${sale.id?.slice(-5).toUpperCase()} convertido em crédito`,
+            createdAt: serverTimestamp()
+          });
+
+          await batch.commit();
+          showAlert("✅ Crédito Convertido!", `O excesso de R$ ${excess.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} foi convertido com sucesso em crédito para ${customer.name}!`, "success");
+        } catch (err: any) {
+          console.error(err);
+          showAlert("Erro", "Erro ao converter excesso em crédito: " + err.message, "error");
+        }
+      }
+    });
   };
 
   const [isResetIconLoading, setIsResetIconLoading] = useState(false);
@@ -788,9 +882,12 @@ export default function Finance() {
                 const customerData = custSnap.data() as Customer;
                 const rollbackDebt = sale.debtAmount || 0;
                 const nextDebt = Math.max(0, (customerData.totalDebt || 0) - rollbackDebt);
+                const currentBalance = customerData.balance !== undefined ? customerData.balance : -(customerData.totalDebt || 0);
+                const nextBalance = currentBalance + rollbackDebt;
                 
                 batch.update(custRef, {
                   totalDebt: nextDebt,
+                  balance: nextBalance,
                   updatedAt: serverTimestamp()
                 });
               }
@@ -846,9 +943,12 @@ export default function Finance() {
                 const prevDebt = sale.debtAmount !== undefined ? sale.debtAmount : sale.total;
                 const debtReduction = Math.max(0, prevDebt - newDebtAmount);
                 const nextDebt = Math.max(0, (customerData.totalDebt || 0) - debtReduction);
+                const currentBalance = customerData.balance !== undefined ? customerData.balance : -(customerData.totalDebt || 0);
+                const nextBalance = currentBalance + debtReduction;
 
                 batch.update(custRef, {
                   totalDebt: nextDebt,
+                  balance: nextBalance,
                   updatedAt: serverTimestamp()
                 });
               }
@@ -982,9 +1082,12 @@ export default function Finance() {
               const customerData = custSnap.data() as Customer;
               const rollbackDebt = sale.debtAmount || 0;
               const nextDebt = Math.max(0, (customerData.totalDebt || 0) - rollbackDebt);
+              const currentBalance = customerData.balance !== undefined ? customerData.balance : -(customerData.totalDebt || 0);
+              const nextBalance = currentBalance + rollbackDebt;
               
               batch.update(custRef, {
                 totalDebt: nextDebt,
+                balance: nextBalance,
                 updatedAt: serverTimestamp()
               });
             }
@@ -2316,9 +2419,21 @@ export default function Finance() {
                                     Canal: <strong className="text-slate-800 uppercase">{mismatch.paymentMethod}</strong> • Esperado: <strong className="text-slate-800 font-mono">{formatCurrency(mismatch.expected)}</strong> • Lançado na base de dados: <strong className="text-red-700 font-mono font-extrabold">{formatCurrency(mismatch.found)}</strong>
                                   </p>
                                 </div>
-                                <span className="px-3 py-1 bg-amber-50 border border-amber-200 text-amber-800 rounded-lg text-[9px] font-black uppercase tracking-widest font-sans">
-                                  Valores Inconsistentes
-                                </span>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="px-3 py-1 bg-amber-50 border border-amber-200 text-amber-800 rounded-lg text-[9px] font-black uppercase tracking-widest font-sans">
+                                    Valores Inconsistentes
+                                  </span>
+                                  {mismatch.found > mismatch.expected && mismatch.sale.customerId && (
+                                    <button
+                                      onClick={() => handleConvertExcessToCredit(mismatch.sale, mismatch.expected, mismatch.found, relatedTrans)}
+                                      className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[9px] font-black uppercase tracking-widest font-sans transition-all active:scale-95 cursor-pointer shadow-sm flex items-center gap-1.5"
+                                      title="Converter diferença em crédito para o cadastro do cliente"
+                                    >
+                                      <Plus size={11} />
+                                      Converter Excesso em Crédito (+{formatCurrency(mismatch.found - mismatch.expected)})
+                                    </button>
+                                  )}
+                                </div>
                               </div>
 
                               {relatedTrans.length > 0 && (
