@@ -8,64 +8,15 @@ service cloud.firestore {
     }
 
     // Primitives & Helpers
-    function isSignedIn() { return request.auth != null; }
-    function isValidId(id) { return id is string && id.size() <= 128; }
+    function isSignedIn() { 
+      return request.auth != null; 
+    }
+    
     function isAdmin() { 
       return isSignedIn() && 
-             (request.auth.token.email.lower() == 'brener91.bg@gmail.com'); 
-    }
-    function incoming() { return request.resource.data; }
-    function existing() { return resource.data; }
-
-    // Validation Blueprints
-    function isValidProduct(data) {
-      return data.get('name', 'ok') is string && 
-             data.get('category', 'ok') is string &&
-             data.get('costPrice', 0) is number &&
-             data.get('sellingPrice', 0) is number &&
-             (data.get('updatedAt', null) == null || data.updatedAt == request.time || data.updatedAt is timestamp);
-    }
-
-    function isValidCustomer(data) {
-      return data.get('name', 'ok') is string &&
-             data.get('contact', 'ok') is string &&
-             data.get('totalDebt', 0) is number &&
-             (data.get('updatedAt', null) == null || data.updatedAt == request.time || data.updatedAt is timestamp);
-    }
-
-    function isValidSale(data) {
-      return data.get('items', [1]) is list && (data.get('items', [1]).size() > 0) &&
-             data.get('total', 0) is number &&
-             data.get('paymentMethod', 'Pix') in ['Dinheiro', 'Cartão', 'Pix', 'Fiado'] &&
-             data.get('status', 'Concluída') in ['Concluída', 'Pendente'] &&
-             (data.get('createdAt', null) == null || data.createdAt is timestamp || data.createdAt == request.time);
-    }
-
-    function isValidTransaction(data) {
-      return (data.get('customerId', null) == null || data.customerId is string) &&
-             data.get('amount', 0) is number &&
-             data.get('type', 'payment') in ['payment', 'debt'] &&
-             (data.get('createdAt', null) == null || data.createdAt is timestamp || data.createdAt == request.time);
-    }
-
-    function isValidShipment(data) {
-      return data.trackingCode is string &&
-             data.status is string &&
-             data.items is list &&
-             data.hasTax is bool &&
-             data.taxAmount is number &&
-             data.taxPaid is bool &&
-             (data.get('supplierName', '') is string) &&
-             (data.get('notes', '') is string) &&
-             (data.get('history', []) is list) &&
-             (data.get('updatedAt', null) == null || data.updatedAt == request.time);
-    }
-
-    function isValidExpense(data) {
-      return data.description is string && data.description.size() <= 200 &&
-             data.amount is number &&
-             data.category in ["Marketing/Ads", "Plataforma/Sistemas", "Embalagens", "Aluguel/Estrutura", "Logística Extra", "Outros"] &&
-             (data.get('createdAt', null) == null || data.createdAt is timestamp || data.createdAt == request.time);
+             ('email' in request.auth.token) &&
+             (request.auth.token.email.lower() == 'brener91.bg@gmail.com' ||
+              request.auth.token.email.lower() == 'brener.gomes.silva@gmail.com'); 
     }
 
     // Collections
@@ -80,13 +31,12 @@ service cloud.firestore {
     }
 
     match /sales/{saleId} {
-      allow get: if true;
-      allow list: if isSignedIn();
+      allow read: if true;
       allow write: if isAdmin();
     }
 
     match /transactions/{transactionId} {
-      allow read: if isAdmin() || (resource.data.saleId != null);
+      allow read: if true;
       allow write: if isAdmin();
     }
 
@@ -95,8 +45,7 @@ service cloud.firestore {
     }
 
     match /shipments/{shipmentId} {
-      allow get: if true;
-      allow list: if isSignedIn();
+      allow read: if true;
       allow write: if isAdmin();
     }
 
@@ -105,7 +54,7 @@ service cloud.firestore {
     }
 
     match /settings/{settingId} {
-      allow read: if (settingId == 'appearance') || isSignedIn();
+      allow read: if true;
       allow write: if isAdmin();
     }
 

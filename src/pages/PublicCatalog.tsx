@@ -17,19 +17,48 @@ import {
   Award,
   Globe,
   ChevronLeft,
-  MessageCircle
+  MessageCircle,
+  Edit2
 } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { collection, doc, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { Product, Variation, CustomerPhoto, Coupon } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
+import { JerseyPreview } from '../components/JerseyPreview';
 
 interface CartItem {
   product: Product;
   variation: Variation;
   quantity: number;
+  isCustomized?: boolean;
+  customName?: string;
+  customNumber?: string;
 }
+
+const CUSTOMIZATION_FEE = 30; // R$ 30,00 customization fee per unit
+
+const isProductCamisa = (product?: Product | null) => {
+  if (!product) return true;
+  const cat = (product.category || '').toLowerCase();
+  const name = (product.name || '').toLowerCase();
+  return cat.includes('camisa') || cat.includes('manto') || cat.includes('conjunto') ||
+         name.includes('camisa') || name.includes('manto') || name.includes('regata') || name.includes('jersey');
+};
+
+const getItemUnitPrice = (item: CartItem) => {
+  const isCamisa = isProductCamisa(item.product);
+  const fee = (item.isCustomized && isCamisa) ? CUSTOMIZATION_FEE : 0;
+  return item.product.sellingPrice + fee;
+};
+
+// Default fallback variation for single-grade / no variation products
+const DEFAULT_GRADE_UNICA: Variation = {
+  id: 'grade-unica',
+  size: 'Tamanho Único',
+  color: '',
+  stock: 999
+};
 
 export default function PublicCatalog() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -46,9 +75,31 @@ export default function PublicCatalog() {
   const [checkoutStep, setCheckoutStep] = useState<'cart' | 'info'>('cart');
   const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
   const [selectedVariation, setSelectedVariation] = useState<Variation | null>(null);
+  const [modalQuantity, setModalQuantity] = useState<number>(1);
   const [customerPhotos, setCustomerPhotos] = useState<CustomerPhoto[]>([]);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [selectedTestimonialPhoto, setSelectedTestimonialPhoto] = useState<CustomerPhoto | null>(null);
+
+  // Customization state for Quick View Modal
+  const [isCustomizedModal, setIsCustomizedModal] = useState(false);
+  const [customNameModal, setCustomNameModal] = useState('');
+  const [customNumberModal, setCustomNumberModal] = useState('');
+  const [editingCartCustomIndex, setEditingCartCustomIndex] = useState<number | null>(null);
+
+  const handleOpenQuickView = (product: Product) => {
+    setQuickViewProduct(product);
+    setModalQuantity(1);
+    setIsCustomizedModal(false);
+    setCustomNameModal('');
+    setCustomNumberModal('');
+
+    if (!product.variations || product.variations.length === 0) {
+      setSelectedVariation(DEFAULT_GRADE_UNICA);
+    } else {
+      const validVariation = product.variations.find(v => product.isDropshipping || v.stock > 0) || product.variations[0];
+      setSelectedVariation(validVariation || DEFAULT_GRADE_UNICA);
+    }
+  };
 
   // Coupons catalog integration
   const [coupons, setCoupons] = useState<Coupon[]>([]);
@@ -139,10 +190,21 @@ export default function PublicCatalog() {
     return matchesSearch && matchesCategory;
   });
 
-  const addToCart = (product: Product, variation: Variation, quantity = 1) => {
+  const addToCart = (
+    product: Product, 
+    variation: Variation, 
+    quantity = 1,
+    isCustomized = false,
+    customName = '',
+    customNumber = ''
+  ) => {
     setCart(prev => {
       const existingIdx = prev.findIndex(item => 
-        item.product.id === product.id && item.variation.id === variation.id
+        item.product.id === product.id && 
+        item.variation.id === variation.id &&
+        !!item.isCustomized === !!isCustomized &&
+        (item.customName || '') === (customName || '') &&
+        (item.customNumber || '') === (customNumber || '')
       );
 
       if (existingIdx > -1) {
@@ -155,13 +217,23 @@ export default function PublicCatalog() {
         }
         return updated;
       } else {
-        return [...prev, { product, variation, quantity }];
+        return [...prev, { 
+          product, 
+          variation, 
+          quantity,
+          isCustomized,
+          customName: isCustomized ? customName.trim().toUpperCase() : '',
+          customNumber: isCustomized ? customNumber.trim() : ''
+        }];
       }
     });
 
     // Reset selection and close quick view
     setQuickViewProduct(null);
     setSelectedVariation(null);
+    setIsCustomizedModal(false);
+    setCustomNameModal('');
+    setCustomNumberModal('');
   };
 
   const updateCartQty = (idx: number, delta: number) => {
@@ -184,7 +256,22 @@ export default function PublicCatalog() {
     });
   };
 
-  const cartTotal = cart.reduce((acc, item) => acc + (item.product.sellingPrice * item.quantity), 0);
+  const updateCartCustomization = (
+    idx: number, 
+    updates: { isCustomized?: boolean; customName?: string; customNumber?: string }
+  ) => {
+    setCart(prev => {
+      const updated = [...prev];
+      updated[idx] = { 
+        ...updated[idx], 
+        ...updates,
+        customName: updates.customName !== undefined ? updates.customName.toUpperCase() : updated[idx].customName
+      };
+      return updated;
+    });
+  };
+
+  const cartTotal = cart.reduce((acc, item) => acc + (getItemUnitPrice(item) * item.quantity), 0);
   const cartItemCount = cart.reduce((acc, item) => acc + item.quantity, 0);
 
   // Validate applied coupon in real-time based on current cartTotal
@@ -258,9 +345,14 @@ export default function PublicCatalog() {
     message += `\n📦 *Itens Escolhidos:*\n`;
 
     cart.forEach((item, index) => {
+      const unitPrice = getItemUnitPrice(item);
+      const subtotalItem = unitPrice * item.quantity;
       message += `${index + 1}. *${item.product.name}*\n`;
       message += `   Tamanho: _${item.variation.size}_ ${item.variation.color ? `| Cor: _${item.variation.color}_` : ''}\n`;
-      message += `   Qtd: *${item.quantity}x* | Preço: _${formatCurrency(item.product.sellingPrice)}_\n\n`;
+      if (item.isCustomized) {
+        message += `   ✨ *Personalização (+ R$ 30,00):* NOME: "${item.customName || 'S/N'}" | Nº: "${item.customNumber || 'S/N'}"\n`;
+      }
+      message += `   Qtd: *${item.quantity}x* | Valor Un: _${formatCurrency(unitPrice)}_ | Subtotal: *${formatCurrency(subtotalItem)}*\n\n`;
     });
 
     if (activeCoupon) {
@@ -531,7 +623,7 @@ export default function PublicCatalog() {
         ) : (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
             {filteredProducts.map((product) => {
-              const hasStock = product.isDropshipping || (product.variations && product.variations.some(v => v.stock > 0));
+              const hasStock = product.isDropshipping || (!product.variations || product.variations.length === 0) || product.variations.some(v => v.stock > 0);
               
               return (
                 <div 
@@ -598,10 +690,7 @@ export default function PublicCatalog() {
                     <button
                       onClick={() => {
                         if (!hasStock) return;
-                        setQuickViewProduct(product);
-                        // Default to first variation with stock or first variation in general
-                        const validVariation = product.variations.find(v => v.stock > 0) || product.variations[0];
-                        setSelectedVariation(validVariation || null);
+                        handleOpenQuickView(product);
                       }}
                       disabled={!hasStock}
                       className={cn(
@@ -611,7 +700,7 @@ export default function PublicCatalog() {
                           : "bg-slate-100 text-slate-400 cursor-not-allowed"
                       )}
                     >
-                      <span>{product.isDropshipping ? 'Encomendar' : 'Ver Tamanhos'}</span>
+                      <span>{product.isDropshipping ? 'Encomendar' : 'Ver Opções / Adicionar'}</span>
                       <ChevronRight size={10} />
                     </button>
                   </div>
@@ -838,14 +927,23 @@ export default function PublicCatalog() {
                       {quickViewProduct.category}
                     </span>
                     <h4 className="font-bold text-sm text-slate-900 leading-tight">{quickViewProduct.name}</h4>
-                    <p className="text-base font-black text-red-800 font-display">{formatCurrency(quickViewProduct.sellingPrice)}</p>
+                    <div className="flex items-baseline gap-2">
+                      <p className="text-base font-black text-red-800 font-display">
+                        {formatCurrency(quickViewProduct.sellingPrice + (isCustomizedModal ? CUSTOMIZATION_FEE : 0))}
+                      </p>
+                      {isCustomizedModal && (
+                        <span className="text-[9px] font-extrabold text-amber-600 uppercase tracking-wider">
+                          (+R$ 30,00 Personalização)
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
 
                 {/* Sizes Selection */}
                 <div className="space-y-2">
                   <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">
-                    Tamanho Disponível:
+                    Tamanho / Opção:
                   </label>
                   
                   {quickViewProduct.variations && quickViewProduct.variations.length > 0 ? (
@@ -878,15 +976,58 @@ export default function PublicCatalog() {
                       })}
                     </div>
                   ) : (
-                    <div className="p-4 bg-amber-50 text-amber-800 rounded-2xl border border-amber-200 text-xs font-bold flex items-center gap-2">
-                      <Info size={16} />
-                      Grade única / Sem variações cadastradas.
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedVariation(DEFAULT_GRADE_UNICA)}
+                        className="px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider bg-red-800 border border-red-800 text-white shadow-md flex items-center gap-2"
+                      >
+                        <Check size={14} />
+                        <span>Tamanho Único / Grade Única</span>
+                      </button>
                     </div>
                   )}
                 </div>
 
+                {/* Quantity Selector */}
+                <div className="space-y-1.5 pt-1">
+                  <label className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">
+                    Quantidade:
+                  </label>
+                  <div className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-2xl p-2.5">
+                    <div className="flex items-center gap-2 select-none">
+                      <button 
+                        type="button"
+                        onClick={() => setModalQuantity(prev => Math.max(1, prev - 1))}
+                        className="size-8 bg-white hover:bg-slate-200 rounded-xl flex items-center justify-center text-slate-800 active:scale-90 border border-slate-200/80 shadow-xs"
+                      >
+                        <Minus size={14} />
+                      </button>
+                      <span className="font-black text-sm font-mono min-w-8 text-center text-slate-900">{modalQuantity}</span>
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          const maxStock = (!quickViewProduct.isDropshipping && selectedVariation && selectedVariation.id !== 'grade-unica') 
+                            ? selectedVariation.stock 
+                            : 99;
+                          setModalQuantity(prev => Math.min(maxStock > 0 ? maxStock : 99, prev + 1));
+                        }}
+                        className="size-8 bg-white hover:bg-slate-200 rounded-xl flex items-center justify-center text-slate-800 active:scale-90 border border-slate-200/80 shadow-xs"
+                      >
+                        <Plus size={14} />
+                      </button>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[9px] font-extrabold uppercase text-slate-400 block">Subtotal Item</span>
+                      <span className="text-sm font-black text-red-800 font-display">
+                        {formatCurrency((quickViewProduct.sellingPrice + (isCustomizedModal ? CUSTOMIZATION_FEE : 0)) * modalQuantity)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Stock info message */}
-                {selectedVariation && !quickViewProduct.isDropshipping && (
+                {selectedVariation && selectedVariation.id !== 'grade-unica' && !quickViewProduct.isDropshipping && (
                   <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between text-[10px] font-bold text-slate-500 uppercase tracking-wider">
                     <span>Estoque Deste Tamanho:</span>
                     <span className={cn("font-black text-xs font-mono", selectedVariation.stock <= 2 ? 'text-amber-600' : 'text-slate-950')}>
@@ -899,6 +1040,84 @@ export default function PublicCatalog() {
                   <div className="p-3.5 bg-indigo-50/50 rounded-xl border border-indigo-150 text-[10px] text-indigo-700 font-bold uppercase tracking-wider flex items-center gap-2">
                     <Sparkles size={14} className="text-indigo-600" />
                     <span>Item sob encomenda internacional (Prazo padrão)</span>
+                  </div>
+                )}
+
+                {/* Customization Section in Modal */}
+                {isProductCamisa(quickViewProduct) && (
+                  <div className="pt-3 border-t border-slate-100 space-y-3">
+                    <label className="flex items-center gap-2 cursor-pointer select-none group/custom">
+                      <input 
+                        type="checkbox"
+                        checked={isCustomizedModal}
+                        onChange={(e) => {
+                          setIsCustomizedModal(e.target.checked);
+                          if (!e.target.checked) {
+                            setCustomNameModal('');
+                            setCustomNumberModal('');
+                          }
+                        }}
+                        className="rounded border-slate-300 text-red-700 focus:ring-red-800 size-4 cursor-pointer"
+                      />
+                      <span className="text-xs font-black uppercase text-slate-800 group-hover/custom:text-red-800 transition-colors tracking-wide flex items-center gap-1.5">
+                        <Sparkles size={14} className="text-amber-500" /> Personalizar Camisa? (+ R$ 30,00)
+                      </span>
+                    </label>
+
+                    {isCustomizedModal && (
+                      <div className="space-y-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-200 animate-fadeIn">
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-black uppercase text-slate-500 tracking-wider block">
+                              Nome nas Costas
+                            </label>
+                            <input 
+                              type="text" 
+                              placeholder="EX: BRENER" 
+                              value={customNameModal}
+                              onChange={(e) => setCustomNameModal(e.target.value.toUpperCase())}
+                              maxLength={15}
+                              className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold uppercase text-slate-900 placeholder:text-slate-300 focus:outline-none focus:ring-1 focus:ring-red-800"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[9px] font-black uppercase text-slate-500 tracking-wider block">
+                              Número (0-99)
+                            </label>
+                            <input 
+                              type="text" 
+                              placeholder="EX: 10" 
+                              value={customNumberModal}
+                              onChange={(e) => {
+                                const cleanNum = e.target.value.replace(/[^0-9]/g, '');
+                                if (cleanNum === '') {
+                                  setCustomNumberModal('');
+                                } else {
+                                  const parsed = parseInt(cleanNum, 10);
+                                  if (parsed <= 99) {
+                                    setCustomNumberModal(cleanNum.slice(0, 2));
+                                  }
+                                }
+                              }}
+                              maxLength={2}
+                              className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold uppercase text-slate-900 placeholder:text-slate-300 text-center focus:outline-none focus:ring-1 focus:ring-red-800"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Live Jersey Canvas Preview */}
+                        <div className="pt-1">
+                          <span className="text-[8px] font-black uppercase tracking-wider text-slate-400 block mb-1">
+                            Prévia da Impressão:
+                          </span>
+                          <JerseyPreview 
+                            name={customNameModal || 'SEU NOME'} 
+                            number={customNumberModal || '10'} 
+                            productName={quickViewProduct.name}
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -916,9 +1135,9 @@ export default function PublicCatalog() {
                   type="button" 
                   disabled={!selectedVariation}
                   onClick={() => {
-                    if (selectedVariation) {
-                      addToCart(quickViewProduct, selectedVariation, 1);
-                    }
+                    const variationToUse = selectedVariation || DEFAULT_GRADE_UNICA;
+                    addToCart(quickViewProduct, variationToUse, modalQuantity, isCustomizedModal, customNameModal, customNumberModal);
+                    setQuickViewProduct(null);
                   }}
                   className={cn(
                     "flex-1 py-3 text-[10px] font-black uppercase rounded-xl transition-all shadow-lg tracking-widest text-center flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer",
@@ -928,7 +1147,7 @@ export default function PublicCatalog() {
                   )}
                 >
                   <ShoppingCart size={14} />
-                  <span>Adicionar Carrinho</span>
+                  <span>Adicionar ({modalQuantity})</span>
                 </button>
               </div>
             </motion.div>
@@ -1016,54 +1235,131 @@ export default function PublicCatalog() {
                   <div className="space-y-4">
                     <div className="divide-y divide-slate-100">
                       {cart.map((item, idx) => (
-                        <div key={`${item.product.id}-${item.variation.id}`} className="py-4 flex gap-4 first:pt-0 last:pb-0">
-                          {/* Image */}
-                          <div className="size-14 rounded-xl bg-slate-100 overflow-hidden border shrink-0">
-                            {item.product.photoUrl ? (
-                              <img src={item.product.photoUrl} alt={item.product.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center bg-red-100 text-red-800 font-bold">⚽</div>
-                            )}
+                        <div key={`${item.product.id}-${item.variation.id}-${idx}`} className="py-4 flex flex-col gap-2.5 border-b border-slate-100 last:border-0">
+                          <div className="flex gap-4">
+                            {/* Image */}
+                            <div className="size-14 rounded-xl bg-slate-100 overflow-hidden border shrink-0">
+                              {item.product.photoUrl ? (
+                                <img src={item.product.photoUrl} alt={item.product.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center bg-red-100 text-red-800 font-bold">⚽</div>
+                              )}
+                            </div>
+
+                            {/* Info */}
+                            <div className="flex-1 min-w-0 flex flex-col justify-between">
+                              <div>
+                                <h4 className="font-bold text-xs text-slate-800 leading-tight truncate">{item.product.name}</h4>
+                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-0.5">
+                                  Tam: {item.variation.size} {item.variation.color ? `| Cor: ${item.variation.color}` : ''}
+                                </p>
+                              </div>
+                              <div className="text-xs font-black text-red-800 font-display">
+                                {formatCurrency(getItemUnitPrice(item))}
+                              </div>
+                            </div>
+
+                            {/* Quantities & Delete */}
+                            <div className="flex flex-col justify-between items-end shrink-0">
+                              <button 
+                                onClick={() => updateCartQty(idx, -999)}
+                                className="text-slate-300 hover:text-red-700 p-1"
+                              >
+                                <X size={14} />
+                              </button>
+                              
+                              <div className="flex items-center gap-2 border border-slate-200 rounded-xl bg-slate-50 p-1 select-none">
+                                <button 
+                                  onClick={() => updateCartQty(idx, -1)}
+                                  className="size-6 bg-white hover:bg-slate-200 rounded-lg flex items-center justify-center text-slate-700 active:scale-90"
+                                >
+                                  <Minus size={10} />
+                                </button>
+                                <span className="font-bold text-xs font-mono min-w-4 text-center">{item.quantity}</span>
+                                <button 
+                                  onClick={() => updateCartQty(idx, 1)}
+                                  className="size-6 bg-white hover:bg-slate-200 rounded-lg flex items-center justify-center text-slate-700 active:scale-90"
+                                >
+                                  <Plus size={10} />
+                                </button>
+                              </div>
+                            </div>
                           </div>
 
-                          {/* Info */}
-                          <div className="flex-1 min-w-0 flex flex-col justify-between">
-                            <div>
-                              <h4 className="font-bold text-xs text-slate-800 leading-tight truncate">{item.product.name}</h4>
-                              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-0.5">
-                                Tam: {item.variation.size} {item.variation.color ? `| Cor: ${item.variation.color}` : ''}
-                              </p>
-                            </div>
-                            <div className="text-xs font-black text-red-800 font-display">
-                              {formatCurrency(item.product.sellingPrice)}
-                            </div>
-                          </div>
+                          {/* Customization Details & Quick Edit Bar */}
+                          {isProductCamisa(item.product) && (
+                            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-2.5 space-y-2 text-[10px]">
+                              <div className="flex items-center justify-between gap-2">
+                                {item.isCustomized ? (
+                                  <div className="flex items-center gap-1.5 text-amber-900 font-extrabold truncate">
+                                    <Sparkles size={12} className="text-amber-600 shrink-0" />
+                                    <span className="truncate">✨ Personalizado: NOME: "{item.customName || 'S/N'}" | Nº: "{item.customNumber || 'S/N'}" (+R$ 30)</span>
+                                  </div>
+                                ) : (
+                                  <span className="text-slate-400 font-bold">Camisa sem personalização</span>
+                                )}
 
-                          {/* Quantities & Delete */}
-                          <div className="flex flex-col justify-between items-end shrink-0">
-                            <button 
-                              onClick={() => updateCartQty(idx, -999)}
-                              className="text-slate-300 hover:text-red-700 p-1"
-                            >
-                              <X size={14} />
-                            </button>
-                            
-                            <div className="flex items-center gap-2 border border-slate-200 rounded-xl bg-slate-50 p-1 select-none">
-                              <button 
-                                onClick={() => updateCartQty(idx, -1)}
-                                className="size-6 bg-white hover:bg-slate-200 rounded-lg flex items-center justify-center text-slate-700 active:scale-90"
-                              >
-                                <Minus size={10} />
-                              </button>
-                              <span className="font-bold text-xs font-mono min-w-4 text-center">{item.quantity}</span>
-                              <button 
-                                onClick={() => updateCartQty(idx, 1)}
-                                className="size-6 bg-white hover:bg-slate-200 rounded-lg flex items-center justify-center text-slate-700 active:scale-90"
-                              >
-                                <Plus size={10} />
-                              </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingCartCustomIndex(editingCartCustomIndex === idx ? null : idx)}
+                                  className="text-[9px] font-black uppercase text-red-800 hover:underline flex items-center gap-1 shrink-0"
+                                >
+                                  <Edit2 size={10} />
+                                  {editingCartCustomIndex === idx ? 'Fechar' : item.isCustomized ? 'Editar' : '+ Customizar (+R$30)'}
+                                </button>
+                              </div>
+
+                              {editingCartCustomIndex === idx && (
+                                <div className="pt-2 border-t border-slate-200/60 space-y-2 animate-fadeIn">
+                                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                                    <input 
+                                      type="checkbox"
+                                      checked={!!item.isCustomized}
+                                      onChange={(e) => updateCartCustomization(idx, { 
+                                        isCustomized: e.target.checked,
+                                        customName: e.target.checked ? (item.customName || '') : '',
+                                        customNumber: e.target.checked ? (item.customNumber || '') : ''
+                                      })}
+                                      className="rounded border-slate-300 text-red-700 focus:ring-red-800 size-3.5"
+                                    />
+                                    <span className="font-bold text-slate-800 text-[10px] uppercase">
+                                      Ativar Personalização (+ R$ 30,00)
+                                    </span>
+                                  </label>
+
+                                  {item.isCustomized && (
+                                    <div className="grid grid-cols-2 gap-2">
+                                      <div>
+                                        <span className="text-[8px] font-bold text-slate-400 uppercase block">Nome</span>
+                                        <input 
+                                          type="text"
+                                          placeholder="EX: BRENER"
+                                          value={item.customName || ''}
+                                          onChange={(e) => updateCartCustomization(idx, { customName: e.target.value.toUpperCase() })}
+                                          maxLength={15}
+                                          className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-[10px] font-bold uppercase text-slate-900"
+                                        />
+                                      </div>
+                                      <div>
+                                        <span className="text-[8px] font-bold text-slate-400 uppercase block">Número</span>
+                                        <input 
+                                          type="text"
+                                          placeholder="EX: 10"
+                                          value={item.customNumber || ''}
+                                          onChange={(e) => {
+                                            const cleanNum = e.target.value.replace(/[^0-9]/g, '');
+                                            updateCartCustomization(idx, { customNumber: cleanNum.slice(0, 2) });
+                                          }}
+                                          maxLength={2}
+                                          className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-[10px] font-bold uppercase text-slate-900 text-center"
+                                        />
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                             </div>
-                          </div>
+                          )}
                         </div>
                       ))}
                     </div>

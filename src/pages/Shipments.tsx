@@ -7,10 +7,12 @@ import {
   CheckCircle2, Clock, AlertCircle, MapPin, 
   MessageCircle, DollarSign, X, Receipt,
   ChevronRight, ArrowRight, ShoppingBag, Box, History, CheckSquare, Square, Calculator,
-  Sparkles, TrendingUp, Activity, Plane, Globe, RefreshCw, Copy, Trello, List
+  Sparkles, TrendingUp, Activity, Plane, Globe, RefreshCw, Copy, Trello, List,
+  FileText, QrCode, Share2
 } from 'lucide-react';
 import { formatCurrency, cn, cleanVariationName, cleanProductNameWithVariation, formatVariationWithGender, formatProductNameWithGender, smartSearchMatch } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
+import TrackingCardModal from '../components/TrackingCardModal';
 
 const SHIPMENT_STATUSES = [
   'Processando',
@@ -397,6 +399,7 @@ export default function Shipments() {
   const [activeStatusMenuId, setActiveStatusMenuId] = useState<string | null>(null);
   const [pendingWhatsAppNotify, setPendingWhatsAppNotify] = useState<{ shipment: Shipment, newStatus: string } | null>(null);
   const [notifyModalData, setNotifyModalData] = useState<{ shipment: Shipment, status: string } | null>(null);
+  const [trackingCardData, setTrackingCardData] = useState<{ shipment: Shipment, customerId?: string } | null>(null);
   const [notifiedCustomers, setNotifiedCustomers] = useState<string[]>([]);
   const [toleranceProcessing, setToleranceProcessing] = useState<number>(() => Number(localStorage.getItem('tol_proc') || '4'));
   const [toleranceTransit, setToleranceTransit] = useState<number>(() => Number(localStorage.getItem('tol_tran') || '12'));
@@ -3219,12 +3222,15 @@ export default function Shipments() {
                         })}
                       </div>
                     ) : (
-                      <div className="flex flex-col items-center justify-center text-center py-7 h-full">
-                        <div className="size-10 bg-emerald-50 rounded-full flex items-center justify-center text-emerald-600 mb-3">
+                      <div className="bg-emerald-50/60 border border-emerald-200/80 rounded-2xl p-4 my-3 flex flex-col items-center justify-center text-center shadow-2xs">
+                        <div className="size-9 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center mb-2 shadow-xs">
                           <CheckCircle2 size={18} />
                         </div>
-                        <p className="text-[10px] font-black uppercase text-slate-800 tracking-wider leading-none">Fluxo Saudável</p>
-                        <p className="text-[8.5px] text-slate-500 font-semibold mt-1.5 max-w-[200px] leading-relaxed uppercase">
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <span className="font-black text-xs text-emerald-950 uppercase tracking-wider">Fluxo Saudável</span>
+                          <span className="text-[8px] bg-emerald-200/80 text-emerald-900 px-1.5 py-0.5 rounded-full font-extrabold uppercase">100% OK</span>
+                        </div>
+                        <p className="text-[9px] text-emerald-800/90 font-bold max-w-[220px] leading-relaxed uppercase">
                           Nenhum lote está parado além das tolerâncias logísticas definidas!
                         </p>
                       </div>
@@ -3344,9 +3350,12 @@ export default function Shipments() {
                   )}
                 </div>
 
-                <p className="text-[8px] text-slate-400 font-black uppercase mt-4 pt-3 border-t border-slate-100/50 flex justify-between items-center">
+                <p className="text-[8px] text-slate-400 font-black uppercase mt-2 pt-2.5 border-t border-slate-100/80 flex justify-between items-center shrink-0">
                   <span>Monitoramento Proativo de Gargalos</span>
-                  <span className="text-[7px] text-rose-600 animate-pulse font-extrabold">• SISTEMA ATIVO</span>
+                  <span className="text-[7px] text-emerald-600 font-extrabold flex items-center gap-1">
+                    <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    SISTEMA ATIVO
+                  </span>
                 </p>
               </div>
             </div>
@@ -3659,6 +3668,18 @@ export default function Shipments() {
                                     <ArrowRight size={10} />
                                   </button>
                                 )}
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setTrackingCardData({ shipment });
+                                  }}
+                                  className="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-amber-400 rounded-lg transition-all border border-amber-400/30 outline-none active:scale-95 shadow-sm cursor-pointer flex items-center gap-1 text-[8.5px] font-black uppercase"
+                                  title="Gerar Cartão / Comprovante Visual de Rastreio em Imagem"
+                                >
+                                  <QrCode size={10} />
+                                  <span>Cartão</span>
+                                </button>
                               </div>
 
                               <button
@@ -4530,6 +4551,16 @@ export default function Shipments() {
 
                             {/* Actions column */}
                             <div className="flex flex-row md:flex-col items-center justify-end gap-2 shrink-0 md:self-stretch md:justify-center">
+                              <button
+                                type="button"
+                                onClick={() => setTrackingCardData({ shipment, customerId: customer.id })}
+                                className="px-3 py-2.5 rounded-2xl font-black text-[10px] uppercase tracking-wider bg-slate-900 hover:bg-slate-800 text-amber-400 transition-all flex items-center justify-center gap-1.5 shadow-md shrink-0 cursor-pointer border border-amber-400/30 w-full md:w-36 text-center"
+                                title="Gerar Cartão Visual de Rastreio em Imagem para WhatsApp"
+                              >
+                                <FileText size={14} />
+                                <span>Cartão (PNG)</span>
+                              </button>
+
                               {customer.contact ? (
                                 <button
                                   onClick={() => {
@@ -4743,6 +4774,17 @@ export default function Shipments() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Tracking Card Modal for WhatsApp */}
+      {trackingCardData && (
+        <TrackingCardModal
+          shipment={trackingCardData.shipment}
+          customerId={trackingCardData.customerId}
+          products={products}
+          customers={customers}
+          onClose={() => setTrackingCardData(null)}
+        />
+      )}
     </motion.div>
   );
 }
