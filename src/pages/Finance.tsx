@@ -2071,7 +2071,7 @@ Este processo ajustará os lançamentos vinculados ao pedido para somarem exatam
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  shareWhatsAppReceipt(sale, products);
+                                  shareWhatsAppReceipt(sale, products, undefined, getSaleBalance(sale));
                                 }}
                                 className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-600 hover:text-white border border-emerald-150 transition-all rounded-xl select-none active:scale-[0.98] text-emerald-700 font-black uppercase text-[8.5px] tracking-wider flex items-center gap-1 cursor-pointer shadow-sm"
                               >

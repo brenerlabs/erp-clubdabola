@@ -2067,7 +2067,7 @@ export default function Customers() {
                         <div className="mt-4 pt-3 border-t border-slate-100 flex justify-end">
                           <button
                             type="button"
-                            onClick={() => shareWhatsAppReceipt(sale, products, selectedCustomer?.contact)}
+                            onClick={() => shareWhatsAppReceipt(sale, products, selectedCustomer?.contact, getSaleBalance(sale))}
                             className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-600 hover:text-white border border-emerald-150 transition-all rounded-xl select-none active:scale-95 text-emerald-700 font-black uppercase text-[9px] tracking-wider flex items-center gap-1.5 cursor-pointer shadow-sm"
                           >
                             <MessageCircle size={12} />

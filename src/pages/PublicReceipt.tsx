@@ -475,7 +475,7 @@ export default function PublicReceipt({ receiptId }: PublicReceiptProps) {
                 {sale.discount ? (
                   <div className="flex justify-between text-slate-500 uppercase">
                     <span>Subtotal</span>
-                    <span className="font-mono">{formatCurrency((sale.subtotal || sale.total) + (sale.discount || 0))}</span>
+                    <span className="font-mono">{formatCurrency(sale.subtotal || ((sale.total || 0) + (sale.discount || 0)))}</span>
                   </div>
                 ) : null}
                 {sale.discount ? (

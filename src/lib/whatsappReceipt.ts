@@ -1,7 +1,7 @@
 import { formatCurrency, formatProductNameWithGender } from './utils';
 import { generatePixPayload } from '../types';
 
-export function getWhatsAppReceiptText(sale: any, products: any[]) {
+export function getWhatsAppReceiptText(sale: any, products: any[], currentBalance?: number) {
   const isPre = sale.status === 'Pré-venda';
   const heading = isPre ? '⚽ *ERP CLUB DA BOLA - Orçamento / Pré-venda* ⚽' : '⚽ *ERP CLUB DA BOLA - Comprovante* ⚽';
   const footer = isPre ? 'Aprovação de orçamento sujeita à disponibilidade de estoque.' : 'Obrigado por comprar no *ERP CLUB DA BOLA*!';
@@ -15,13 +15,15 @@ export function getWhatsAppReceiptText(sale: any, products: any[]) {
     : (sale.createdAt ? new Date(sale.createdAt).toLocaleString('pt-BR') : new Date().toLocaleString('pt-BR'));
 
   const itemsText = sale.items.map((i: any) => {
-    const itemGender = i.gender || products.find(p => p.id === i.productId || p.name === i.name)?.gender || 'Ambos';
+    const itemGender = i.gender || products.find((p: any) => p.id === i.productId || p.name === i.name)?.gender || 'Ambos';
     let row = `- ${formatProductNameWithGender(i.name || i.productName, itemGender)} [${i.variationName || i.variation || 'Única'}] x ${i.quantity}: ${formatCurrency(i.price * i.quantity)}`;
     if (i.isCustomized && i.customName) {
       row += `\n  └ 👕 Personalizado: NOME: "${i.customName}" | Nº: ${i.customNumber || 'S/N'}`;
     }
     return row;
   }).join('\n');
+
+  const actualDebt = currentBalance !== undefined ? currentBalance : (sale.debtAmount || 0);
 
   // Determine the total label
   let totalLabel = 'A PAGAR';
@@ -39,7 +41,7 @@ export function getWhatsAppReceiptText(sale: any, products: any[]) {
     `📅 *Data:* ${displayDateStr}\n` +
     (!isPre ? `💳 *Pagamento:* ${sale.paymentMethod || 'Dinheiro'}\n` : '') +
     (!isPre && sale.downPayment > 0 ? `💵 *Entrada:* ${formatCurrency(sale.downPayment)}\n` : '') +
-    (!isPre && sale.debtAmount > 0 ? `📝 *Pendente:* ${formatCurrency(sale.debtAmount)}\n` : '') +
+    (!isPre && actualDebt > 0 ? `📝 *Pendente:* ${formatCurrency(actualDebt)}\n` : '') +
     `-------------------------------------------\n` +
     `📦 *Itens:*\n${itemsText}\n` +
     `-------------------------------------------\n` +
@@ -52,9 +54,9 @@ export function getWhatsAppReceiptText(sale: any, products: any[]) {
     `${footer}`;
 
   const hasPixPayment = !isPre && (sale.paymentMethod === 'Fiado' || sale.paymentMethod === 'Pix');
-  const pixAmount = sale.debtAmount || sale.total;
+  const pixAmount = actualDebt > 0 ? actualDebt : sale.total;
 
-  const pixSection = hasPixPayment ? (
+  const pixSection = hasPixPayment && pixAmount > 0 ? (
     `-------------------------------------------\n` +
     `💳 *DADOS PARA PAGAMENTO VIA PIX:*\n` +
     `• Banco: *Nubank*\n` +
@@ -77,13 +79,13 @@ export function getWhatsAppReceiptText(sale: any, products: any[]) {
   ) : '';
 
   // Merge components
-  const finalMessage = message.replace(`_Produzido por: Brener Gomes_\n${footer}`, receiptSection + pixSection + `-------------------------------------------\n` + footer + `\n\n_Produzido por: Brener Gomes_`);
+  const finalMessage = message.replace(`_Produzido por: Brener Gomes_\n${footer}`, receiptSection + pixSection + (pixSection || receiptSection ? `-------------------------------------------\n` : '') + footer + `\n\n_Produzido por: Brener Gomes_`);
   return finalMessage;
 }
 
-export function shareWhatsAppReceipt(sale: any, products: any[], backupPhone?: string) {
+export function shareWhatsAppReceipt(sale: any, products: any[], backupPhone?: string, currentBalance?: number) {
   if (!sale) return;
-  const messageText = getWhatsAppReceiptText(sale, products);
+  const messageText = getWhatsAppReceiptText(sale, products, currentBalance);
   const encoded = encodeURIComponent(messageText);
   let phone = sale.customerContact || sale.customerWhatsapp || backupPhone || '';
   phone = phone.replace(/\D/g, '');
